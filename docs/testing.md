@@ -41,10 +41,11 @@ The registered contract coverage rows are:
 
 - Adapter redaction: fail if payloads or logs contain prompts, tool args, cwd, transcript paths, or environment values
 - Adapter no-op behavior when ClawShell is not running
-- Control endpoint auth failure, replay rejection, and rate limiting: covered by `ControlServerTests`
+- Control endpoint auth failure, replay rejection, and rate limiting: covered through the Unix socket by `ControlServerTests`
+- Control endpoint peer PID identity: covered by socket tests that reject client-supplied PID rotation
 - Config patcher fixtures for Claude Code and Codex CLI
 - Config merge/removal preserving unrelated user config
-- CLI command behavior: covered by `ControlServerTests`
+- CLI command behavior: covered by parser, local client, and socket transport tests in `ControlServerTests`
 
 ## Coverage Status
 

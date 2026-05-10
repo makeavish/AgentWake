@@ -119,6 +119,7 @@ public final class IntegrationManager: StubLifecycleComponent {
 
 public final class ClawShellServices {
     public let agentMonitor: AgentMonitor
+    public let controlServer: ControlServerComponent
     public let assertionManager: AssertionManager
     public let integrationManager: IntegrationManager
     public let settingsStore: SettingsStore
@@ -126,6 +127,7 @@ public final class ClawShellServices {
 
     public init(
         agentMonitor: AgentMonitor? = nil,
+        controlServer: ControlServerComponent? = nil,
         assertionManager: AssertionManager = AssertionManager(),
         integrationManager: IntegrationManager = IntegrationManager(),
         settingsStore: SettingsStore? = nil,
@@ -138,7 +140,14 @@ public final class ClawShellServices {
         self.logStore = resolvedLogStore
         let resolvedSettingsStore = settingsStore ?? SettingsStore(paths: paths, logStore: resolvedLogStore)
         self.settingsStore = resolvedSettingsStore
-        self.agentMonitor = agentMonitor ?? AgentMonitor(settingsProvider: { resolvedSettingsStore.settings })
+        let resolvedAgentMonitor = agentMonitor ?? AgentMonitor(settingsProvider: { resolvedSettingsStore.settings })
+        self.agentMonitor = resolvedAgentMonitor
+        self.controlServer = controlServer ?? ControlServerComponent(
+            runtimeStore: ControlRuntimeStore(paths: paths),
+            router: DefaultControlCommandRouter(statusProvider: {
+                resolvedAgentMonitor.aggregateHoldState.shouldHold ? "ClawShell holding" : "ClawShell running"
+            })
+        )
     }
 
     public var lifecycleComponents: [any AppLifecycleComponent] {
@@ -146,6 +155,7 @@ public final class ClawShellServices {
             logStore,
             settingsStore,
             agentMonitor,
+            controlServer,
             assertionManager,
             integrationManager
         ]

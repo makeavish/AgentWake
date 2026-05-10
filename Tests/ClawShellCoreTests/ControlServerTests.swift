@@ -13,12 +13,36 @@ struct ControlServerTests {
         try runControlServerRejectsAuthReplayAndRateLimitFailures()
     }
 
+    @Test func controlServerRateLimitsPerProcessAndTokenBackstop() throws {
+        try runControlServerRateLimitsPerProcessAndTokenBackstop()
+    }
+
+    @Test func replayCacheExpiresOldEvents() throws {
+        try runReplayCacheExpiresOldEvents()
+    }
+
     @Test func serverUsesReceiptTimeInsteadOfClientTimestamp() throws {
         try runServerUsesReceiptTimeInsteadOfClientTimestamp()
     }
 
     @Test func cliParsesCommandsAndSendsThroughClient() throws {
         try runCLIParsesCommandsAndSendsThroughClient()
+    }
+
+    @Test func cliRejectsExtraArgumentsAndUnknownFlags() throws {
+        try runCLIRejectsExtraArgumentsAndUnknownFlags()
+    }
+
+    @Test func localControlClientSendsThroughUnixSocket() throws {
+        try runLocalControlClientSendsThroughUnixSocket()
+    }
+
+    @Test func socketEndpointRejectsAuthReplayAndClientPIDRotation() throws {
+        try runSocketEndpointRejectsAuthReplayAndClientPIDRotation()
+    }
+
+    @Test func controlServerComponentRotatesTokenAndClearsRuntime() throws {
+        try runControlServerComponentRotatesTokenAndClearsRuntime()
     }
 }
 
@@ -35,12 +59,36 @@ final class ControlServerTests: XCTestCase {
         try runControlServerRejectsAuthReplayAndRateLimitFailures()
     }
 
+    func testControlServerRateLimitsPerProcessAndTokenBackstop() throws {
+        try runControlServerRateLimitsPerProcessAndTokenBackstop()
+    }
+
+    func testReplayCacheExpiresOldEvents() throws {
+        try runReplayCacheExpiresOldEvents()
+    }
+
     func testServerUsesReceiptTimeInsteadOfClientTimestamp() throws {
         try runServerUsesReceiptTimeInsteadOfClientTimestamp()
     }
 
     func testCLIParsesCommandsAndSendsThroughClient() throws {
         try runCLIParsesCommandsAndSendsThroughClient()
+    }
+
+    func testCLIRejectsExtraArgumentsAndUnknownFlags() throws {
+        try runCLIRejectsExtraArgumentsAndUnknownFlags()
+    }
+
+    func testLocalControlClientSendsThroughUnixSocket() throws {
+        try runLocalControlClientSendsThroughUnixSocket()
+    }
+
+    func testSocketEndpointRejectsAuthReplayAndClientPIDRotation() throws {
+        try runSocketEndpointRejectsAuthReplayAndClientPIDRotation()
+    }
+
+    func testControlServerComponentRotatesTokenAndClearsRuntime() throws {
+        try runControlServerComponentRotatesTokenAndClearsRuntime()
     }
 }
 
@@ -94,6 +142,51 @@ private func runControlServerRejectsAuthReplayAndRateLimitFailures() throws {
     }
 }
 
+private func runControlServerRateLimitsPerProcessAndTokenBackstop() throws {
+    var current = Date(timeIntervalSince1970: 5_000)
+    let server = ControlServer(
+        token: "secret",
+        router: RecordingRouter(),
+        maxEventsPerWindow: 2,
+        maxTokenEventsPerWindow: 4,
+        rateLimitWindow: 60,
+        now: { current }
+    )
+
+    _ = try server.handle(ControlRequest(token: "secret", eventID: "p1-a", processID: 1, command: .status))
+    _ = try server.handle(ControlRequest(token: "secret", eventID: "p1-b", processID: 1, command: .status))
+    try expectThrows(ControlServerError.rateLimited) {
+        _ = try server.handle(ControlRequest(token: "secret", eventID: "p1-c", processID: 1, command: .status))
+    }
+
+    _ = try server.handle(ControlRequest(token: "secret", eventID: "p2-a", processID: 2, command: .status))
+    _ = try server.handle(ControlRequest(token: "secret", eventID: "p3-a", processID: 3, command: .status))
+    try expectThrows(ControlServerError.rateLimited) {
+        _ = try server.handle(ControlRequest(token: "secret", eventID: "p4-a", processID: 4, command: .status))
+    }
+
+    current = current.addingTimeInterval(61)
+    _ = try server.handle(ControlRequest(token: "secret", eventID: "p1-d", processID: 1, command: .status))
+}
+
+private func runReplayCacheExpiresOldEvents() throws {
+    var current = Date(timeIntervalSince1970: 7_000)
+    let server = ControlServer(
+        token: "secret",
+        router: RecordingRouter(),
+        replayTTL: 10,
+        now: { current }
+    )
+
+    _ = try server.handle(ControlRequest(token: "secret", eventID: "repeatable", command: .status))
+    try expectThrows(ControlServerError.replayedEvent) {
+        _ = try server.handle(ControlRequest(token: "secret", eventID: "repeatable", command: .status))
+    }
+
+    current = current.addingTimeInterval(11)
+    _ = try server.handle(ControlRequest(token: "secret", eventID: "repeatable", command: .status))
+}
+
 private func runServerUsesReceiptTimeInsteadOfClientTimestamp() throws {
     let receiptTime = Date(timeIntervalSince1970: 6_000)
     let clientTime = Date(timeIntervalSince1970: 1)
@@ -143,6 +236,108 @@ private func runCLIParsesCommandsAndSendsThroughClient() throws {
     )
 }
 
+private func runCLIRejectsExtraArgumentsAndUnknownFlags() throws {
+    let cli = ClawShellCLI(client: RecordingClient())
+
+    try expectThrows(ControlServerError.invalidRequest("status takes no arguments")) {
+        _ = try cli.parse(arguments: ["status", "extra"])
+    }
+    try expectThrows(ControlServerError.invalidRequest("release requires `now`")) {
+        _ = try cli.parse(arguments: ["release", "now", "again"])
+    }
+    try expectThrows(ControlServerError.invalidRequest("integrations list takes no arguments")) {
+        _ = try cli.parse(arguments: ["integrations", "list", "--verbose"])
+    }
+    try expectThrows(ControlServerError.invalidRequest("helper status takes no arguments")) {
+        _ = try cli.parse(arguments: ["helper", "status", "--json"])
+    }
+    try expectThrows(ControlServerError.invalidRequest("unknown uninstall flag: --everything")) {
+        _ = try cli.parse(arguments: ["uninstall", "--everything"])
+    }
+}
+
+private func runLocalControlClientSendsThroughUnixSocket() throws {
+    let paths = try makeTemporaryPaths()
+    defer { try? FileManager.default.removeItem(at: paths.applicationSupportDirectory) }
+
+    let store = ControlRuntimeStore(paths: paths)
+    let token = try store.rotateToken()
+    let router = RecordingRouter()
+    let server = ControlServer(token: token, router: router, now: { Date(timeIntervalSince1970: 8_000) })
+    let socketServer = ControlSocketServer(runtimeStore: store)
+    try socketServer.start(controlServer: server)
+    defer { socketServer.stop() }
+
+    let response = try LocalControlClient(runtimeStore: store).send(.status)
+    let socketMode = try store.socketFileMode()
+
+    try check(response.message == "ok", "Expected local client to receive socket server response")
+    try check(router.commands.last == .status, "Expected socket server to route status command")
+    try check(socketMode == 0o600, "Expected control socket mode 0600")
+}
+
+private func runSocketEndpointRejectsAuthReplayAndClientPIDRotation() throws {
+    let paths = try makeTemporaryPaths()
+    defer { try? FileManager.default.removeItem(at: paths.applicationSupportDirectory) }
+
+    let store = ControlRuntimeStore(paths: paths)
+    let token = try store.rotateToken()
+    let server = ControlServer(
+        token: token,
+        router: RecordingRouter(),
+        maxEventsPerWindow: 1,
+        maxTokenEventsPerWindow: 10,
+        rateLimitWindow: 60,
+        now: { Date(timeIntervalSince1970: 8_500) }
+    )
+    let socketServer = ControlSocketServer(runtimeStore: store)
+    try socketServer.start(controlServer: server)
+    defer { socketServer.stop() }
+
+    try expectThrows(ControlServerError.invalidRequest("Control request was not authenticated.")) {
+        _ = try UnixControlSocketClient.send(
+            ControlRequest(token: "wrong", eventID: "wrong-token", processID: 111, command: .status),
+            to: paths.controlSocketURL
+        )
+    }
+
+    _ = try UnixControlSocketClient.send(
+        ControlRequest(token: token, eventID: "accepted", processID: 111, command: .status),
+        to: paths.controlSocketURL
+    )
+    try expectThrows(ControlServerError.invalidRequest("Control request was already processed.")) {
+        _ = try UnixControlSocketClient.send(
+            ControlRequest(token: token, eventID: "accepted", processID: 111, command: .status),
+            to: paths.controlSocketURL
+        )
+    }
+    try expectThrows(ControlServerError.invalidRequest("Too many control requests. Try again in a moment.")) {
+        _ = try UnixControlSocketClient.send(
+            ControlRequest(token: token, eventID: "fake-pid", processID: 222, command: .status),
+            to: paths.controlSocketURL
+        )
+    }
+}
+
+private func runControlServerComponentRotatesTokenAndClearsRuntime() throws {
+    let paths = try makeTemporaryPaths()
+    defer { try? FileManager.default.removeItem(at: paths.applicationSupportDirectory) }
+
+    let store = ControlRuntimeStore(paths: paths)
+    let component = ControlServerComponent(runtimeStore: store, router: RecordingRouter())
+    component.start()
+
+    try check(component.runState == .started, "Expected control server component to start: \(String(describing: component.lastError))")
+    try check(FileManager.default.fileExists(atPath: paths.hookTokenURL.path), "Expected component start to rotate token")
+    try check(FileManager.default.fileExists(atPath: paths.controlSocketURL.path), "Expected component start to bind socket")
+
+    component.stop()
+
+    try check(component.runState == .stopped, "Expected control server component to stop")
+    try check(!FileManager.default.fileExists(atPath: paths.hookTokenURL.path), "Expected component stop to clear token")
+    try check(!FileManager.default.fileExists(atPath: paths.controlSocketURL.path), "Expected component stop to clear socket")
+}
+
 private final class RecordingRouter: ControlCommandRouting {
     var commands: [ControlCommand] = []
     var receivedAt: [Date] = []
@@ -164,8 +359,8 @@ private final class RecordingClient: ControlClient {
 }
 
 private func makeTemporaryPaths() throws -> ClawShellPaths {
-    let url = FileManager.default.temporaryDirectory
-        .appendingPathComponent("ClawShellControlTests-\(UUID().uuidString)", isDirectory: true)
+    let url = URL(fileURLWithPath: "/tmp", isDirectory: true)
+        .appendingPathComponent("cs-\(UUID().uuidString.prefix(8))", isDirectory: true)
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return ClawShellPaths(applicationSupportDirectory: url)
 }

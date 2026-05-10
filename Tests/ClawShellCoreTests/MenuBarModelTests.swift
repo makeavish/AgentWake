@@ -102,8 +102,8 @@ private func placeholderTitles(in snapshot: MenuBarSnapshot) -> [String] {
 }
 
 private func makeTemporaryPaths() throws -> ClawShellPaths {
-    let url = FileManager.default.temporaryDirectory
-        .appendingPathComponent("ClawShellTests-\(UUID().uuidString)", isDirectory: true)
+    let url = URL(fileURLWithPath: "/tmp", isDirectory: true)
+        .appendingPathComponent("cs-\(UUID().uuidString.prefix(8))", isDirectory: true)
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return ClawShellPaths(applicationSupportDirectory: url)
 }

@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public protocol ControlClient {
@@ -24,20 +25,25 @@ public struct ClawShellCLI {
 
         switch first {
         case "status":
+            try requireArgumentCount(arguments, 1, usage: "status takes no arguments")
             return .status
         case "pause":
+            try requireArgumentCount(arguments, 2, usage: "pause requires a duration like 1h or 15m")
             guard let duration = arguments.dropFirst().first.flatMap(parseDuration) else {
                 throw ControlServerError.invalidRequest("pause requires a duration like 1h or 15m")
             }
             return .pause(duration: duration)
         case "release":
+            try requireArgumentCount(arguments, 2, usage: "release requires `now`")
             guard arguments.dropFirst().first == "now" else {
                 throw ControlServerError.invalidRequest("release requires `now`")
             }
             return .releaseNow
         case "list":
+            try requireArgumentCount(arguments, 1, usage: "list takes no arguments")
             return .list
         case "add":
+            try requireArgumentCount(arguments, 2, usage: "add requires a binary path")
             guard let binary = arguments.dropFirst().first else {
                 throw ControlServerError.invalidRequest("add requires a binary path")
             }
@@ -47,9 +53,18 @@ public struct ClawShellCLI {
         case "helper":
             return try parseHelper(Array(arguments.dropFirst()))
         case "uninstall":
+            let flags = Array(arguments.dropFirst())
+            let allowedFlags = Set(["--remove-helper", "--remove-integrations"])
+            guard flags.allSatisfy({ allowedFlags.contains($0) }) else {
+                let unknownFlag = flags.first { !allowedFlags.contains($0) } ?? ""
+                throw ControlServerError.invalidRequest("unknown uninstall flag: \(unknownFlag)")
+            }
+            guard Set(flags).count == flags.count else {
+                throw ControlServerError.invalidRequest("duplicate uninstall flag")
+            }
             return .uninstall(
-                removeHelper: arguments.contains("--remove-helper"),
-                removeIntegrations: arguments.contains("--remove-integrations")
+                removeHelper: flags.contains("--remove-helper"),
+                removeIntegrations: flags.contains("--remove-integrations")
             )
         default:
             throw ControlServerError.invalidRequest("unknown command: \(first)")
@@ -63,15 +78,19 @@ public struct ClawShellCLI {
 
         switch first {
         case "list":
+            try requireArgumentCount(arguments, 1, usage: "integrations list takes no arguments")
             return .integrationsList
         case "status":
+            try requireArgumentCount(arguments, 1, usage: "integrations status takes no arguments")
             return .integrationsStatus
         case "remove":
+            try requireArgumentCount(arguments, 2, usage: "integrations remove requires an agent")
             guard let agent = arguments.dropFirst().first else {
                 throw ControlServerError.invalidRequest("integrations remove requires an agent")
             }
             return .integrationsRemove(agentID: agent)
         case "enable-auto":
+            try requireArgumentCount(arguments, 2, usage: "integrations enable-auto requires an agent")
             guard let agent = arguments.dropFirst().first else {
                 throw ControlServerError.invalidRequest("integrations enable-auto requires an agent")
             }
@@ -88,11 +107,19 @@ public struct ClawShellCLI {
 
         switch first {
         case "status":
+            try requireArgumentCount(arguments, 1, usage: "helper status takes no arguments")
             return .helperStatus
         case "repair":
+            try requireArgumentCount(arguments, 1, usage: "helper repair takes no arguments")
             return .helperRepair
         default:
             throw ControlServerError.invalidRequest("unknown helper subcommand: \(first)")
+        }
+    }
+
+    private func requireArgumentCount(_ arguments: [String], _ count: Int, usage: String) throws {
+        guard arguments.count == count else {
+            throw ControlServerError.invalidRequest(usage)
         }
     }
 
@@ -131,7 +158,13 @@ public struct LocalControlClient: ControlClient {
             throw ControlServerError.notRunning
         }
 
-        _ = try runtimeStore.loadToken()
-        throw ControlServerError.notRunning
+        let token = try runtimeStore.loadToken().trimmingCharacters(in: .whitespacesAndNewlines)
+        let request = ControlRequest(
+            token: token,
+            processID: Darwin.getpid(),
+            clientTimestamp: Date(),
+            command: command
+        )
+        return try UnixControlSocketClient.send(request, to: runtimeStore.paths.controlSocketURL)
     }
 }

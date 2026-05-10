@@ -26,12 +26,21 @@ public struct ControlRuntimeStore {
         try String(contentsOf: paths.hookTokenURL, encoding: .utf8)
     }
 
+    public func clearRuntimeFiles() throws {
+        try? fileManager.removeItem(at: paths.controlSocketURL)
+        try? fileManager.removeItem(at: paths.hookTokenURL)
+    }
+
     public func runtimeDirectoryMode() throws -> Int? {
         try permissionMode(at: paths.runtimeDirectory)
     }
 
     public func tokenFileMode() throws -> Int? {
         try permissionMode(at: paths.hookTokenURL)
+    }
+
+    public func socketFileMode() throws -> Int? {
+        try permissionMode(at: paths.controlSocketURL)
     }
 
     private func permissionMode(at url: URL) throws -> Int? {
