@@ -1,3 +1,5 @@
+import Foundation
+
 #if canImport(Testing)
 import Testing
 @testable import ClawShellCore
@@ -27,16 +29,17 @@ struct MenuBarModelTests {
         #expect(snapshot.items.first?.detail == "Closed-lid guarded mode")
     }
 
-    @Test func lifecycleComponentsCanStartAndStopTogether() {
-        let services = ClawShellServices()
+    @Test func lifecycleComponentsCanStartAndStopTogether() throws {
+        let paths = try makeTemporaryPaths()
+        let services = ClawShellServices(paths: paths)
 
         services.startAll()
         #expect(services.lifecycleComponents.allSatisfy { $0.runState == .started })
-        #expect(services.logStore.events == [.appStarted])
+        #expect(services.logStore.events.map(\.kind).contains(.appStarted))
 
         services.stopAll()
         #expect(services.lifecycleComponents.allSatisfy { $0.runState == .stopped })
-        #expect(services.logStore.events == [.appStarted, .appStopped])
+        #expect(services.logStore.events.map(\.kind).contains(.appStopped))
     }
 }
 
@@ -69,16 +72,17 @@ final class MenuBarModelTests: XCTestCase {
         XCTAssertEqual(snapshot.items.first?.detail, "Closed-lid guarded mode")
     }
 
-    func testLifecycleComponentsCanStartAndStopTogether() {
-        let services = ClawShellServices()
+    func testLifecycleComponentsCanStartAndStopTogether() throws {
+        let paths = try makeTemporaryPaths()
+        let services = ClawShellServices(paths: paths)
 
         services.startAll()
         XCTAssertTrue(services.lifecycleComponents.allSatisfy { $0.runState == .started })
-        XCTAssertEqual(services.logStore.events, [.appStarted])
+        XCTAssertTrue(services.logStore.events.map(\.kind).contains(.appStarted))
 
         services.stopAll()
         XCTAssertTrue(services.lifecycleComponents.allSatisfy { $0.runState == .stopped })
-        XCTAssertEqual(services.logStore.events, [.appStarted, .appStopped])
+        XCTAssertTrue(services.logStore.events.map(\.kind).contains(.appStopped))
     }
 }
 
@@ -98,4 +102,11 @@ private func placeholderTitles(in snapshot: MenuBarSnapshot) -> [String] {
 
         return item.title
     }
+}
+
+private func makeTemporaryPaths() throws -> ClawShellPaths {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("ClawShellTests-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    return ClawShellPaths(applicationSupportDirectory: url)
 }

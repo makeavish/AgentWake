@@ -18,47 +18,6 @@ public final class IntegrationManager: StubLifecycleComponent {
     }
 }
 
-public struct ClawShellSettings: Codable, Equatable, Sendable {
-    public var launchAtLogin: Bool
-    public var normalSleepProtectionEnabled: Bool
-
-    public init(
-        launchAtLogin: Bool = false,
-        normalSleepProtectionEnabled: Bool = true
-    ) {
-        self.launchAtLogin = launchAtLogin
-        self.normalSleepProtectionEnabled = normalSleepProtectionEnabled
-    }
-}
-
-public final class SettingsStore: StubLifecycleComponent {
-    public private(set) var settings: ClawShellSettings
-
-    public init(settings: ClawShellSettings = ClawShellSettings()) {
-        self.settings = settings
-        super.init(componentName: "SettingsStore")
-    }
-}
-
-public enum LogEvent: Equatable, Sendable {
-    case appStarted
-    case appStopped
-    case stateChanged(ClawShellState)
-}
-
-public final class LogStore: StubLifecycleComponent {
-    public private(set) var events: [LogEvent]
-
-    public init(events: [LogEvent] = []) {
-        self.events = events
-        super.init(componentName: "LogStore")
-    }
-
-    public func append(_ event: LogEvent) {
-        events.append(event)
-    }
-}
-
 public final class ClawShellServices {
     public let agentMonitor: AgentMonitor
     public let assertionManager: AssertionManager
@@ -70,33 +29,35 @@ public final class ClawShellServices {
         agentMonitor: AgentMonitor = AgentMonitor(),
         assertionManager: AssertionManager = AssertionManager(),
         integrationManager: IntegrationManager = IntegrationManager(),
-        settingsStore: SettingsStore = SettingsStore(),
-        logStore: LogStore = LogStore()
+        settingsStore: SettingsStore? = nil,
+        logStore: LogStore? = nil,
+        paths: ClawShellPaths = .defaultPaths()
     ) {
         self.agentMonitor = agentMonitor
         self.assertionManager = assertionManager
         self.integrationManager = integrationManager
-        self.settingsStore = settingsStore
-        self.logStore = logStore
+        let resolvedLogStore = logStore ?? LogStore(paths: paths)
+        self.logStore = resolvedLogStore
+        self.settingsStore = settingsStore ?? SettingsStore(paths: paths, logStore: resolvedLogStore)
     }
 
     public var lifecycleComponents: [any AppLifecycleComponent] {
         [
+            logStore,
+            settingsStore,
             agentMonitor,
             assertionManager,
-            integrationManager,
-            settingsStore,
-            logStore
+            integrationManager
         ]
     }
 
     public func startAll() {
         lifecycleComponents.forEach { $0.start() }
-        logStore.append(.appStarted)
+        logStore.append(kind: .appStarted, message: "ClawShell started")
     }
 
     public func stopAll() {
-        logStore.append(.appStopped)
+        logStore.append(kind: .appStopped, message: "ClawShell stopped")
         lifecycleComponents.reversed().forEach { $0.stop() }
     }
 }

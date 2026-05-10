@@ -22,7 +22,11 @@ final class MenuBarApp {
 
     func start() {
         services.startAll()
-        services.logStore.append(.stateChanged(currentState))
+        services.logStore.append(
+            kind: .stateChanged,
+            message: "State changed to \(currentState.menuTitle)",
+            metadata: ["state": currentState.rawValue]
+        )
         renderMenu()
     }
 

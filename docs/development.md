@@ -26,3 +26,12 @@ swift run ClawShell --smoke-test
 The first checks cover the state/menu model, lifecycle component boundaries, and a short AppKit launch smoke. AppKit behavior is intentionally thin until the detection, assertion, and integration issues add real behavior.
 
 The local Command Line Tools environment may lack `Testing` and `XCTest`, so `ClawShellCoreChecks` remains the portable assertion gate until the dedicated test-harness issue installs CI.
+
+## Local Data
+
+ClawShell stores local state under `~/Library/Application Support/ClawShell/`:
+
+- `settings.json` contains versioned settings.
+- `logs/audit.jsonl` contains bounded local audit events.
+
+Config exports exclude logs, runtime tokens, helper ownership state, cwd hashes, and hook payloads. Custom executable paths can still reveal local machine details, so exported config should be shared carefully.
