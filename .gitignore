@@ -1,0 +1,23 @@
+.DS_Store
+
+# Xcode / Swift
+.build/
+DerivedData/
+*.xcuserdata/
+xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# App packaging
+*.app
+*.dmg
+*.pkg
+
+# Local config
+.env
+.env.*
+!.env.example
+
+# Internal planning docs
+docs/prd.md
+docs/tdd.md
