@@ -2,6 +2,10 @@ import Foundation
 
 public enum SettingsStoreError: Error, Equatable {
     case unsupportedSchemaVersion(Int)
+    case invalidDefaultGraceSeconds(Int)
+    case invalidSafetySettings
+    case invalidAgentConfiguration(String)
+    case duplicateAgentID(String)
 }
 
 public final class SettingsStore: StubLifecycleComponent {
@@ -56,26 +60,26 @@ public final class SettingsStore: StubLifecycleComponent {
     public func loadOrRecover() -> ClawShellSettings {
         do {
             return try load()
-        } catch {
-            let recoveredSettings = ClawShellSettings()
-            let corruptURL = moveCorruptSettingsAside()
-
-            do {
-                try save(recoveredSettings)
-            } catch {
-                settings = recoveredSettings
-            }
-
+        } catch is DecodingError {
+            return recoverCorruptSettings()
+        } catch SettingsStoreError.unsupportedSchemaVersion(let version) {
             logStore?.append(
-                kind: .settingsRecoveredFromCorruption,
-                message: "Corrupt settings were moved aside and replaced with defaults",
+                kind: .degradedConfidence,
                 metadata: [
-                    "settingsFile": paths.settingsURL.path,
-                    "corruptSettingsFile": corruptURL?.path ?? "missing"
+                    "status": "unsupported-settings-schema",
+                    "errorCode": "schema-\(version)"
                 ]
             )
-
-            return recoveredSettings
+            return settings
+        } catch {
+            logStore?.append(
+                kind: .degradedConfidence,
+                metadata: [
+                    "status": "settings-load-failed",
+                    "errorCode": "io"
+                ]
+            )
+            return settings
         }
     }
 
@@ -96,6 +100,66 @@ public final class SettingsStore: StubLifecycleComponent {
         guard settings.schemaVersion == ClawShellSettings.currentSchemaVersion else {
             throw SettingsStoreError.unsupportedSchemaVersion(settings.schemaVersion)
         }
+
+        guard (60...86_400).contains(settings.defaultGraceSeconds) else {
+            throw SettingsStoreError.invalidDefaultGraceSeconds(settings.defaultGraceSeconds)
+        }
+
+        guard (0...100).contains(settings.safety.batteryFloorPercent),
+              (0...120).contains(settings.safety.temperatureWarningCelsius),
+              (1...125).contains(settings.safety.temperatureCutoffCelsius),
+              settings.safety.temperatureWarningCelsius < settings.safety.temperatureCutoffCelsius
+        else {
+            throw SettingsStoreError.invalidSafetySettings
+        }
+
+        var seenAgentIDs = Set<String>()
+        for agent in settings.agents {
+            try validateAgentID(agent.id)
+            guard !agent.executableNames.isEmpty else {
+                throw SettingsStoreError.invalidAgentConfiguration(agent.id)
+            }
+            guard seenAgentIDs.insert(agent.id).inserted else {
+                throw SettingsStoreError.duplicateAgentID(agent.id)
+            }
+        }
+
+        for agent in settings.customAgents {
+            try validateAgentID(agent.id)
+            guard !agent.executablePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw SettingsStoreError.invalidAgentConfiguration(agent.id)
+            }
+            guard seenAgentIDs.insert(agent.id).inserted else {
+                throw SettingsStoreError.duplicateAgentID(agent.id)
+            }
+        }
+    }
+
+    private func validateAgentID(_ id: String) throws {
+        guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw SettingsStoreError.invalidAgentConfiguration(id)
+        }
+    }
+
+    private func recoverCorruptSettings() -> ClawShellSettings {
+        let recoveredSettings = ClawShellSettings()
+        let corruptURL = moveCorruptSettingsAside()
+
+        do {
+            try save(recoveredSettings)
+        } catch {
+            settings = recoveredSettings
+        }
+
+        logStore?.append(
+            kind: .settingsRecoveredFromCorruption,
+            metadata: [
+                "settingsFile": paths.settingsURL.path,
+                "corruptSettingsFile": corruptURL?.path ?? "missing"
+            ]
+        )
+
+        return recoveredSettings
     }
 
     private func moveCorruptSettingsAside() -> URL? {

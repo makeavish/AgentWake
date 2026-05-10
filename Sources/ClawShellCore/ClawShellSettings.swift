@@ -184,7 +184,6 @@ public struct SettingsExport: Codable, Equatable, Sendable {
     public var customAgents: [CustomAgentConfiguration]
     public var integrationSuppressions: [String: IntegrationSuppression]
     public var safety: SafetySettings
-    public var manualOverrides: [ManualOverride]
 
     public init(settings: ClawShellSettings) {
         schemaVersion = settings.schemaVersion
@@ -194,7 +193,6 @@ public struct SettingsExport: Codable, Equatable, Sendable {
         customAgents = settings.customAgents
         integrationSuppressions = settings.integrationSuppressions
         safety = settings.safety
-        manualOverrides = settings.manualOverrides
     }
 
     public func applying(to settings: ClawShellSettings) -> ClawShellSettings {
@@ -206,7 +204,7 @@ public struct SettingsExport: Codable, Equatable, Sendable {
             customAgents: customAgents,
             integrationSuppressions: integrationSuppressions,
             safety: safety,
-            manualOverrides: manualOverrides,
+            manualOverrides: settings.manualOverrides,
             helperOwnership: settings.helperOwnership
         )
     }

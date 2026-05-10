@@ -26,14 +26,15 @@ public enum PrivacyRedactor {
 
     public static func sanitizedMetadata(
         _ metadata: [String: String],
+        allowedKeys: Set<String>,
         homeDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path
     ) -> [String: String] {
         metadata.reduce(into: [:]) { sanitized, pair in
-            if shouldDropMetadataKey(pair.key) {
-                sanitized[pair.key] = "[redacted]"
-            } else {
-                sanitized[pair.key] = redact(pair.value, homeDirectory: homeDirectory)
+            guard allowedKeys.contains(pair.key), !shouldDropMetadataKey(pair.key) else {
+                return
             }
+
+            sanitized[pair.key] = redact(pair.value, homeDirectory: homeDirectory)
         }
     }
 

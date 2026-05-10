@@ -9,6 +9,8 @@ struct ClawShellCoreChecks {
         try lifecycleComponentsCanStartAndStopTogether()
         try settingsPersistWithExpectedSchema()
         try corruptSettingsRecoverToDefaults()
+        try unsupportedSchemaDoesNotRecoverAsCorrupt()
+        try invalidSettingsAreRejected()
         try settingsExportExcludesLocalOnlyState()
         try logsRedactSensitiveFields()
         try logsEnforceRetention()
@@ -124,6 +126,78 @@ struct ClawShellCoreChecks {
         try check(recoveredFiles.count == 1, "Expected corrupt settings file to be moved aside")
     }
 
+    private static func unsupportedSchemaDoesNotRecoverAsCorrupt() throws {
+        let paths = try makeTemporaryPaths()
+        defer { try? FileManager.default.removeItem(at: paths.applicationSupportDirectory) }
+
+        let futureSettings = """
+        {
+          "schemaVersion": 999,
+          "launchAtLogin": true,
+          "defaultGraceSeconds": 900,
+          "agents": [],
+          "customAgents": [],
+          "integrationSuppressions": {},
+          "safety": {
+            "temperatureWarningCelsius": 85,
+            "temperatureCutoffCelsius": 95,
+            "batteryFloorPercent": 15
+          },
+          "manualOverrides": [],
+          "helperOwnership": null
+        }
+        """
+        try FileManager.default.createDirectory(at: paths.applicationSupportDirectory, withIntermediateDirectories: true)
+        try Data(futureSettings.utf8).write(to: paths.settingsURL)
+
+        let logStore = LogStore(paths: paths, homeDirectory: "/Users/tester")
+        let store = SettingsStore(paths: paths, logStore: logStore)
+        logStore.start()
+        store.start()
+
+        let settingsJSON = try String(contentsOf: paths.settingsURL, encoding: .utf8)
+        try check(settingsJSON.contains("\"schemaVersion\": 999"), "Expected unsupported schema file to be preserved")
+        try check(
+            !logStore.events.map(\.kind).contains(.settingsRecoveredFromCorruption),
+            "Expected unsupported schema not to be treated as corruption"
+        )
+
+        let recoveredFiles = try FileManager.default.contentsOfDirectory(atPath: paths.applicationSupportDirectory.path)
+            .filter { $0.hasPrefix("settings.corrupt.") }
+        try check(recoveredFiles.isEmpty, "Expected unsupported schema not to be moved aside")
+    }
+
+    private static func invalidSettingsAreRejected() throws {
+        let paths = try makeTemporaryPaths()
+        defer { try? FileManager.default.removeItem(at: paths.applicationSupportDirectory) }
+
+        let store = SettingsStore(paths: paths)
+
+        var invalidGrace = ClawShellSettings()
+        invalidGrace.defaultGraceSeconds = -1
+        try expectThrows("Expected invalid grace settings to be rejected") {
+            try store.save(invalidGrace)
+        }
+
+        var invalidSafety = ClawShellSettings()
+        invalidSafety.safety = SafetySettings(
+            temperatureWarningCelsius: 100,
+            temperatureCutoffCelsius: 90,
+            batteryFloorPercent: 150
+        )
+        try expectThrows("Expected invalid safety settings to be rejected") {
+            try store.save(invalidSafety)
+        }
+
+        var invalidAgent = ClawShellSettings()
+        invalidAgent.agents = [
+            AgentConfiguration(id: "", displayName: "Broken", executableNames: ["broken"])
+        ]
+        try expectThrows("Expected invalid agent settings to be rejected") {
+            try store.save(invalidAgent)
+        }
+    }
+
     private static func settingsExportExcludesLocalOnlyState() throws {
         let paths = try makeTemporaryPaths()
         defer { try? FileManager.default.removeItem(at: paths.applicationSupportDirectory) }
@@ -144,6 +218,7 @@ struct ClawShellCoreChecks {
         try check(exportJSON.contains("defaultGraceSeconds"), "Expected grace settings in export")
         try check(exportJSON.contains("integrationSuppressions"), "Expected integration suppressions in export")
         try check(!exportJSON.contains("helperOwnership"), "Expected helper ownership to be excluded from export")
+        try check(!exportJSON.contains("manualOverrides"), "Expected manual overrides to be excluded from export")
         try check(!exportJSON.contains("runtime"), "Expected runtime tokens to be absent from export")
         try check(!exportJSON.contains("hookPayload"), "Expected hook payloads to be absent from export")
 
@@ -184,19 +259,23 @@ struct ClawShellCoreChecks {
             kind: .configMutation,
             message: "Updated \(home)/.claude/settings.json",
             metadata: [
+                "settingsFile": "\(home)/.claude/settings.json",
                 "configFile": "\(home)/.claude/settings.json",
                 "cwd": "\(home)/project",
+                "details": "secret prompt",
                 "prompt": "secret prompt",
                 "environment": "TOKEN=secret"
             ]
         )
 
         let event = try checkNotNil(logStore.events.last, "Expected persisted log event")
-        try check(event.message == "Updated ~/.claude/settings.json", "Expected home directory redaction")
-        try check(event.metadata["configFile"] == "~/.claude/settings.json", "Expected safe path redaction")
-        try check(event.metadata["cwd"] == "[redacted]", "Expected raw cwd redaction")
-        try check(event.metadata["prompt"] == "[redacted]", "Expected prompt redaction")
-        try check(event.metadata["environment"] == "[redacted]", "Expected environment redaction")
+        try check(event.message == "Configuration changed", "Expected canonical audit message")
+        try check(event.metadata["settingsFile"] == "~/.claude/settings.json", "Expected safe path redaction")
+        try check(event.metadata["configFile"] == nil, "Expected non-allowlisted config key to be dropped")
+        try check(event.metadata["cwd"] == nil, "Expected raw cwd key to be dropped")
+        try check(event.metadata["details"] == nil, "Expected non-allowlisted details key to be dropped")
+        try check(event.metadata["prompt"] == nil, "Expected prompt key to be dropped")
+        try check(event.metadata["environment"] == nil, "Expected environment key to be dropped")
 
         let rawLog = try String(contentsOf: paths.auditLogURL, encoding: .utf8)
         try check(!rawLog.contains(home), "Expected raw log to omit home directory")
@@ -224,10 +303,22 @@ struct ClawShellCoreChecks {
                 message: "old event"
             )
         )
+        logStore.append(
+            LogEvent(
+                timestamp: now.addingTimeInterval(8 * 24 * 60 * 60),
+                kind: .degradedConfidence,
+                message: "future event",
+                metadata: ["status": "future"]
+            )
+        )
         logStore.append(kind: .appStarted, message: "recent event")
         logStore.append(kind: .appStopped, message: String(repeating: "x", count: 300))
 
-        try check(!logStore.events.contains { $0.message == "old event" }, "Expected old log events to be trimmed")
+        try check(!logStore.events.contains { $0.kind == .crashRecovery }, "Expected old log events to be trimmed")
+        try check(
+            logStore.events.allSatisfy { $0.timestamp <= now },
+            "Expected future log timestamps to be clamped to now"
+        )
         let logSize = try FileManager.default.attributesOfItem(atPath: paths.auditLogURL.path)[.size] as? UInt64 ?? 0
         try check(logSize <= 420, "Expected log file to stay under the byte cap")
     }
@@ -245,6 +336,16 @@ struct ClawShellCoreChecks {
         }
 
         return value
+    }
+
+    private static func expectThrows(_ message: String, operation: () throws -> Void) throws {
+        do {
+            try operation()
+        } catch {
+            return
+        }
+
+        throw CheckFailure(message)
     }
 
     private static func check(_ condition: @autoclosure () -> Bool, _ message: String) throws {

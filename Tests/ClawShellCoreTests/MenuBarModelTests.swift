@@ -87,13 +87,10 @@ final class MenuBarModelTests: XCTestCase {
 }
 
 #else
-import ClawShellCore
-
-func packageHasAStandardTestTarget() {
-    _ = MenuBarModel.snapshot(currentState: .idle)
-}
+#error("This toolchain does not provide Testing or XCTest. Run `swift run ClawShellCoreChecks` for portable checks.")
 #endif
 
+#if canImport(Testing) || canImport(XCTest)
 private func placeholderTitles(in snapshot: MenuBarSnapshot) -> [String] {
     snapshot.items.compactMap { item -> String? in
         guard case .placeholderState = item.kind else {
@@ -110,3 +107,4 @@ private func makeTemporaryPaths() throws -> ClawShellPaths {
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return ClawShellPaths(applicationSupportDirectory: url)
 }
+#endif

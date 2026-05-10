@@ -15,6 +15,62 @@ public enum AuditEventKind: String, Codable, Equatable, Sendable {
     case crashRecovery
     case endpointAuthFailure
     case degradedConfidence
+
+    var message: String {
+        switch self {
+        case .appStarted:
+            "ClawShell started"
+        case .appStopped:
+            "ClawShell stopped"
+        case .stateChanged:
+            "ClawShell state changed"
+        case .settingsRecoveredFromCorruption:
+            "Corrupt settings were moved aside and replaced with defaults"
+        case .settingsSaved:
+            "Settings saved"
+        case .settingsImported:
+            "Settings imported"
+        case .configMutation:
+            "Configuration changed"
+        case .integrationSetup:
+            "Integration setup changed"
+        case .integrationRemoval:
+            "Integration removed"
+        case .helperChange:
+            "Helper state changed"
+        case .safetyCutoff:
+            "Safety cutoff triggered"
+        case .crashRecovery:
+            "Crash recovery recorded"
+        case .endpointAuthFailure:
+            "Endpoint authentication failed"
+        case .degradedConfidence:
+            "Detection confidence degraded"
+        }
+    }
+
+    var allowedMetadataKeys: Set<String> {
+        switch self {
+        case .appStarted, .appStopped, .settingsSaved, .settingsImported:
+            []
+        case .stateChanged:
+            ["state"]
+        case .settingsRecoveredFromCorruption:
+            ["settingsFile", "corruptSettingsFile"]
+        case .configMutation:
+            ["operation", "settingsFile", "agentID", "integrationID"]
+        case .integrationSetup, .integrationRemoval:
+            ["agentID", "integrationID", "settingsFile", "status"]
+        case .helperChange:
+            ["operation", "status"]
+        case .safetyCutoff:
+            ["cutoff", "status"]
+        case .crashRecovery, .endpointAuthFailure:
+            ["status", "errorCode"]
+        case .degradedConfidence:
+            ["agentID", "status"]
+        }
+    }
 }
 
 public struct LogEvent: Codable, Equatable, Sendable {
@@ -81,11 +137,16 @@ public final class LogStore: StubLifecycleComponent {
     }
 
     public func append(_ event: LogEvent) {
+        let eventTimestamp = min(event.timestamp, now())
         let sanitizedEvent = LogEvent(
-            timestamp: event.timestamp,
+            timestamp: eventTimestamp,
             kind: event.kind,
-            message: PrivacyRedactor.redact(event.message, homeDirectory: homeDirectory),
-            metadata: PrivacyRedactor.sanitizedMetadata(event.metadata, homeDirectory: homeDirectory)
+            message: event.kind.message,
+            metadata: PrivacyRedactor.sanitizedMetadata(
+                event.metadata,
+                allowedKeys: event.kind.allowedMetadataKeys,
+                homeDirectory: homeDirectory
+            )
         )
 
         events.append(sanitizedEvent)
@@ -95,10 +156,13 @@ public final class LogStore: StubLifecycleComponent {
             let line = try encoder.encode(sanitizedEvent) + Data([0x0A])
             if fileManager.fileExists(atPath: paths.auditLogURL.path) {
                 let handle = try FileHandle(forWritingTo: paths.auditLogURL)
+                defer {
+                    try? handle.close()
+                }
+
                 try handle.seekToEnd()
                 try handle.write(contentsOf: line)
                 try handle.synchronize()
-                try handle.close()
             } else {
                 try AtomicFileWriter.write(line, to: paths.auditLogURL, fileManager: fileManager)
             }
@@ -111,7 +175,7 @@ public final class LogStore: StubLifecycleComponent {
 
     public func append(
         kind: AuditEventKind,
-        message: String,
+        message: String = "",
         metadata: [String: String] = [:]
     ) {
         append(
