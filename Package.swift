@@ -33,6 +33,10 @@ let package = Package(
             name: "ClawShellCoreChecks",
             dependencies: ["ClawShellCore"],
             path: "Checks/ClawShellCoreChecks"
+        ),
+        .testTarget(
+            name: "ClawShellCoreTests",
+            dependencies: ["ClawShellCore"]
         )
     ]
 )

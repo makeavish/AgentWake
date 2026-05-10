@@ -2,8 +2,15 @@ import AppKit
 import ClawShellCore
 
 let application = NSApplication.shared
-let delegate = AppDelegate()
-
-application.delegate = delegate
 application.setActivationPolicy(.accessory)
-application.run()
+
+if CommandLine.arguments.contains("--smoke-test") {
+    let app = MenuBarApp(services: ClawShellServices())
+    app.start()
+    app.stop()
+    print("ClawShell launch smoke passed")
+} else {
+    let delegate = AppDelegate()
+    application.delegate = delegate
+    application.run()
+}

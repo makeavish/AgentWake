@@ -4,7 +4,7 @@ Close the lid. The agent keeps running.
 
 ClawShell is a planned native macOS menu bar app for keeping long-running AI coding agents alive while they work, then letting the Mac return to normal sleep behavior when they are done.
 
-It is designed for developers using tools like Claude Code, Codex CLI, Cursor, VS Code, and Gemini CLI on a MacBook as their main machine.
+It is designed for developers using tools like Claude Code and Codex CLI on a MacBook as their main machine.
 
 ## Status
 
@@ -24,17 +24,21 @@ Long-running coding agents can work for minutes or hours. macOS can interrupt th
 
 `caffeinate -i` helps with idle sleep, but it does not fully solve closed-lid workflows. ClawShell aims to make these runs reliable without becoming a general-purpose "keep my Mac awake forever" tool.
 
-## Planned V1 Support
+## Planned First Version Support
 
-| Agent | Planned V1 behavior |
+| Agent | Planned behavior |
 |---|---|
 | Claude Code | First-class local integration where available, with process fallback |
 | Codex CLI | Local notification/integration where available, with process fallback |
-| Gemini CLI | Local hook integration where available, with process fallback |
-| Cursor | App/session-level detection |
-| VS Code | App/session-level detection for stable, Insiders, and VSCodium |
 
-Custom binaries are planned too. They will use generic process detection rather than first-class integrations.
+Gemini CLI, Cursor, VS Code, and custom binaries are planned for later versions.
+
+## Planned Later Support
+
+- Gemini CLI
+- Cursor
+- VS Code
+- Custom agent binaries
 
 ## Safety Model
 
