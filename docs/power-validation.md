@@ -32,15 +32,15 @@ Do not claim clamshell-on-AC support from normal assertions until a real MacBook
 
 | Scenario | Required artifact | Current status |
 |---|---|---|
-| Idle sleep on AC | Timed idle harness output while on AC | Pending timed hardware run |
-| Idle sleep on battery | Timed idle harness output while on battery | Timed hold observed, but run was confounded by other sleep-preventing apps |
+| Idle sleep on AC | Timed idle harness output while on AC | Non-conclusive blocker-accounted run captured; assertion lifecycle observed, but clean idle validation remains open until `conclusive=true` or explicit owner sign-off accepting non-conclusive lifecycle evidence |
+| Idle sleep on battery | Timed idle harness output while on battery | Legacy confounded timed snapshot captured; assertion lifecycle observed, but clean idle validation remains open until a current-harness `conclusive=true` run or explicit owner sign-off accepting non-conclusive lifecycle evidence |
 | AC clamshell, internal display only | Manual lid-close result plus `pmset` snapshots | Not claimed |
 | AC clamshell with external display | Manual lid-close result plus `pmset` snapshots | Not claimed |
 | Battery clamshell | Bag Mode spike only; normal assertions are not proof | Not claimed |
 
 Attach generated harness directories to the relevant issue or PR when validating hardware behavior. Generated `.build/power-validation/` artifacts are local evidence and are not committed by default.
 
-Latest local smoke for this branch: `scripts/normal-assertion-validation.sh` was run for a short hold while the machine was on battery. The sanitized `during` snapshot showed a ClawShell-owned `PreventUserIdleSystemSleep` assertion, and the `after` snapshot no longer contained ClawShell-owned assertions.
+Latest local normal assertion smoke: `scripts/normal-assertion-validation.sh` was run for a short hold while the machine was on battery. The sanitized `during` snapshot showed a ClawShell-owned `PreventUserIdleSystemSleep` assertion, and the `after` snapshot no longer contained ClawShell-owned assertions.
 
 Sanitized excerpt:
 
@@ -52,4 +52,31 @@ after/pmset-assertions.txt:
 <no ClawShellPowerValidation assertions present>
 ```
 
-Latest battery timed run: `scripts/timed-idle-validation.sh` was run while the machine was on battery with `sleep = 1` minute and a 90 second ClawShell hold. The late snapshot showed ClawShell's `PreventUserIdleSystemSleep` still visible after the nominal 1-minute sleep setting elapsed, and the after snapshot no longer contained a ClawShell assertion. The run is not clean enough to close battery validation because other processes also held sleep assertions during the same window.
+Latest battery timed snapshot: `.build/power-validation/battery-timed-idle-20260510T165231Z` was captured while the machine was on battery with `sleep = 1` minute and a 90 second ClawShell hold. This is a legacy/confounded snapshot from before the timed harness wrote `validation-config.txt` and `non-clawshell-late-sleep-blockers.txt`, so treat it as lifecycle evidence only, not a clean/conclusive idle-sleep result.
+
+Sanitized battery evidence:
+
+```text
+before/pmset-battery.txt: Now drawing from 'Battery Power'
+during-late/pmset-battery.txt: Now drawing from 'Battery Power'
+after/pmset-battery.txt: Now drawing from 'Battery Power'
+hold.log: Holding normal assertions for 90 seconds
+hold.log: Assertions: PreventUserIdleSystemSleep
+during-late/pmset-assertions.txt: ClawShellPowerValidation PreventUserIdleSystemSleep present
+after/pmset-assertions.txt: no ClawShell assertion present
+during-late blockers: WindowServer UserIsActive, Comet/audio, Codex/Electron, powerd, sharingd, coreaudiod
+```
+
+Latest AC timed run: `.build/power-validation/battery-accounted-20260510T1709Z` was captured while the machine was on AC with `sleep = 1` minute and a 90 second ClawShell hold. The directory name is misleading; the run's `validation-config.txt` recorded `activePowerSource=AC Power`:
+
+```text
+activePowerSource=AC Power
+activeSleepThresholdSeconds=60
+idleSleepThresholdExceeded=true
+lateClawShellAssertion=present
+afterClawShellAssertion=missing
+nonClawShellLateSleepBlockerCount=3
+conclusive=false
+```
+
+The run confirms the normal assertion lifecycle under the AC profile, but it is not a clean/conclusive AC idle-sleep result because Codex/Electron, powerd, and WindowServer still held unrelated late blockers. A future clean hardware run should replace these blocker-accounted notes with `conclusive=true` artifacts.
