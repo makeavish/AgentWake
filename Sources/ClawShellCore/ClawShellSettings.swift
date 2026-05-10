@@ -96,7 +96,7 @@ public struct AgentConfiguration: Codable, Equatable, Sendable {
         AgentConfiguration(
             id: "claude-code",
             displayName: "Claude Code",
-            executableNames: ["claude"]
+            executableNames: ["claude", "claude-code"]
         ),
         AgentConfiguration(
             id: "codex-cli",

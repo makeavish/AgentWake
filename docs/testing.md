@@ -22,12 +22,12 @@ If the local toolchain cannot import `Testing` or `XCTest`, the script skips Swi
 
 ## Unit Test Matrix
 
-`Tests/ClawShellCoreTests` is the home for unit tests. The issue #9 coverage plan is registered in `IssueNineCoveragePlanTests`; as the implementation lands, rows marked as pending implementation should gain behavior-level assertions:
+`Tests/ClawShellCoreTests` is the home for unit tests. The issue #9 coverage plan is registered in `IssueNineCoveragePlanTests`; rows are promoted from `pendingImplementation` as behavior-level assertions land.
 
-- Session transition matrix
-- PID reuse and process restart dedupe
+- Session transition matrix: covered by `AgentSessionStateMachineTests`
+- PID reuse and process restart dedupe: covered by `AgentSessionStateMachineTests`
 - Out-of-order hook events
-- Grace timer reset and non-reset rules
+- Grace timer reset and non-reset rules: covered by `AgentSessionStateMachineTests`
 - Manual override precedence and persistence
 - Safety transitions, stale sensors, unavailable sensors, and hysteresis
 - Settings migration, atomic write, corrupt settings recovery

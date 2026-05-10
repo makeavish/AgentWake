@@ -9,13 +9,19 @@ public enum SettingsStoreError: Error, Equatable {
 }
 
 public final class SettingsStore: StubLifecycleComponent {
-    public private(set) var settings: ClawShellSettings
+    public var settings: ClawShellSettings {
+        settingsQueue.sync {
+            storedSettings
+        }
+    }
 
     private let paths: ClawShellPaths
     private let fileManager: FileManager
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private weak var logStore: LogStore?
+    private let settingsQueue = DispatchQueue(label: "wtf.vishal.clawshell.settings-store")
+    private var storedSettings: ClawShellSettings
 
     public init(
         settings: ClawShellSettings = ClawShellSettings(),
@@ -23,7 +29,7 @@ public final class SettingsStore: StubLifecycleComponent {
         fileManager: FileManager = .default,
         logStore: LogStore? = nil
     ) {
-        self.settings = settings
+        self.storedSettings = settings
         self.paths = paths
         self.fileManager = fileManager
         self.logStore = logStore
@@ -35,14 +41,14 @@ public final class SettingsStore: StubLifecycleComponent {
 
     public override func start() {
         super.start()
-        settings = loadOrRecover()
+        setSettings(loadOrRecover())
     }
 
     public func save(_ settings: ClawShellSettings) throws {
         try validate(settings)
         let data = try encoder.encode(settings)
         try AtomicFileWriter.write(data, to: paths.settingsURL, fileManager: fileManager)
-        self.settings = settings
+        setSettings(settings)
         logStore?.append(kind: .settingsSaved, message: "Settings saved")
     }
 
@@ -148,7 +154,7 @@ public final class SettingsStore: StubLifecycleComponent {
         do {
             try save(recoveredSettings)
         } catch {
-            settings = recoveredSettings
+            setSettings(recoveredSettings)
         }
 
         logStore?.append(
@@ -176,6 +182,12 @@ public final class SettingsStore: StubLifecycleComponent {
             return recoveredURL
         } catch {
             return nil
+        }
+    }
+
+    private func setSettings(_ settings: ClawShellSettings) {
+        settingsQueue.sync {
+            storedSettings = settings
         }
     }
 }
