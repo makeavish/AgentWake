@@ -88,6 +88,24 @@ public final class AgentMonitor: AppLifecycleComponent {
         }
     }
 
+    public func pauseAll(until expiresAt: Date?) {
+        queue.sync {
+            stateMachine.pauseAll(until: expiresAt)
+        }
+    }
+
+    public func releaseHeldSessions(at now: Date) {
+        queue.sync {
+            let heldSessionIDs = stateMachine.sessions
+                .filter { $0.contributesToHold(at: now) }
+                .map(\.id)
+
+            heldSessionIDs.forEach {
+                stateMachine.applyTrustedEvent(.releaseNow, to: $0, at: now)
+            }
+        }
+    }
+
     private func pollOnQueue() {
         let timestamp = now()
 
@@ -102,12 +120,6 @@ public final class AgentMonitor: AppLifecycleComponent {
         } catch {
             stateMachine.refreshExpirations(at: timestamp)
         }
-    }
-}
-
-public final class AssertionManager: StubLifecycleComponent {
-    public init() {
-        super.init(componentName: "AssertionManager")
     }
 }
 
@@ -128,13 +140,12 @@ public final class ClawShellServices {
     public init(
         agentMonitor: AgentMonitor? = nil,
         controlServer: ControlServerComponent? = nil,
-        assertionManager: AssertionManager = AssertionManager(),
+        assertionManager: AssertionManager? = nil,
         integrationManager: IntegrationManager = IntegrationManager(),
         settingsStore: SettingsStore? = nil,
         logStore: LogStore? = nil,
         paths: ClawShellPaths = .defaultPaths()
     ) {
-        self.assertionManager = assertionManager
         self.integrationManager = integrationManager
         let resolvedLogStore = logStore ?? LogStore(paths: paths)
         self.logStore = resolvedLogStore
@@ -142,10 +153,22 @@ public final class ClawShellServices {
         self.settingsStore = resolvedSettingsStore
         let resolvedAgentMonitor = agentMonitor ?? AgentMonitor(settingsProvider: { resolvedSettingsStore.settings })
         self.agentMonitor = resolvedAgentMonitor
+        let resolvedAssertionManager = assertionManager ?? AssertionManager(
+            holdStateProvider: {
+                resolvedAgentMonitor.aggregateHoldState
+            }
+        )
+        self.assertionManager = resolvedAssertionManager
         self.controlServer = controlServer ?? ControlServerComponent(
             runtimeStore: ControlRuntimeStore(paths: paths),
             router: DefaultControlCommandRouter(statusProvider: {
                 resolvedAgentMonitor.aggregateHoldState.shouldHold ? "ClawShell holding" : "ClawShell running"
+            }, pauseHandler: { duration, receivedAt in
+                resolvedAgentMonitor.pauseAll(until: receivedAt.addingTimeInterval(duration))
+                resolvedAssertionManager.reconcile()
+            }, releaseNowHandler: { receivedAt in
+                resolvedAgentMonitor.releaseHeldSessions(at: receivedAt)
+                resolvedAssertionManager.reconcile()
             })
         )
     }

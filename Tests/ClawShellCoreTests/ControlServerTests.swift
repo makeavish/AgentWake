@@ -21,6 +21,10 @@ struct ControlServerTests {
         try runReplayCacheExpiresOldEvents()
     }
 
+    @Test func controlServerRejectsInvalidPauseDurations() throws {
+        try runControlServerRejectsInvalidPauseDurations()
+    }
+
     @Test func serverUsesReceiptTimeInsteadOfClientTimestamp() throws {
         try runServerUsesReceiptTimeInsteadOfClientTimestamp()
     }
@@ -65,6 +69,10 @@ final class ControlServerTests: XCTestCase {
 
     func testReplayCacheExpiresOldEvents() throws {
         try runReplayCacheExpiresOldEvents()
+    }
+
+    func testControlServerRejectsInvalidPauseDurations() throws {
+        try runControlServerRejectsInvalidPauseDurations()
     }
 
     func testServerUsesReceiptTimeInsteadOfClientTimestamp() throws {
@@ -185,6 +193,23 @@ private func runReplayCacheExpiresOldEvents() throws {
 
     current = current.addingTimeInterval(11)
     _ = try server.handle(ControlRequest(token: "secret", eventID: "repeatable", command: .status))
+}
+
+private func runControlServerRejectsInvalidPauseDurations() throws {
+    let router = RecordingRouter()
+    let server = ControlServer(token: "secret", router: router)
+
+    try expectThrows(ControlServerError.invalidRequest("pause requires a positive finite duration")) {
+        _ = try server.handle(ControlRequest(token: "secret", eventID: "zero-pause", command: .pause(duration: 0)))
+    }
+    try expectThrows(ControlServerError.invalidRequest("pause requires a positive finite duration")) {
+        _ = try server.handle(ControlRequest(token: "secret", eventID: "negative-pause", command: .pause(duration: -1)))
+    }
+    try expectThrows(ControlServerError.invalidRequest("pause requires a positive finite duration")) {
+        _ = try server.handle(ControlRequest(token: "secret", eventID: "infinite-pause", command: .pause(duration: .infinity)))
+    }
+
+    try check(router.commands.isEmpty, "Expected invalid pause commands not to reach router")
 }
 
 private func runServerUsesReceiptTimeInsteadOfClientTimestamp() throws {

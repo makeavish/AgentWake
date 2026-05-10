@@ -16,10 +16,21 @@ struct ClawShellCoreChecks {
         try cpuDiagnosticsDoNotDriveTransitions()
         try remainingTransitionRowsAreExecutable()
         try trustedEventsAreMonotonic()
+        try assertionManagerAcquiresValidatedNormalAssertionsAndReleases()
+        try assertionManagerPauseAndReleaseOverridesStopAssertions()
+        try assertionManagerPartialCreateFailureKeepsAcquiredAssertionsAndRetriesMissingOnes()
+        try assertionManagerFailedReleaseRemainsTrackedAndRetriesWithoutHidingError()
+        try controlRouterPauseAndReleaseReconcileAssertions()
+        try assertionManagerStopReleasesHeldAssertions()
+        try assertionManagerStopWithFailedReleaseDoesNotReportStoppedUntilRetryCompletes()
+        try stoppedAssertionManagerDoesNotReacquireAssertions()
+        try normalAssertionPolicyAvoidsDisplayAndDiskAssertions()
+        try assertionManagerDefaultReconcileIntervalMeetsReleaseSLA()
         try controlRuntimeStoreCreatesPrivateDirectoryAndRotatingToken()
         try controlServerRejectsAuthReplayAndRateLimitFailures()
         try controlServerRateLimitsPerProcessAndTokenBackstop()
         try replayCacheExpiresOldEvents()
+        try controlServerRejectsInvalidPauseDurations()
         try controlServerUsesReceiptTime()
         try cliParsesCommandsAndSendsThroughClient()
         try cliRejectsExtraArgumentsAndUnknownFlags()
@@ -392,6 +403,239 @@ struct ClawShellCoreChecks {
         try check(machine.sessions[0].state == .finished, "Expected terminal finished session not to reactivate")
     }
 
+    private static func assertionManagerAcquiresValidatedNormalAssertionsAndReleases() throws {
+        let controller = RecordingPowerAssertionController()
+        let heldSessionID = UUID()
+        var holdState = AgentAggregateHoldState(shouldHold: false, heldSessionIDs: [])
+        let manager = AssertionManager(
+            controller: controller,
+            holdStateProvider: { holdState },
+            reconcileInterval: 60
+        )
+
+        manager.start()
+        try check(controller.createdTypes.isEmpty, "Expected no assertion while aggregate hold is false")
+
+        holdState = AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [heldSessionID])
+        manager.reconcile()
+
+        try check(
+            controller.createdTypes == [.preventUserIdleSystemSleep],
+            "Expected validated normal assertion set"
+        )
+        try check(manager.snapshot.isHolding, "Expected manager snapshot to report active hold")
+
+        holdState = AgentAggregateHoldState(shouldHold: false, heldSessionIDs: [])
+        manager.reconcile()
+
+        try check(controller.releasedIDs.count == 1, "Expected normal assertion to release")
+        try check(!manager.snapshot.isHolding, "Expected manager snapshot to report released state")
+        manager.stop()
+    }
+
+    private static func assertionManagerPauseAndReleaseOverridesStopAssertions() throws {
+        let controller = RecordingPowerAssertionController()
+        var holdState = AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [UUID()])
+        let manager = AssertionManager(
+            controller: controller,
+            holdStateProvider: { holdState },
+            reconcileInterval: 60
+        )
+
+        manager.start()
+        try check(manager.snapshot.isHolding, "Expected initial aggregate hold to create assertions")
+
+        holdState = AgentAggregateHoldState(shouldHold: false, heldSessionIDs: [], isPaused: true)
+        manager.reconcile()
+        try check(!manager.snapshot.isHolding, "Expected pause override to release assertions")
+
+        holdState = AgentAggregateHoldState(shouldHold: false, heldSessionIDs: [])
+        manager.reconcile()
+        try check(controller.createdTypes.count == 1, "Expected release-now false hold state not to reacquire assertions")
+        manager.stop()
+    }
+
+    private static func assertionManagerPartialCreateFailureKeepsAcquiredAssertionsAndRetriesMissingOnes() throws {
+        let controller = RecordingPowerAssertionController()
+        controller.createFailures[.preventDiskIdle] = PowerAssertionError.createFailed(type: .preventDiskIdle, code: -1)
+        let policy = NormalPowerAssertionPolicy(assertionTypes: [.preventUserIdleSystemSleep, .preventDiskIdle])
+        let manager = AssertionManager(
+            controller: controller,
+            policy: policy,
+            holdStateProvider: { AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [UUID()]) },
+            reconcileInterval: 60
+        )
+
+        manager.start()
+        try check(manager.snapshot.heldAssertions.map(\.type) == [.preventUserIdleSystemSleep], "Expected successful assertion to stay tracked")
+        try check(manager.snapshot.lastErrorDescription != nil, "Expected create failure to stay visible")
+
+        controller.createFailures.removeAll()
+        manager.reconcile()
+        try check(
+            manager.snapshot.heldAssertions.map(\.type) == [.preventDiskIdle, .preventUserIdleSystemSleep],
+            "Expected missing assertion type to be created on retry"
+        )
+        try check(manager.snapshot.lastErrorDescription == nil, "Expected retry success to clear create error")
+        manager.stop()
+    }
+
+    private static func assertionManagerFailedReleaseRemainsTrackedAndRetriesWithoutHidingError() throws {
+        let controller = RecordingPowerAssertionController()
+        let policy = NormalPowerAssertionPolicy(assertionTypes: [.preventUserIdleSystemSleep, .preventDiskIdle])
+        var holdState = AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [UUID()])
+        let manager = AssertionManager(
+            controller: controller,
+            policy: policy,
+            holdStateProvider: { holdState },
+            reconcileInterval: 60
+        )
+
+        manager.start()
+        controller.releaseFailures = [PowerAssertionID(rawValue: 1)]
+        holdState = AgentAggregateHoldState(shouldHold: false, heldSessionIDs: [])
+        manager.reconcile()
+
+        try check(manager.snapshot.heldAssertions.map(\.type) == [.preventUserIdleSystemSleep], "Expected failed release to remain tracked")
+        try check(manager.snapshot.lastErrorDescription != nil, "Expected failed release error to remain visible")
+
+        holdState = AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [UUID()])
+        controller.releaseFailures.removeAll()
+        manager.reconcile()
+        try check(
+            manager.snapshot.heldAssertions.map(\.type) == [.preventDiskIdle, .preventUserIdleSystemSleep],
+            "Expected re-hold to recreate missing desired assertion"
+        )
+        try check(manager.snapshot.lastErrorDescription == nil, "Expected successful reconcile to clear release error")
+        manager.stop()
+    }
+
+    private static func controlRouterPauseAndReleaseReconcileAssertions() throws {
+        var current = Date(timeIntervalSince1970: 9_000)
+        let monitor = AgentMonitor(
+            snapshotProvider: StaticSnapshotProvider(
+                snapshotsToReturn: [
+                    ProcessSnapshot(
+                        pid: 41,
+                        processName: "codex",
+                        executablePath: "/opt/homebrew/bin/codex",
+                        processStartTime: current
+                    )
+                ]
+            ),
+            now: { current }
+        )
+        let controller = RecordingPowerAssertionController()
+        let manager = AssertionManager(
+            controller: controller,
+            holdStateProvider: { monitor.aggregateHoldState },
+            reconcileInterval: 60
+        )
+        let router = DefaultControlCommandRouter(
+            pauseHandler: { duration, receivedAt in
+                monitor.pauseAll(until: receivedAt.addingTimeInterval(duration))
+                manager.reconcile()
+            },
+            releaseNowHandler: { receivedAt in
+                monitor.releaseHeldSessions(at: receivedAt)
+                manager.reconcile()
+            }
+        )
+
+        monitor.start()
+        manager.start()
+        try check(manager.snapshot.isHolding, "Expected process-backed session to hold assertions")
+
+        _ = try router.route(.pause(duration: 60), receivedAt: current)
+        try check(!manager.snapshot.isHolding, "Expected pause command to release assertions")
+
+        current = current.addingTimeInterval(61)
+        monitor.poll()
+        manager.reconcile()
+        try check(manager.snapshot.isHolding, "Expected assertions to resume after pause expiry")
+
+        _ = try router.route(.releaseNow, receivedAt: current)
+        try check(!manager.snapshot.isHolding, "Expected release now command to release assertions")
+
+        manager.stop()
+        monitor.stop()
+    }
+
+    private static func assertionManagerStopReleasesHeldAssertions() throws {
+        let controller = RecordingPowerAssertionController()
+        let manager = AssertionManager(
+            controller: controller,
+            holdStateProvider: { AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [UUID()]) },
+            reconcileInterval: 60
+        )
+
+        manager.start()
+        try check(manager.snapshot.isHolding, "Expected manager to hold after start")
+
+        manager.stop()
+
+        try check(controller.releasedIDs.count == 1, "Expected stop to release held assertion")
+        try check(manager.snapshot.runState == .stopped, "Expected manager to report stopped state")
+        try check(!manager.snapshot.isHolding, "Expected stopped manager to report no active assertions")
+    }
+
+    private static func assertionManagerStopWithFailedReleaseDoesNotReportStoppedUntilRetryCompletes() throws {
+        let controller = RecordingPowerAssertionController()
+        let manager = AssertionManager(
+            controller: controller,
+            holdStateProvider: { AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [UUID()]) },
+            reconcileInterval: 60
+        )
+
+        manager.start()
+        controller.releaseFailures = [PowerAssertionID(rawValue: 1)]
+        manager.stop()
+
+        try check(manager.snapshot.runState == .started, "Expected manager not to report stopped while release retry is pending")
+        try check(manager.snapshot.isHolding, "Expected failed release to remain tracked after stop")
+        try check(manager.snapshot.lastErrorDescription != nil, "Expected stop release failure to stay visible")
+
+        controller.releaseFailures.removeAll()
+        manager.reconcile()
+
+        try check(manager.snapshot.runState == .stopped, "Expected manager to report stopped after release retry succeeds")
+        try check(!manager.snapshot.isHolding, "Expected retry to clear held assertion")
+    }
+
+    private static func stoppedAssertionManagerDoesNotReacquireAssertions() throws {
+        let controller = RecordingPowerAssertionController()
+        let manager = AssertionManager(
+            controller: controller,
+            holdStateProvider: { AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [UUID()]) },
+            reconcileInterval: 60
+        )
+
+        manager.start()
+        manager.stop()
+        manager.reconcile()
+
+        try check(controller.createdTypes.count == 1, "Expected stopped reconcile not to reacquire assertions")
+        try check(manager.snapshot.runState == .stopped, "Expected manager to remain stopped")
+        try check(!manager.snapshot.isHolding, "Expected stopped manager not to hold assertions")
+    }
+
+    private static func normalAssertionPolicyAvoidsDisplayAndDiskAssertions() throws {
+        let defaults = NormalPowerAssertionPolicy.validatedDefault.assertionTypes
+        try check(defaults == [.preventUserIdleSystemSleep], "Expected user-idle system sleep assertion by default")
+        try check(!defaults.contains(.preventDisplaySleep), "Expected display sleep assertion to stay disabled by default")
+        try check(!defaults.contains(.preventDiskIdle), "Expected disk idle assertion to stay out of default set")
+        try check(!defaults.contains(.preventSystemSleep), "Expected unsupported system sleep assertion to stay out of default set")
+        try check(
+            NormalPowerAssertionPolicy.validationCandidateAssertionTypes.contains(.preventDiskIdle),
+            "Expected disk idle to remain an explicit validation candidate"
+        )
+    }
+
+    private static func assertionManagerDefaultReconcileIntervalMeetsReleaseSLA() throws {
+        let manager = AssertionManager()
+        try check(manager.reconcileInterval <= 30, "Expected assertion release polling interval within 30 seconds")
+    }
+
     private static func controlRuntimeStoreCreatesPrivateDirectoryAndRotatingToken() throws {
         let paths = try makeTemporaryPaths()
         defer { try? FileManager.default.removeItem(at: paths.applicationSupportDirectory) }
@@ -480,6 +724,23 @@ struct ClawShellCoreChecks {
 
         current = current.addingTimeInterval(11)
         _ = try server.handle(ControlRequest(token: "secret", eventID: "repeatable", command: .status))
+    }
+
+    private static func controlServerRejectsInvalidPauseDurations() throws {
+        let router = RecordingControlRouter()
+        let server = ControlServer(token: "secret", router: router)
+
+        try expectThrows("Expected zero pause duration to be rejected") {
+            _ = try server.handle(ControlRequest(token: "secret", eventID: "zero-pause", command: .pause(duration: 0)))
+        }
+        try expectThrows("Expected negative pause duration to be rejected") {
+            _ = try server.handle(ControlRequest(token: "secret", eventID: "negative-pause", command: .pause(duration: -1)))
+        }
+        try expectThrows("Expected infinite pause duration to be rejected") {
+            _ = try server.handle(ControlRequest(token: "secret", eventID: "infinite-pause", command: .pause(duration: .infinity)))
+        }
+
+        try check(router.commands.isEmpty, "Expected invalid pause commands not to reach router")
     }
 
     private static func controlServerUsesReceiptTime() throws {
@@ -1017,5 +1278,29 @@ final class RecordingControlClient: ControlClient {
     func send(_ command: ControlCommand) throws -> ControlResponse {
         commands.append(command)
         return ControlResponse(accepted: true, receiptTimestamp: Date(timeIntervalSince1970: 1), message: "ok")
+    }
+}
+
+final class RecordingPowerAssertionController: PowerAssertionControlling {
+    var createdTypes: [PowerAssertionType] = []
+    var releasedIDs: [PowerAssertionID] = []
+    var createFailures: [PowerAssertionType: Error] = [:]
+    var releaseFailures: Set<PowerAssertionID> = []
+    private var nextID: UInt32 = 1
+
+    func createAssertion(type: PowerAssertionType, reason: String) throws -> PowerAssertionID {
+        createdTypes.append(type)
+        if let failure = createFailures[type] {
+            throw failure
+        }
+        defer { nextID += 1 }
+        return PowerAssertionID(rawValue: nextID)
+    }
+
+    func releaseAssertion(_ id: PowerAssertionID) throws {
+        releasedIDs.append(id)
+        if releaseFailures.contains(id) {
+            throw PowerAssertionError.releaseFailed(id: id, code: -1)
+        }
     }
 }

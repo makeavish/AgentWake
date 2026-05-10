@@ -217,6 +217,8 @@ public final class ControlServer: @unchecked Sendable {
             throw ControlServerError.unauthenticated
         }
 
+        try validateCommand(request.command)
+
         guard !request.eventID.isEmpty else {
             throw ControlServerError.invalidRequest("control request requires an event ID")
         }
@@ -281,41 +283,59 @@ public final class ControlServer: @unchecked Sendable {
             replayedEventIDs.removeValue(forKey: $0)
         }
     }
+
+    private func validateCommand(_ command: ControlCommand) throws {
+        if case .pause(let duration) = command {
+            guard duration.isFinite, duration > 0 else {
+                throw ControlServerError.invalidRequest("pause requires a positive finite duration")
+            }
+        }
+    }
 }
 
 public struct DefaultControlCommandRouter: ControlCommandRouting {
     public var statusProvider: () -> String
+    public var pauseHandler: (TimeInterval, Date) -> Void
+    public var releaseNowHandler: (Date) -> Void
 
-    public init(statusProvider: @escaping () -> String = { "ClawShell status unavailable" }) {
+    public init(
+        statusProvider: @escaping () -> String = { "ClawShell status unavailable" },
+        pauseHandler: @escaping (TimeInterval, Date) -> Void = { _, _ in },
+        releaseNowHandler: @escaping (Date) -> Void = { _ in }
+    ) {
         self.statusProvider = statusProvider
+        self.pauseHandler = pauseHandler
+        self.releaseNowHandler = releaseNowHandler
     }
 
     public func route(_ command: ControlCommand, receivedAt: Date) throws -> ControlResponse {
         switch command {
         case .status:
-            ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: statusProvider())
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: statusProvider())
         case .pause(let duration):
-            ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Pause requested for \(Int(duration)) seconds")
+            pauseHandler(duration, receivedAt)
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Pause requested for \(Int(duration)) seconds")
         case .releaseNow:
-            ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Release requested")
+            releaseNowHandler(receivedAt)
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Release requested")
         case .list:
-            ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "No sessions reported")
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "No sessions reported")
         case .add(let binary):
-            ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Custom binary support is post-v1: \(binary)")
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Custom binary support is post-v1: \(binary)")
         case .integrationsList:
-            ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Integrations: claude-code, codex-cli")
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Integrations: claude-code, codex-cli")
         case .integrationsStatus:
-            ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Integration setup pending")
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Integration setup pending")
         case .integrationsRemove(let agentID):
-            ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Remove integration requested: \(agentID)")
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Remove integration requested: \(agentID)")
         case .integrationsEnableAuto(let agentID):
-            ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Auto-integration enabled: \(agentID)")
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Auto-integration enabled: \(agentID)")
         case .helperStatus:
-            ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Helper not installed")
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Helper not installed")
         case .helperRepair:
-            ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Helper repair is unavailable in this build")
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Helper repair is unavailable in this build")
         case .uninstall(let removeHelper, let removeIntegrations):
-            ControlResponse(
+            return ControlResponse(
                 accepted: true,
                 receiptTimestamp: receivedAt,
                 message: "Uninstall requested removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations)"

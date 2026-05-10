@@ -29,6 +29,7 @@ If the local toolchain cannot import `Testing` or `XCTest`, the script skips Swi
 - Out-of-order hook events
 - Grace timer reset and non-reset rules: covered by `AgentSessionStateMachineTests`
 - Manual override precedence and persistence
+- Normal assertion ownership/release and failed-release retry behavior: covered by `AssertionManagerTests`
 - Safety transitions, stale sensors, unavailable sensors, and hysteresis
 - Settings migration, atomic write, corrupt settings recovery
 - Export redaction and exclusion rules
@@ -63,6 +64,14 @@ scripts/pmset-snapshot.sh
 ```
 
 The harness captures `pmset` and power-state diagnostics without changing power settings. It must not be used as proof that ClawShell blocks clamshell sleep; it only records state for validation artifacts.
+
+Use the normal assertion validation harness to capture `before`, `during`, and `after` snapshots around a temporary non-privileged IOPM hold:
+
+```sh
+scripts/normal-assertion-validation.sh
+```
+
+See [power-validation.md](power-validation.md) for the current normal assertion policy, disk/display assertion status, and hardware result matrix.
 
 ## Manual Hardware Checklist
 
