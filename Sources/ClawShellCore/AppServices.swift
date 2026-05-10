@@ -2,7 +2,11 @@ import Foundation
 
 public final class AgentMonitor: AppLifecycleComponent {
     public let componentName = "AgentMonitor"
-    public private(set) var runState: ComponentRunState = .stopped
+    public var runState: ComponentRunState {
+        queue.sync {
+            storedRunState
+        }
+    }
 
     public let pollInterval: TimeInterval
 
@@ -12,6 +16,7 @@ public final class AgentMonitor: AppLifecycleComponent {
     private let now: () -> Date
     private let queue: DispatchQueue
     private var timer: DispatchSourceTimer?
+    private var storedRunState: ComponentRunState = .stopped
 
     public init(
         snapshotProvider: ProcessSnapshotProviding = LibprocProcessSnapshotProvider(),
@@ -42,26 +47,30 @@ public final class AgentMonitor: AppLifecycleComponent {
     }
 
     public func start() {
-        guard runState == .stopped else {
-            return
-        }
+        queue.sync {
+            guard storedRunState == .stopped else {
+                return
+            }
 
-        runState = .started
-        poll()
+            storedRunState = .started
+            pollOnQueue()
 
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + pollInterval, repeating: pollInterval)
-        timer.setEventHandler { [weak self] in
-            self?.pollOnQueue()
+            let timer = DispatchSource.makeTimerSource(queue: queue)
+            timer.schedule(deadline: .now() + pollInterval, repeating: pollInterval)
+            timer.setEventHandler { [weak self] in
+                self?.pollOnQueue()
+            }
+            timer.resume()
+            self.timer = timer
         }
-        timer.resume()
-        self.timer = timer
     }
 
     public func stop() {
-        timer?.cancel()
-        timer = nil
-        runState = .stopped
+        queue.sync {
+            timer?.cancel()
+            timer = nil
+            storedRunState = .stopped
+        }
     }
 
     public func poll() {

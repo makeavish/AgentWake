@@ -21,29 +21,29 @@ public final class AgentSessionStateMachine {
     public func applyProcessObservations(_ observations: [AgentProcessObservation], at now: Date) {
         refreshExpirations(at: now)
 
-        let observedIdentities = Set(observations.compactMap(\.key.processIdentity))
+        let observedRuntimeIdentities = Set(observations.compactMap(\.key.processRuntimeIdentity))
         for index in sessions.indices {
             guard sessions[index].source == .processScan,
-                  sessions[index].state != .finished,
-                  let identity = sessions[index].key.processIdentity,
-                  !observedIdentities.contains(identity) else {
+                  let identity = sessions[index].key.processRuntimeIdentity,
+                  !observedRuntimeIdentities.contains(identity) else {
                 continue
             }
 
-            sessions[index].state = .finished
-            sessions[index].standingByExpiresAt = nil
-            sessions[index].lastEvent = SessionEvent(kind: .processDisappeared, occurredAt: now)
+            markProcessDisappeared(at: index, now: now)
         }
 
         for observation in observations {
-            guard let identity = observation.key.processIdentity else {
+            guard let runtimeIdentity = observation.key.processRuntimeIdentity else {
                 continue
             }
 
-            if let index = sessions.firstIndex(where: { $0.key.processIdentity == identity }) {
-                sessions[index].lastObservedAt = now
-                sessions[index].diagnosticCPUPercent = observation.snapshot.cpuPercent
+            if let index = firstProcessSessionIndex(matching: observation.key) {
+                updateSession(at: index, with: observation, at: now)
             } else {
+                if let volatileIndex = sessions.firstIndex(where: { $0.key.processRuntimeIdentity == runtimeIdentity }) {
+                    markProcessDisappeared(at: volatileIndex, now: now)
+                }
+
                 sessions.append(
                     AgentSession(
                         key: observation.key,
@@ -62,7 +62,13 @@ public final class AgentSessionStateMachine {
     }
 
     public func applyTrustedEvent(_ kind: SessionEventKind, to sessionID: UUID, at now: Date) {
+        refreshExpirations(at: now)
+
         guard let index = sessions.firstIndex(where: { $0.id == sessionID }) else {
+            return
+        }
+
+        guard shouldAcceptTrustedEvent(kind, forSessionAt: index, at: now) else {
             return
         }
 
@@ -140,17 +146,23 @@ public final class AgentSessionStateMachine {
             sessions[index].lastEvent = SessionEvent(kind: kind, occurredAt: now)
 
         case .toolStarted, .agentResumed, .processTreeChanged:
+            guard !sessions[index].hasTerminalEndEvent else {
+                return
+            }
+
             sessions[index].state = .active
             sessions[index].lastActivityAt = now
             sessions[index].standingByExpiresAt = nil
             sessions[index].lastEvent = SessionEvent(kind: kind, occurredAt: now)
 
         case .keepHolding:
-            guard sessions[index].state == .standingBy else {
+            guard sessions[index].state == .standingBy,
+                  let expiresAt = sessions[index].standingByExpiresAt,
+                  expiresAt > now else {
                 return
             }
 
-            let baseline = max(sessions[index].standingByExpiresAt ?? now, now)
+            let baseline = max(expiresAt, now)
             sessions[index].standingByExpiresAt = baseline.addingTimeInterval(graceInterval)
             sessions[index].lastEvent = SessionEvent(kind: kind, occurredAt: now)
 
@@ -162,6 +174,100 @@ public final class AgentSessionStateMachine {
 
         case .matchingProcessStarted, .graceExpired:
             return
+        }
+    }
+
+    private func firstProcessSessionIndex(matching key: SessionKey) -> Array<AgentSession>.Index? {
+        if let identity = key.processIdentity,
+           let index = sessions.firstIndex(where: { $0.key.processIdentity == identity }) {
+            return index
+        }
+
+        return sessions.firstIndex { session in
+            guard session.source == .processScan,
+                  let runtimeIdentity = key.processRuntimeIdentity,
+                  session.key.processRuntimeIdentity == runtimeIdentity else {
+                return false
+            }
+
+            return canReconcileExecutablePathVolatility(existing: session.key, incoming: key)
+        }
+    }
+
+    private func canReconcileExecutablePathVolatility(existing: SessionKey, incoming: SessionKey) -> Bool {
+        guard existing.processRuntimeIdentity == incoming.processRuntimeIdentity else {
+            return false
+        }
+
+        if existing.executablePathHash == incoming.executablePathHash {
+            return true
+        }
+
+        return !existing.executablePathHashIsVerified || !incoming.executablePathHashIsVerified
+    }
+
+    private func updateSession(
+        at index: Array<AgentSession>.Index,
+        with observation: AgentProcessObservation,
+        at now: Date
+    ) {
+        sessions[index].lastObservedAt = now
+        sessions[index].diagnosticCPUPercent = observation.snapshot.cpuPercent
+        sessions[index].processExitedAt = nil
+
+        if observation.key.executablePathHashIsVerified {
+            sessions[index].key.executablePathHash = observation.key.executablePathHash
+            sessions[index].key.executablePathHashIsVerified = true
+        } else if sessions[index].key.executablePathHash == nil {
+            sessions[index].key.executablePathHash = observation.key.executablePathHash
+            sessions[index].key.executablePathHashIsVerified = false
+        }
+    }
+
+    private func markProcessDisappeared(at index: Array<AgentSession>.Index, now: Date) {
+        if sessions[index].processExitedAt == nil {
+            sessions[index].processExitedAt = now
+        }
+
+        guard sessions[index].state != .finished else {
+            sessions[index].lastEvent = SessionEvent(kind: .processDisappeared, occurredAt: now)
+            return
+        }
+
+        sessions[index].state = .finished
+        sessions[index].standingByExpiresAt = nil
+        sessions[index].lastEvent = SessionEvent(kind: .processDisappeared, occurredAt: now)
+    }
+
+    private func shouldAcceptTrustedEvent(
+        _ kind: SessionEventKind,
+        forSessionAt index: Array<AgentSession>.Index,
+        at now: Date
+    ) -> Bool {
+        if let lastEventAt = sessions[index].lastEvent?.occurredAt, now < lastEventAt {
+            return false
+        }
+
+        if sessions[index].hasTerminalEndEvent {
+            switch kind {
+            case .toolStarted, .agentResumed, .processTreeChanged, .turnFinished, .keepHolding:
+                return false
+            default:
+                return true
+            }
+        }
+
+        return true
+    }
+}
+
+private extension AgentSession {
+    var hasTerminalEndEvent: Bool {
+        switch lastEvent?.kind {
+        case .sessionFinished, .processDisappeared, .graceExpired:
+            true
+        default:
+            false
         }
     }
 }

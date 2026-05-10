@@ -22,7 +22,7 @@ public enum AgentKind: String, Codable, CaseIterable, Equatable, Hashable, Ident
         case .claudeCode:
             ["claude", "claude-code"]
         case .codexCLI:
-            ["codex"]
+            ["codex", "codex-aarch64-apple-darwin", "codex-x86_64-apple-darwin"]
         }
     }
 
@@ -80,6 +80,7 @@ public struct SessionKey: Codable, Equatable, Hashable, Sendable {
     public var processStartTime: Date?
     public var auditTokenHash: String?
     public var executablePathHash: String?
+    public var executablePathHashIsVerified: Bool
     public var bundleIdentifier: String?
     public var integrationSessionId: String?
     public var cwdHash: String?
@@ -89,6 +90,7 @@ public struct SessionKey: Codable, Equatable, Hashable, Sendable {
         processStartTime: Date? = nil,
         auditTokenHash: String? = nil,
         executablePathHash: String? = nil,
+        executablePathHashIsVerified: Bool = false,
         bundleIdentifier: String? = nil,
         integrationSessionId: String? = nil,
         cwdHash: String? = nil
@@ -97,6 +99,7 @@ public struct SessionKey: Codable, Equatable, Hashable, Sendable {
         self.processStartTime = processStartTime
         self.auditTokenHash = auditTokenHash
         self.executablePathHash = executablePathHash
+        self.executablePathHashIsVerified = executablePathHashIsVerified
         self.bundleIdentifier = bundleIdentifier
         self.integrationSessionId = integrationSessionId
         self.cwdHash = cwdHash
@@ -112,6 +115,24 @@ public struct SessionKey: Codable, Equatable, Hashable, Sendable {
             processStartTime: processStartTime,
             executablePathHash: executablePathHash
         )
+    }
+
+    public var processRuntimeIdentity: ProcessRuntimeIdentity? {
+        guard let pid, let processStartTime else {
+            return nil
+        }
+
+        return ProcessRuntimeIdentity(pid: pid, processStartTime: processStartTime)
+    }
+}
+
+public struct ProcessRuntimeIdentity: Equatable, Hashable, Sendable {
+    public var pid: Int32
+    public var processStartTime: Date
+
+    public init(pid: Int32, processStartTime: Date) {
+        self.pid = pid
+        self.processStartTime = processStartTime
     }
 }
 
@@ -129,7 +150,7 @@ public struct ProcessSessionIdentity: Equatable, Hashable, Sendable {
 
 public struct AgentSession: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
-    public let key: SessionKey
+    public var key: SessionKey
     public let agent: AgentKind
     public let confidence: DetectionConfidence
     public let source: DetectionSource
@@ -141,6 +162,7 @@ public struct AgentSession: Codable, Equatable, Identifiable, Sendable {
     public var holdWhileOpen: Bool
     public var lastEvent: SessionEvent?
     public var diagnosticCPUPercent: Double?
+    public var processExitedAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -155,7 +177,8 @@ public struct AgentSession: Codable, Equatable, Identifiable, Sendable {
         standingByExpiresAt: Date? = nil,
         holdWhileOpen: Bool = false,
         lastEvent: SessionEvent? = nil,
-        diagnosticCPUPercent: Double? = nil
+        diagnosticCPUPercent: Double? = nil,
+        processExitedAt: Date? = nil
     ) {
         self.id = id
         self.key = key
@@ -170,6 +193,7 @@ public struct AgentSession: Codable, Equatable, Identifiable, Sendable {
         self.holdWhileOpen = holdWhileOpen
         self.lastEvent = lastEvent
         self.diagnosticCPUPercent = diagnosticCPUPercent
+        self.processExitedAt = processExitedAt
     }
 
     public func contributesToHold(at now: Date) -> Bool {

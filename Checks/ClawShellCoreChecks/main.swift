@@ -9,8 +9,13 @@ struct ClawShellCoreChecks {
         try lifecycleComponentsCanStartAndStopTogether()
         try processDetectorMatchesBuiltInAgents()
         try agentMonitorPollsSnapshotsEveryTwoSecondsByDefault()
+        try agentMonitorStartUsesTimerCadence()
         try sessionStateMachineCoversProcessIdentityTransitionsAndAggregateHold()
+        try pathLookupVolatilityDoesNotSplitSessions()
+        try executablePathHashParticipatesInVerifiedIdentity()
         try cpuDiagnosticsDoNotDriveTransitions()
+        try remainingTransitionRowsAreExecutable()
+        try trustedEventsAreMonotonic()
         try settingsPersistWithExpectedSchema()
         try corruptSettingsRecoverToDefaults()
         try unsupportedSchemaDoesNotRecoverAsCorrupt()
@@ -114,8 +119,14 @@ struct ClawShellCoreChecks {
                     processStartTime: Date(timeIntervalSince1970: 1)
                 ),
                 ProcessSnapshot(
-                    pid: 14,
+                    pid: 16,
                     processName: "codex",
+                    executablePath: "/opt/homebrew/Caskroom/codex/codex-aarch64-apple-darwin",
+                    processStartTime: Date(timeIntervalSince1970: 1)
+                ),
+                ProcessSnapshot(
+                    pid: 14,
+                    processName: "not-codex",
                     executablePath: "/usr/bin/not-codex",
                     processStartTime: Date(timeIntervalSince1970: 1)
                 )
@@ -123,7 +134,7 @@ struct ClawShellCoreChecks {
         )
 
         try check(
-            observations.map(\.agent) == [.claudeCode, .claudeCode, .codexCLI, .codexCLI],
+            observations.map(\.agent) == [.claudeCode, .claudeCode, .codexCLI, .codexCLI, .codexCLI],
             "Expected built-in process detection for claude, claude-code, and codex"
         )
         try check(
@@ -131,9 +142,15 @@ struct ClawShellCoreChecks {
             "Expected executable path hashes when paths are available"
         )
         try check(
+            observations[0].key.executablePathHash == StablePathHash.sha256("/opt/homebrew/bin/claude"),
+            "Expected real executable path to drive path hash"
+        )
+        try check(
             observations[0].key.executablePathHash != "/opt/homebrew/bin/claude",
             "Expected raw executable paths not to be retained in session keys"
         )
+        try check(!observations[3].key.executablePathHashIsVerified, "Expected missing paths to be marked unverified")
+        try check(observations[4].key.executablePathHashIsVerified, "Expected resolved paths to be marked verified")
     }
 
     private static func agentMonitorPollsSnapshotsEveryTwoSecondsByDefault() throws {
@@ -157,6 +174,35 @@ struct ClawShellCoreChecks {
         monitor.poll()
         try check(monitor.sessions.count == 1, "Expected monitor poll to normalize snapshots into sessions")
         try check(monitor.sessions.first?.agent == .codexCLI, "Expected monitor to detect Codex CLI")
+    }
+
+    private static func agentMonitorStartUsesTimerCadence() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let provider = CountingSnapshotProvider(
+            snapshotsToReturn: [
+                ProcessSnapshot(
+                    pid: 25,
+                    processName: "codex",
+                    executablePath: "/opt/homebrew/bin/codex",
+                    processStartTime: now
+                )
+            ]
+        )
+        let monitor = AgentMonitor(
+            snapshotProvider: provider,
+            settingsProvider: { ClawShellSettings() },
+            pollInterval: 0.01,
+            now: { now }
+        )
+
+        monitor.start()
+        Thread.sleep(forTimeInterval: 0.05)
+        monitor.stop()
+
+        try check(
+            provider.callCount >= 2,
+            "Expected start() to perform an immediate poll and continue on the configured cadence"
+        )
     }
 
     private static func sessionStateMachineCoversProcessIdentityTransitionsAndAggregateHold() throws {
@@ -216,6 +262,54 @@ struct ClawShellCoreChecks {
         try check(!machine.aggregateHoldState(at: restartedAt.addingTimeInterval(1_811)).shouldHold, "Expected aggregate hold to release after all sessions finish or expire")
     }
 
+    private static func pathLookupVolatilityDoesNotSplitSessions() throws {
+        let baseline = Date(timeIntervalSince1970: 1_000)
+        let machine = AgentSessionStateMachine()
+
+        machine.applyProcessObservations([observationWithMissingPath(pid: 43, start: baseline)], at: baseline)
+        let sessionID = try checkNotNil(machine.sessions.first?.id, "Expected fallback process session")
+        machine.applyTrustedEvent(.turnFinished, to: sessionID, at: baseline.addingTimeInterval(10))
+        let expiry = try checkNotNil(machine.sessions.first?.standingByExpiresAt, "Expected standing-by expiry")
+
+        machine.applyProcessObservations(
+            [observation(pid: 43, start: baseline, path: "/opt/homebrew/bin/codex")],
+            at: baseline.addingTimeInterval(20)
+        )
+
+        try check(machine.sessions.count == 1, "Expected path hash upgrade not to split the same pid/start process")
+        try check(machine.sessions[0].id == sessionID, "Expected path hash upgrade to preserve session identity")
+        try check(machine.sessions[0].state == .standingBy, "Expected path hash upgrade not to reactivate the session")
+        try check(machine.sessions[0].standingByExpiresAt == expiry, "Expected path hash upgrade not to reset grace")
+        try check(machine.sessions[0].key.executablePathHash == StablePathHash.sha256("/opt/homebrew/bin/codex"), "Expected verified path hash to upgrade")
+        try check(machine.sessions[0].key.executablePathHashIsVerified, "Expected upgraded path hash to be marked verified")
+    }
+
+    private static func executablePathHashParticipatesInVerifiedIdentity() throws {
+        let baseline = Date(timeIntervalSince1970: 1_000)
+        let machine = AgentSessionStateMachine()
+
+        machine.applyProcessObservations(
+            [observation(pid: 44, start: baseline, path: "/opt/homebrew/bin/codex")],
+            at: baseline
+        )
+        let firstSessionID = try checkNotNil(machine.sessions.first?.id, "Expected first verified session")
+
+        machine.applyProcessObservations(
+            [observation(pid: 44, start: baseline, path: "/tmp/codex")],
+            at: baseline.addingTimeInterval(10)
+        )
+
+        try check(machine.sessions.count == 2, "Expected same pid/start with a different verified path to create a new identity")
+        try check(
+            machine.sessions.contains { $0.id == firstSessionID && $0.state == .finished },
+            "Expected old verified-path session to be closed"
+        )
+        try check(
+            machine.sessions.contains { $0.id != firstSessionID && $0.state == .active },
+            "Expected new verified-path identity to be active"
+        )
+    }
+
     private static func cpuDiagnosticsDoNotDriveTransitions() throws {
         let baseline = Date(timeIntervalSince1970: 2_000)
         let machine = AgentSessionStateMachine(graceInterval: 900)
@@ -233,6 +327,62 @@ struct ClawShellCoreChecks {
         try check(machine.sessions[0].state == .standingBy, "Expected CPU load not to reactivate standing-by session")
         try check(machine.sessions[0].standingByExpiresAt == originalExpiry, "Expected CPU load not to extend grace")
         try check(machine.sessions[0].diagnosticCPUPercent == 95, "Expected CPU load to be diagnostic only")
+    }
+
+    private static func remainingTransitionRowsAreExecutable() throws {
+        let baseline = Date(timeIntervalSince1970: 3_000)
+        let machine = AgentSessionStateMachine(graceInterval: 900)
+        machine.applyProcessObservations(
+            [
+                observation(pid: 80, start: baseline, path: "/opt/homebrew/bin/claude", agent: .claudeCode),
+                observation(pid: 81, start: baseline, path: "/opt/homebrew/bin/codex", agent: .codexCLI)
+            ],
+            at: baseline
+        )
+        let claudeID = try checkNotNil(machine.sessions.first(where: { $0.agent == .claudeCode })?.id, "Expected Claude session")
+        let codexID = try checkNotNil(machine.sessions.first(where: { $0.agent == .codexCLI })?.id, "Expected Codex session")
+
+        machine.applyTrustedEvent(.releaseNow, to: claudeID, at: baseline.addingTimeInterval(10))
+        try check(machine.sessions.first(where: { $0.id == claudeID })?.state == .finished, "Expected releaseNow to release the selected session")
+        try check(machine.aggregateHoldState(at: baseline.addingTimeInterval(11)).shouldHold, "Expected other active sessions to keep aggregate hold active")
+
+        machine.pauseAll(until: baseline.addingTimeInterval(20))
+        try check(machine.aggregateHoldState(at: baseline.addingTimeInterval(12)).isPaused, "Expected pauseAll to suppress aggregate hold")
+        try check(!machine.aggregateHoldState(at: baseline.addingTimeInterval(12)).shouldHold, "Expected pauseAll to release assertions")
+        try check(machine.aggregateHoldState(at: baseline.addingTimeInterval(21)).shouldHold, "Expected pause expiry to restore remaining held sessions")
+
+        machine.setSafetyCutoffActive(true)
+        try check(machine.aggregateHoldState(at: baseline.addingTimeInterval(22)).isSafetyCutoffActive, "Expected safety cutoff to be represented")
+        try check(!machine.aggregateHoldState(at: baseline.addingTimeInterval(22)).shouldHold, "Expected safety cutoff to suppress aggregate hold")
+        machine.setSafetyCutoffActive(false)
+
+        machine.applyTrustedEvent(.sessionFinished, to: codexID, at: baseline.addingTimeInterval(30))
+        try check(!machine.aggregateHoldState(at: baseline.addingTimeInterval(31)).shouldHold, "Expected sessionFinished to release when no held sessions remain")
+
+        machine.applyProcessObservations([observation(pid: 82, start: baseline.addingTimeInterval(40))], at: baseline.addingTimeInterval(40))
+        let processGoneID = try checkNotNil(machine.sessions.first(where: { $0.key.pid == 82 })?.id, "Expected process-backed session")
+        machine.applyProcessObservations([], at: baseline.addingTimeInterval(50))
+        let processGoneSession = try checkNotNil(machine.sessions.first(where: { $0.id == processGoneID }), "Expected process-backed session to remain visible")
+        try check(processGoneSession.state == .finished, "Expected missing process poll to finish the session")
+        try check(processGoneSession.processExitedAt == baseline.addingTimeInterval(50), "Expected process exit time to be recorded")
+    }
+
+    private static func trustedEventsAreMonotonic() throws {
+        let baseline = Date(timeIntervalSince1970: 4_000)
+        let machine = AgentSessionStateMachine(graceInterval: 900)
+        machine.applyProcessObservations([observation(pid: 90, start: baseline)], at: baseline)
+        let sessionID = try checkNotNil(machine.sessions.first?.id, "Expected session")
+
+        machine.applyTrustedEvent(.agentResumed, to: sessionID, at: baseline.addingTimeInterval(20))
+        machine.applyTrustedEvent(.turnFinished, to: sessionID, at: baseline.addingTimeInterval(10))
+        try check(machine.sessions[0].state == .active, "Expected stale turnFinished not to move active session backward")
+
+        machine.applyTrustedEvent(.turnFinished, to: sessionID, at: baseline.addingTimeInterval(30))
+        machine.applyTrustedEvent(.keepHolding, to: sessionID, at: baseline.addingTimeInterval(931))
+        try check(machine.sessions[0].state == .finished, "Expected expired grace to finish before keepHolding is considered")
+
+        machine.applyTrustedEvent(.agentResumed, to: sessionID, at: baseline.addingTimeInterval(940))
+        try check(machine.sessions[0].state == .finished, "Expected terminal finished session not to reactivate")
     }
 
     private static func settingsPersistWithExpectedSchema() throws {
@@ -509,7 +659,28 @@ struct ClawShellCoreChecks {
             key: SessionKey(
                 pid: pid,
                 processStartTime: start,
-                executablePathHash: StablePathHash.sha256(path)
+                executablePathHash: StablePathHash.sha256(path),
+                executablePathHashIsVerified: true
+            )
+        )
+    }
+
+    private static func observationWithMissingPath(pid: Int32, start: Date) -> AgentProcessObservation {
+        let snapshot = ProcessSnapshot(
+            pid: pid,
+            processName: "codex",
+            executablePath: nil,
+            processStartTime: start
+        )
+
+        return AgentProcessObservation(
+            agent: .codexCLI,
+            snapshot: snapshot,
+            key: SessionKey(
+                pid: pid,
+                processStartTime: start,
+                executablePathHash: StablePathHash.sha256("process:codex"),
+                executablePathHashIsVerified: false
             )
         )
     }
@@ -552,5 +723,28 @@ struct StaticSnapshotProvider: ProcessSnapshotProviding {
 
     func snapshots() throws -> [ProcessSnapshot] {
         snapshotsToReturn
+    }
+}
+
+final class CountingSnapshotProvider: ProcessSnapshotProviding {
+    var snapshotsToReturn: [ProcessSnapshot]
+    private let lock = NSLock()
+    private var count = 0
+
+    init(snapshotsToReturn: [ProcessSnapshot]) {
+        self.snapshotsToReturn = snapshotsToReturn
+    }
+
+    var callCount: Int {
+        lock.withLock {
+            count
+        }
+    }
+
+    func snapshots() throws -> [ProcessSnapshot] {
+        lock.withLock {
+            count += 1
+        }
+        return snapshotsToReturn
     }
 }

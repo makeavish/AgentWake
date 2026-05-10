@@ -29,6 +29,12 @@ public struct ProcessSnapshot: Equatable, Sendable {
 
         return processName
     }
+
+    public var matchingExecutableNames: Set<String> {
+        var names = Set([processName])
+        names.insert(executableName)
+        return names
+    }
 }
 
 public struct AgentProcessObservation: Equatable, Sendable {
@@ -77,7 +83,7 @@ public struct AgentProcessDetector: Sendable {
             }
 
             let executableNames = kind.defaultExecutableNames.union(configuration.executableNames)
-            guard executableNames.contains(snapshot.executableName) else {
+            guard !snapshot.matchingExecutableNames.isDisjoint(with: executableNames) else {
                 continue
             }
 
@@ -85,7 +91,8 @@ public struct AgentProcessDetector: Sendable {
             let key = SessionKey(
                 pid: snapshot.pid,
                 processStartTime: snapshot.processStartTime,
-                executablePathHash: StablePathHash.sha256(executableIdentity)
+                executablePathHash: StablePathHash.sha256(executableIdentity),
+                executablePathHashIsVerified: snapshot.executablePath != nil
             )
 
             return AgentProcessObservation(agent: kind, snapshot: snapshot, key: key)
