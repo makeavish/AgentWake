@@ -26,6 +26,14 @@ bash scripts/timed-idle-validation.sh
 
 By default, this holds the normal assertion for 90 seconds and captures `before`, `during-early`, `during-late`, and `after` snapshots. The harness does not change `pmset` settings. It records the active power source, the active profile's `sleep` threshold, whether the late snapshot exceeded that threshold, and any non-ClawShell sleep-preventing assertions in `validation-config.txt` and `non-clawshell-late-sleep-blockers.txt`. Treat a run as conclusive only when `validation-config.txt` contains `conclusive=true`.
 
+Before attempting a clean timed-idle run, use the preflight helper from a normal terminal to check whether the active power profile can exceed the sleep threshold and whether unrelated sleep blockers are already present:
+
+```sh
+scripts/timed-idle-preflight.sh
+```
+
+Preflight is advisory and does not hold assertions or create validation evidence. It exits successfully only when the active `sleep` threshold is lower than the configured late snapshot offset and no non-ClawShell sleep blockers are visible in `pmset -g assertions`.
+
 ## Manual Result Matrix
 
 Do not claim clamshell-on-AC support from normal assertions until a real MacBook validation pass proves it. Normal assertion artifacts should fill this matrix as hardware checks are run.

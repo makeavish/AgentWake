@@ -24,6 +24,11 @@ for slot in adapters cli config-patchers control-server power; do
     fi
 done
 
+echo "==> shell script syntax"
+for script in scripts/*.sh; do
+    bash -n "$script"
+done
+
 echo "==> swift test discovery"
 test_list_output="$(mktemp)"
 test_list_error="$(mktemp)"

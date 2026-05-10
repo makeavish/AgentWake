@@ -77,6 +77,14 @@ Use the timed idle harness for AC/battery idle behavior runs under the current m
 bash scripts/timed-idle-validation.sh
 ```
 
+Use the timed idle preflight helper before a clean run to avoid spending a full hold window when the machine is not clean right now:
+
+```sh
+scripts/timed-idle-preflight.sh
+```
+
+Preflight is only a readiness check. It does not create validation evidence; #5 still needs a timed-idle artifact with `conclusive=true` or explicit owner sign-off.
+
 See [power-validation.md](power-validation.md) for the current normal assertion policy, disk/display assertion status, timed-idle caveats, and hardware result matrix.
 
 ## Manual Hardware Checklist
