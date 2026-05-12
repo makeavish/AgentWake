@@ -198,8 +198,13 @@ approval. New artifacts default to `powermetrics --show-initial-usage -n 1 -i
 1000 --samplers thermal` so the next run can test whether an initial sample
 finishes inside the 1 second provider deadline; set
 `CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE=false` only when comparing
-against the earlier timed-out command shape. Mutating registration uses the same
-prepared artifact and requires:
+against the earlier timed-out command shape.
+
+Each new artifact also gets a unique SMAppService bundle/helper identity derived
+from its output path. This avoids reusing stale macOS approval/code-signing state
+between ad-hoc proof attempts. To force a deterministic suffix for comparison
+runs, set `CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX=<lettersAndDigits>`.
+Mutating registration uses the same prepared artifact and requires:
 
 ```bash
 scripts/temperature-provider-smappservice-proof.sh \

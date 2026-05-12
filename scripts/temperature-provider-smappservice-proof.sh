@@ -162,9 +162,30 @@ require_bool() {
     esac
 }
 
+require_identity_suffix() {
+    local name="$1"
+    local value="$2"
+    if ! [[ "$value" =~ ^[A-Za-z][A-Za-z0-9]{0,31}$ ]]; then
+        echo "$name must start with a letter and contain only letters/digits, max 32 chars" >&2
+        exit 64
+    fi
+}
+
+require_helper_label() {
+    local name="$1"
+    local value="$2"
+    if ! [[ "$value" =~ ^com[.]makeavish[.]ClawShell[.]TemperatureProviderPrototype([.][A-Za-z][A-Za-z0-9]{0,31})?[.]daemon$ ]]; then
+        echo "$name must be a ClawShell temperature provider helper label" >&2
+        exit 73
+    fi
+}
+
 require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS" "$TIMEOUT_SECONDS"
 require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_SAMPLE_RATE_MS" "$SAMPLE_RATE_MS"
 require_bool "CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE" "$SHOW_INITIAL_USAGE"
+if [[ -n "${CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX:-}" ]]; then
+    require_identity_suffix "CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX" "$CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX"
+fi
 require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_FRESHNESS_SECONDS" "$FRESHNESS_SECONDS"
 require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_ACTIVE_CADENCE_SECONDS" "$ACTIVE_CADENCE_SECONDS"
 require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_IDLE_CADENCE_SECONDS" "$IDLE_CADENCE_SECONDS"
@@ -174,8 +195,57 @@ if [[ "$EXISTING_ARTIFACT_MODE" == false ]]; then
 fi
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 
-BUNDLE_ID="com.makeavish.ClawShell.TemperatureProviderPrototype"
-HELPER_LABEL="com.makeavish.ClawShell.TemperatureProviderPrototype.daemon"
+if [[ "$EXISTING_ARTIFACT_MODE" == true ]]; then
+    existing_config_file="$OUTPUT_DIR/validation-config.txt"
+    if [[ -L "$existing_config_file" || ( -e "$existing_config_file" && ! -f "$existing_config_file" ) ]]; then
+        echo "$CAPTURE_ACTION_NAME requires regular artifact file path: $existing_config_file" >&2
+        exit 73
+    fi
+    if [[ ! -f "$existing_config_file" ]]; then
+        echo "$CAPTURE_ACTION_NAME missing required artifact file path: $existing_config_file" >&2
+        exit 73
+    fi
+fi
+
+config_value() {
+    local key="$1"
+    local file="${2:-$CONFIG_FILE}"
+    [[ -f "$file" ]] || return 1
+    awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$file"
+}
+
+derive_identity_suffix() {
+    local digest
+    digest="$(printf '%s' "$OUTPUT_DIR" | shasum -a 256 | awk '{ print substr($1, 1, 10) }')"
+    printf 'h%s' "$digest"
+}
+
+BASE_BUNDLE_ID="com.makeavish.ClawShell.TemperatureProviderPrototype"
+BASE_HELPER_LABEL="com.makeavish.ClawShell.TemperatureProviderPrototype"
+IDENTITY_SUFFIX="${CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX:-}"
+if [[ "$EXISTING_ARTIFACT_MODE" == true && -f "$OUTPUT_DIR/validation-config.txt" ]]; then
+    HELPER_LABEL="$(config_value helperLabel "$OUTPUT_DIR/validation-config.txt" || true)"
+    BUNDLE_ID="$(config_value appBundleIdentifier "$OUTPUT_DIR/validation-config.txt" || true)"
+    IDENTITY_SUFFIX="$(config_value identitySuffix "$OUTPUT_DIR/validation-config.txt" || true)"
+    if [[ -z "$HELPER_LABEL" ]]; then
+        echo "$CAPTURE_ACTION_NAME missing required helperLabel in validation config" >&2
+        exit 73
+    fi
+    require_helper_label "helperLabel" "$HELPER_LABEL"
+    if [[ -n "$IDENTITY_SUFFIX" ]]; then
+        require_identity_suffix "identitySuffix" "$IDENTITY_SUFFIX"
+    fi
+    if [[ -z "$BUNDLE_ID" ]]; then
+        BUNDLE_ID="$BASE_BUNDLE_ID"
+    fi
+else
+    if [[ -z "$IDENTITY_SUFFIX" ]]; then
+        IDENTITY_SUFFIX="$(derive_identity_suffix)"
+    fi
+    require_identity_suffix "CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX" "$IDENTITY_SUFFIX"
+    BUNDLE_ID="$BASE_BUNDLE_ID.$IDENTITY_SUFFIX"
+    HELPER_LABEL="$BASE_HELPER_LABEL.$IDENTITY_SUFFIX.daemon"
+fi
 APP_NAME="ClawShellTemperatureProviderPrototype"
 HELPER_NAME="ClawShellTemperatureProviderPrototypeDaemon"
 PLIST_NAME="$HELPER_LABEL.plist"
@@ -333,7 +403,8 @@ require_existing_artifact() {
     for required_path in \
         "$APP_DIR" \
         "$CONTENTS_DIR" \
-        "$MACOS_DIR"
+        "$MACOS_DIR" \
+        "$LAUNCHD_DIR"
     do
         if [[ -L "$required_path" ]]; then
             echo "$CAPTURE_ACTION_NAME requires a real artifact directory path, not a symlink: $required_path" >&2
@@ -375,7 +446,7 @@ require_existing_artifact() {
             exit 73
         fi
     done
-    for required_path in "$CONFIG_FILE" "$MANIFEST_FILE"; do
+    for required_path in "$CONFIG_FILE" "$MANIFEST_FILE" "$LAUNCHD_DIR/$PLIST_NAME"; do
         if [[ -L "$required_path" || ( -e "$required_path" && ! -f "$required_path" ) ]]; then
             echo "$CAPTURE_ACTION_NAME requires regular artifact file path: $required_path" >&2
             exit 73
@@ -385,8 +456,23 @@ require_existing_artifact() {
             exit 73
         fi
     done
+    plist_label="$(plutil -extract Label raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
+    if [[ "$plist_label" != "$HELPER_LABEL" ]]; then
+        echo "$CAPTURE_ACTION_NAME requires LaunchDaemon Label to match helperLabel: $LAUNCHD_DIR/$PLIST_NAME" >&2
+        exit 73
+    fi
     if [[ ! -w "$CONFIG_FILE" ]]; then
         echo "$CAPTURE_ACTION_NAME requires writable validation config: $CONFIG_FILE" >&2
+        exit 73
+    fi
+}
+
+assert_controller_plist_name() {
+    local evidence_name="$1"
+    local evidence_file="$EVIDENCE_DIR/$evidence_name.txt"
+    if ! grep -Fq "plistName=$PLIST_NAME" "$evidence_file"; then
+        echo "$CAPTURE_ACTION_NAME requires controller plistName to match helperLabel: $PLIST_NAME" >&2
+        cat "$evidence_file" >&2
         exit 73
     fi
 }
@@ -403,6 +489,7 @@ capture_post_approval_status() {
         logs
 
     capture "temperature-provider-status-after-approval" "$MACOS_DIR/$APP_NAME" status || true
+    assert_controller_plist_name "temperature-provider-status-after-approval"
     capture "launchctl-status" launchctl print "system/$HELPER_LABEL" || true
     capture_file_snapshot "helper-ownership-context" "$RUNTIME_DIR/provider.log" || true
     capture_file_snapshot "numeric-temperature-output" "$RUNTIME_DIR/numeric-temperature-output.txt" || true
@@ -440,11 +527,15 @@ EOF
 capture_register_status() {
     require_existing_artifact
     require_writable_capture_targets \
+        temperature-provider-status-before-register \
         provider-register \
         temperature-provider-status-after-register
 
+    capture "temperature-provider-status-before-register" "$MACOS_DIR/$APP_NAME" status || true
+    assert_controller_plist_name "temperature-provider-status-before-register"
     capture "provider-register" "$MACOS_DIR/$APP_NAME" register || true
     capture "temperature-provider-status-after-register" "$MACOS_DIR/$APP_NAME" status || true
+    assert_controller_plist_name "temperature-provider-status-after-register"
 
     config_set_key "registerAttempted" "true"
     config_set_key "registerCaptureAttempted" "true"
@@ -458,6 +549,7 @@ bundle.
 
 Captured files:
 
+- \`evidence/temperature-provider-status-before-register.txt\`
 - \`evidence/provider-register.txt\`
 - \`evidence/temperature-provider-status-after-register.txt\`
 
@@ -472,13 +564,17 @@ EOF
 capture_unregister_status() {
     require_existing_artifact
     require_writable_capture_targets \
+        temperature-provider-status-before-unregister \
         provider-unregister \
         temperature-provider-status-after-unregister \
         launchctl-status-after-unregister \
         logs-after-unregister
 
+    capture "temperature-provider-status-before-unregister" "$MACOS_DIR/$APP_NAME" status || true
+    assert_controller_plist_name "temperature-provider-status-before-unregister"
     capture "provider-unregister" "$MACOS_DIR/$APP_NAME" unregister || true
     capture "temperature-provider-status-after-unregister" "$MACOS_DIR/$APP_NAME" status || true
+    assert_controller_plist_name "temperature-provider-status-after-unregister"
     capture "launchctl-status-after-unregister" launchctl print "system/$HELPER_LABEL" || true
     capture "logs-after-unregister" log show --style syslog --last "${CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
 
@@ -494,6 +590,7 @@ app bundle.
 
 Captured files:
 
+- \`evidence/temperature-provider-status-before-unregister.txt\`
 - \`evidence/provider-unregister.txt\`
 - \`evidence/temperature-provider-status-after-unregister.txt\`
 - \`evidence/launchctl-status-after-unregister.txt\`
@@ -546,7 +643,7 @@ SWIFT
 
 write_controller_source() {
     mkdir -p "$SOURCE_DIR/Sources/ClawShellTemperatureProviderPrototype"
-    cat >"$SOURCE_DIR/Sources/ClawShellTemperatureProviderPrototype/main.swift" <<'SWIFT'
+    cat >"$SOURCE_DIR/Sources/ClawShellTemperatureProviderPrototype/main.swift" <<SWIFT
 import Foundation
 import ServiceManagement
 
@@ -558,7 +655,7 @@ struct Controller {
             exit(2)
         }
 
-        let plistName = "com.makeavish.ClawShell.TemperatureProviderPrototype.daemon.plist"
+        let plistName = "$PLIST_NAME"
         let service = SMAppService.daemon(plistName: plistName)
         let command = CommandLine.arguments.dropFirst().first ?? "status"
 
@@ -905,6 +1002,7 @@ caseId=$CASE_ID
 mode=prepare-or-register
 providerSource=powermetrics
 helperLabel=$HELPER_LABEL
+identitySuffix=$IDENTITY_SUFFIX
 registerAttempted=$REGISTER
 showInitialUsage=$SHOW_INITIAL_USAGE
 providerProofReady=false
@@ -916,6 +1014,7 @@ metadataRedacted=true
 macOSVersion=$MACOS_VERSION
 cpu=$CPU
 hardwareClass=$HARDWARE_CLASS
+appBundleIdentifier=$BUNDLE_ID
 providerSource=powermetrics
 helperOwned=false
 processInfoSupplementalOnly=true
@@ -931,6 +1030,7 @@ result=$RESULT
 caseId=$CASE_ID
 helperInstallPath=smappservice
 helperLabel=$HELPER_LABEL
+identitySuffix=$IDENTITY_SUFFIX
 sampleRateMs=$SAMPLE_RATE_MS
 showInitialUsage=$SHOW_INITIAL_USAGE
 registerAttempted=$REGISTER
@@ -1014,6 +1114,12 @@ This package builds an ad-hoc signed SMAppService app/helper prototype for #25.
 The default mode is non-mutating. It does not prove helper-owned thermal
 sampling until \`--register --i-understand-this-registers-provider\` and
 \`--capture-post-approval\` are run intentionally on the same artifact.
+
+SMAppService identity:
+
+- App bundle id: \`$BUNDLE_ID\`
+- Helper label: \`$HELPER_LABEL\`
+- Identity suffix: \`$IDENTITY_SUFFIX\`
 
 Provider proof ready: \`false\`
 Result: \`$RESULT\`

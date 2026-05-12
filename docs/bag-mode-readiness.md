@@ -181,6 +181,9 @@ New artifacts default to `powermetrics --show-initial-usage -n 1 -i 1000
 --samplers thermal` so the next #25 run can test whether an initial thermal
 sample beats the 1 second provider deadline.
 
+Each artifact also gets a unique SMAppService identity derived from its output
+path so repeated ad-hoc attempts do not reuse stale approval/code-signing state.
+
 Mutating registration uses the same prepared artifact and requires:
 
 ```sh

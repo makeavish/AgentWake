@@ -1409,6 +1409,37 @@ if ! grep -q '^providerProofReady=false$' "$temperature_smappservice_provider_pr
     cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
     exit 1
 fi
+temperature_smappservice_provider_prepare_identity="$(awk -F= '$1 == "identitySuffix" { print $2; found = 1 } END { exit !found }' "$temperature_smappservice_provider_prepare/validation-config.txt")"
+temperature_smappservice_provider_prepare_label="$(awk -F= '$1 == "helperLabel" { print $2; found = 1 } END { exit !found }' "$temperature_smappservice_provider_prepare/validation-config.txt")"
+temperature_smappservice_provider_prepare_bundle="$(awk -F= '$1 == "appBundleIdentifier" { print $2; found = 1 } END { exit !found }' "$temperature_smappservice_provider_prepare/validation-config.txt")"
+case "$temperature_smappservice_provider_prepare_identity" in
+    h*) ;;
+    *)
+        echo "Temperature SMAppService provider harness did not record an auto identity suffix" >&2
+        cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
+        exit 1
+        ;;
+esac
+if [[ "$temperature_smappservice_provider_prepare_label" != "com.makeavish.ClawShell.TemperatureProviderPrototype.$temperature_smappservice_provider_prepare_identity.daemon" ]]; then
+    echo "Temperature SMAppService provider harness did not derive helper label from identity suffix" >&2
+    cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
+    exit 1
+fi
+if [[ "$temperature_smappservice_provider_prepare_bundle" != "com.makeavish.ClawShell.TemperatureProviderPrototype.$temperature_smappservice_provider_prepare_identity" ]]; then
+    echo "Temperature SMAppService provider harness did not derive bundle id from identity suffix" >&2
+    cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q "$temperature_smappservice_provider_prepare_label" "$temperature_smappservice_provider_prepare/evidence/provider-command-or-api.txt"; then
+    echo "Temperature SMAppService provider harness did not write unique helper label to LaunchDaemon plist" >&2
+    cat "$temperature_smappservice_provider_prepare/evidence/provider-command-or-api.txt" >&2
+    exit 1
+fi
+if ! grep -q "plistName=$temperature_smappservice_provider_prepare_label.plist" "$temperature_smappservice_provider_prepare/evidence/temperature-provider-status-before-approval.txt"; then
+    echo "Temperature SMAppService provider harness did not point controller at unique helper plist" >&2
+    cat "$temperature_smappservice_provider_prepare/evidence/temperature-provider-status-before-approval.txt" >&2
+    exit 1
+fi
 if ! grep -q '^showInitialUsage=true$' "$temperature_smappservice_provider_prepare/validation-config.txt"; then
     echo "Temperature SMAppService provider harness did not record initial-usage powermetrics mode" >&2
     cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
@@ -1430,6 +1461,31 @@ fi
 if grep -q -- '--show-initial-usage' "$temperature_smappservice_provider_no_initial/evidence/provider-command-or-api.txt"; then
     echo "Temperature SMAppService provider harness wired --show-initial-usage while it was disabled" >&2
     cat "$temperature_smappservice_provider_no_initial/evidence/provider-command-or-api.txt" >&2
+    exit 1
+fi
+temperature_smappservice_provider_no_initial_label="$(awk -F= '$1 == "helperLabel" { print $2; found = 1 } END { exit !found }' "$temperature_smappservice_provider_no_initial/validation-config.txt")"
+if [[ "$temperature_smappservice_provider_no_initial_label" == "$temperature_smappservice_provider_prepare_label" ]]; then
+    echo "Temperature SMAppService provider harness reused a helper label across distinct artifacts" >&2
+    cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
+    cat "$temperature_smappservice_provider_no_initial/validation-config.txt" >&2
+    exit 1
+fi
+temperature_smappservice_provider_manual_identity="$bag_mode_smoke_dir/temperature-smappservice-provider-manual-identity"
+CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX=manual01 \
+    scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_manual_identity" >/dev/null
+if ! grep -q '^identitySuffix=manual01$' "$temperature_smappservice_provider_manual_identity/validation-config.txt"; then
+    echo "Temperature SMAppService provider harness did not record explicit identity suffix" >&2
+    cat "$temperature_smappservice_provider_manual_identity/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^helperLabel=com.makeavish.ClawShell.TemperatureProviderPrototype.manual01.daemon$' "$temperature_smappservice_provider_manual_identity/validation-config.txt"; then
+    echo "Temperature SMAppService provider harness did not derive helper label from explicit identity suffix" >&2
+    cat "$temperature_smappservice_provider_manual_identity/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^appBundleIdentifier=com.makeavish.ClawShell.TemperatureProviderPrototype.manual01$' "$temperature_smappservice_provider_manual_identity/validation-config.txt"; then
+    echo "Temperature SMAppService provider harness did not derive bundle id from explicit identity suffix" >&2
+    cat "$temperature_smappservice_provider_manual_identity/validation-config.txt" >&2
     exit 1
 fi
 if ! grep -q '^registerAttempted=false$' "$temperature_smappservice_provider_prepare/validation-config.txt"; then
@@ -1498,16 +1554,52 @@ if ! grep -q "Use only one" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
+temperature_smappservice_provider_missing_label="$bag_mode_smoke_dir/temperature-smappservice-provider-missing-label"
+cp -R "$temperature_smappservice_provider_prepare" "$temperature_smappservice_provider_missing_label"
+grep -v '^helperLabel=' "$temperature_smappservice_provider_missing_label/validation-config.txt" >"$temperature_smappservice_provider_missing_label/validation-config.tmp"
+mv "$temperature_smappservice_provider_missing_label/validation-config.tmp" "$temperature_smappservice_provider_missing_label/validation-config.txt"
+if scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_missing_label" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness invented helper label for existing artifact" >&2
+    exit 1
+fi
+if ! grep -q "missing required helperLabel" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_smappservice_provider_missing_plist="$bag_mode_smoke_dir/temperature-smappservice-provider-missing-plist"
+cp -R "$temperature_smappservice_provider_prepare" "$temperature_smappservice_provider_missing_plist"
+temperature_smappservice_provider_missing_plist_label="$(awk -F= '$1 == "helperLabel" { print $2; found = 1 } END { exit !found }' "$temperature_smappservice_provider_missing_plist/validation-config.txt")"
+rm -f "$temperature_smappservice_provider_missing_plist/ClawShellTemperatureProviderPrototype.app/Contents/Library/LaunchDaemons/$temperature_smappservice_provider_missing_plist_label.plist"
+if scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_missing_plist" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness accepted existing artifact without LaunchDaemon plist" >&2
+    exit 1
+fi
+if ! grep -q "missing required artifact file path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_smappservice_provider_mismatched_plist_label="$bag_mode_smoke_dir/temperature-smappservice-provider-mismatched-plist-label"
+cp -R "$temperature_smappservice_provider_prepare" "$temperature_smappservice_provider_mismatched_plist_label"
+temperature_smappservice_provider_mismatched_plist_label_value="$(awk -F= '$1 == "helperLabel" { print $2; found = 1 } END { exit !found }' "$temperature_smappservice_provider_mismatched_plist_label/validation-config.txt")"
+plutil -replace Label -string "com.makeavish.ClawShell.TemperatureProviderPrototype.stale.daemon" \
+    "$temperature_smappservice_provider_mismatched_plist_label/ClawShellTemperatureProviderPrototype.app/Contents/Library/LaunchDaemons/$temperature_smappservice_provider_mismatched_plist_label_value.plist"
+if scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_mismatched_plist_label" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness accepted existing artifact with mismatched LaunchDaemon Label" >&2
+    exit 1
+fi
+if ! grep -q "LaunchDaemon Label" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
 temperature_smappservice_provider_register_fake="$bag_mode_smoke_dir/temperature-smappservice-provider-register-fake"
-mkdir -p "$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS" \
-    "$temperature_smappservice_provider_register_fake/evidence" \
-    "$temperature_smappservice_provider_register_fake/runtime"
+cp -R "$temperature_smappservice_provider_prepare" "$temperature_smappservice_provider_register_fake"
+temperature_smappservice_provider_register_fake_label="$(awk -F= '$1 == "helperLabel" { print $2; found = 1 } END { exit !found }' "$temperature_smappservice_provider_register_fake/validation-config.txt")"
 {
     printf '%s\n' '#!/usr/bin/env bash'
     printf '%s\n' 'set -euo pipefail'
     printf '%s\n' 'command="${1:-status}"'
     printf '%s\n' 'echo "command=$command"'
-    printf '%s\n' 'echo "plistName=com.makeavish.ClawShell.TemperatureProviderPrototype.daemon.plist"'
+    printf 'echo "plistName=%s.plist"\n' "$temperature_smappservice_provider_register_fake_label"
     printf '%s\n' 'case "$command" in'
     printf '%s\n' '  register)'
     printf '%s\n' '    echo "statusBeforeRaw=3"'
@@ -1528,11 +1620,6 @@ mkdir -p "$temperature_smappservice_provider_register_fake/ClawShellTemperatureP
 printf '#!/usr/bin/env bash\nexit 0\n' >"$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon"
 chmod +x "$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype" \
     "$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon"
-{
-    printf 'evidenceFormat=temperature-provider-proof-v1\n'
-    printf 'registerAttempted=false\n'
-} >"$temperature_smappservice_provider_register_fake/validation-config.txt"
-cp "$temperature_smappservice_provider_prepare/provider-manifest.tsv" "$temperature_smappservice_provider_register_fake/provider-manifest.tsv"
 scripts/temperature-provider-smappservice-proof.sh \
     --output-dir "$temperature_smappservice_provider_register_fake" \
     --register \
@@ -1548,6 +1635,7 @@ if ! grep -q '^registerCaptureAttempted=true$' "$temperature_smappservice_provid
     exit 1
 fi
 for register_capture in \
+    temperature-provider-status-before-register \
     provider-register \
     temperature-provider-status-after-register
 do
@@ -1560,6 +1648,11 @@ do
         exit 1
     fi
 done
+if ! grep -q "plistName=$temperature_smappservice_provider_register_fake_label.plist" "$temperature_smappservice_provider_register_fake/evidence/temperature-provider-status-before-register.txt"; then
+    echo "Temperature SMAppService provider register capture did not preflight matching controller plist" >&2
+    cat "$temperature_smappservice_provider_register_fake/evidence/temperature-provider-status-before-register.txt" >&2
+    exit 1
+fi
 if [[ ! -s "$temperature_smappservice_provider_register_fake/register-capture.md" ]]; then
     echo "Temperature SMAppService provider register capture missing summary" >&2
     exit 1
@@ -1646,6 +1739,20 @@ if ! grep -q "CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE must be true or 
 fi
 if [[ -e "$temperature_smappservice_provider_bad_bool" ]]; then
     echo "Temperature SMAppService provider harness created evidence for an invalid initial-usage flag" >&2
+    exit 1
+fi
+temperature_smappservice_provider_bad_suffix="$bag_mode_smoke_dir/temperature-smappservice-provider-bad-suffix"
+if CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX=bad-suffix \
+    scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_bad_suffix" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness accepted an invalid identity suffix" >&2
+    exit 1
+fi
+if ! grep -q "CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX must start with a letter" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if [[ -e "$temperature_smappservice_provider_bad_suffix" ]]; then
+    echo "Temperature SMAppService provider harness created evidence for an invalid identity suffix" >&2
     exit 1
 fi
 if zsh scripts/temperature-provider-smappservice-proof.sh --output-dir "$bag_mode_smoke_dir/temperature-smappservice-provider-zsh" >/dev/null 2>"$bag_mode_smoke_error"; then
@@ -1805,15 +1912,14 @@ if ! grep -q '^exitCode=1$' "$temperature_smappservice_provider_non_regular_sour
     exit 1
 fi
 temperature_smappservice_provider_unregister_fake="$bag_mode_smoke_dir/temperature-smappservice-provider-unregister-fake"
-mkdir -p "$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS" \
-    "$temperature_smappservice_provider_unregister_fake/evidence" \
-    "$temperature_smappservice_provider_unregister_fake/runtime"
+cp -R "$temperature_smappservice_provider_prepare" "$temperature_smappservice_provider_unregister_fake"
+temperature_smappservice_provider_unregister_fake_label="$(awk -F= '$1 == "helperLabel" { print $2; found = 1 } END { exit !found }' "$temperature_smappservice_provider_unregister_fake/validation-config.txt")"
 {
     printf '%s\n' '#!/usr/bin/env bash'
     printf '%s\n' 'set -euo pipefail'
     printf '%s\n' 'command="${1:-status}"'
     printf '%s\n' 'echo "command=$command"'
-    printf '%s\n' 'echo "plistName=com.makeavish.ClawShell.TemperatureProviderPrototype.daemon.plist"'
+    printf 'echo "plistName=%s.plist"\n' "$temperature_smappservice_provider_unregister_fake_label"
     printf '%s\n' 'case "$command" in'
     printf '%s\n' '  unregister)'
     printf '%s\n' '    echo "statusBeforeRaw=1"'
@@ -1834,11 +1940,6 @@ mkdir -p "$temperature_smappservice_provider_unregister_fake/ClawShellTemperatur
 printf '#!/usr/bin/env bash\nexit 0\n' >"$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon"
 chmod +x "$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype" \
     "$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon"
-{
-    printf 'evidenceFormat=temperature-provider-proof-v1\n'
-    printf 'unregisterAttempted=false\n'
-} >"$temperature_smappservice_provider_unregister_fake/validation-config.txt"
-cp "$temperature_smappservice_provider_prepare/provider-manifest.tsv" "$temperature_smappservice_provider_unregister_fake/provider-manifest.tsv"
 CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST=1m \
     scripts/temperature-provider-smappservice-proof.sh \
     --output-dir "$temperature_smappservice_provider_unregister_fake" \
@@ -1855,6 +1956,7 @@ if ! grep -q '^unregisterCaptureAttempted=true$' "$temperature_smappservice_prov
     exit 1
 fi
 for unregister_capture in \
+    temperature-provider-status-before-unregister \
     provider-unregister \
     temperature-provider-status-after-unregister \
     launchctl-status-after-unregister \
@@ -1869,6 +1971,11 @@ do
         exit 1
     fi
 done
+if ! grep -q "plistName=$temperature_smappservice_provider_unregister_fake_label.plist" "$temperature_smappservice_provider_unregister_fake/evidence/temperature-provider-status-before-unregister.txt"; then
+    echo "Temperature SMAppService provider unregister capture did not preflight matching controller plist" >&2
+    cat "$temperature_smappservice_provider_unregister_fake/evidence/temperature-provider-status-before-unregister.txt" >&2
+    exit 1
+fi
 if [[ ! -s "$temperature_smappservice_provider_unregister_fake/unregister-capture.md" ]]; then
     echo "Temperature SMAppService provider unregister capture missing summary" >&2
     exit 1
