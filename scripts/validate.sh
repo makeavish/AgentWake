@@ -442,6 +442,19 @@ if ! grep -q "at least one evidence row" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
+cat >"$bag_mode_smoke_dir/matrix/deferred-placeholder-manifest.tsv" <<'EOF'
+caseId	status	evidenceDir	naReason
+validate-smoke	evidence	validate-smoke	evidence attached
+macos-13-intel-deferred	deferred		TBD
+EOF
+if scripts/bag-mode-primitive-matrix-verify.sh --manifest "$bag_mode_smoke_dir/matrix/deferred-placeholder-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Bag Mode primitive matrix verifier accepted placeholder deferred reason" >&2
+    exit 1
+fi
+if ! grep -q "macos-13-intel-deferred" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
 bag_mode_matrix_scaffold="$bag_mode_smoke_dir/matrix-scaffold"
 scripts/bag-mode-primitive-matrix-scaffold.sh --output-dir "$bag_mode_matrix_scaffold" >/dev/null
 for required_file in matrix-manifest.tsv README.md scaffold-config.txt; do
@@ -509,8 +522,18 @@ for case_id in "${bag_mode_matrix_scaffold_todo_cases[@]}"; do
     fi
 done
 if ! awk -F '\t' '
-    $1 == "helper-restart-after-27" && $2 == "deferred" && $4 != "" { restart = 1 }
-    $1 == "helper-upgrade-after-27" && $2 == "deferred" && $4 != "" { upgrade = 1 }
+    function trim(value) {
+        gsub(/\r/, "", value)
+        sub(/^[[:space:]]*/, "", value)
+        sub(/[[:space:]]*$/, "", value)
+        return value
+    }
+    function usable_reason(value) {
+        value = trim(value)
+        return value != "" && value != "TODO" && value != "TBD" && !(value ~ /</ && value ~ />/) && value !~ / \| /
+    }
+    $1 == "helper-restart-after-27" && $2 == "deferred" && usable_reason($4) { restart = 1 }
+    $1 == "helper-upgrade-after-27" && $2 == "deferred" && usable_reason($4) { upgrade = 1 }
     END { exit !(restart && upgrade) }
 ' "$bag_mode_matrix_scaffold/matrix-manifest.tsv"; then
     echo "Bag Mode primitive matrix scaffold missing helper deferred rows with reasons" >&2

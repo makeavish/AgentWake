@@ -139,6 +139,7 @@ is_unfilled_value() {
 
     [[ -z "$value" ]] && return 0
     [[ "$value" == "TODO" ]] && return 0
+    [[ "$value" == "TBD" ]] && return 0
     [[ "$value" == *"<"* && "$value" == *">"* ]] && return 0
     [[ "$value" == *" | "* ]] && return 0
     return 1
