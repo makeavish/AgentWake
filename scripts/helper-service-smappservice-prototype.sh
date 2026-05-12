@@ -192,6 +192,57 @@ capture_caller_auth_model_required() {
     fi
 }
 
+capture_fixed_command_api() {
+    local out="$EVIDENCE_DIR/fixed-command-api.txt"
+    local status_file="$EVIDENCE_DIR/fixed-command-api.status"
+    local log_file="$RUNTIME_DIR/fixed-command-api.log"
+    local start finish status block_status rc command rejected_command
+    local allowed_commands=(status enableBagMode disableBagMode repair uninstall)
+    start="$(date +%s)"
+    status=0
+    rejected_command="arbitraryShellCommand"
+    set +e
+    {
+        for command in "${allowed_commands[@]}"; do
+            printf '$ %q --command %q --log %q\n' "$MACOS_DIR/$HELPER_NAME" "$command" "$log_file"
+            "$MACOS_DIR/$HELPER_NAME" --command "$command" --log "$log_file"
+            rc=$?
+            echo "observedExitCode[$command]=$rc"
+            if [[ "$rc" -ne 0 ]]; then
+                status=1
+            fi
+        done
+
+        printf '$ %q --command %q --log %q\n' "$MACOS_DIR/$HELPER_NAME" "$rejected_command" "$log_file"
+        "$MACOS_DIR/$HELPER_NAME" --command "$rejected_command" --log "$log_file"
+        rc=$?
+        echo "observedExitCode[$rejected_command]=$rc"
+        if [[ "$rc" -eq 0 ]]; then
+            status=1
+        fi
+    } >"$out" 2>&1
+    block_status=$?
+    set -e
+    if [[ "$block_status" -ne 0 ]]; then
+        status=1
+    fi
+    finish="$(date +%s)"
+    {
+        echo "command=fixed-command-api"
+        echo "exitCode=$status"
+        echo "durationSeconds=$(( finish - start ))"
+    } >"$status_file"
+    return "$status"
+}
+
+capture_fixed_command_api_required() {
+    if ! capture_fixed_command_api; then
+        echo "Required evidence capture failed: fixed-command-api" >&2
+        cat "$EVIDENCE_DIR/fixed-command-api.txt" >&2
+        exit 1
+    fi
+}
+
 xml_escape() {
     local value="$1"
     value="${value//&/&amp;}"
@@ -259,15 +310,56 @@ import Foundation
 import Darwin
 
 let arguments = CommandLine.arguments
-let logPathIndex = arguments.firstIndex(of: "--log").map { arguments.index(after: $0) }
-let logPath = logPathIndex.flatMap { $0 < arguments.endIndex ? arguments[$0] : nil }
+let allowedCommands: Set<String> = [
+    "status",
+    "enableBagMode",
+    "disableBagMode",
+    "repair",
+    "uninstall"
+]
+
+func argumentValue(after option: String) -> String? {
+    guard let index = arguments.firstIndex(of: option) else {
+        return nil
+    }
+    let valueIndex = arguments.index(after: index)
+    guard valueIndex < arguments.endIndex else {
+        return nil
+    }
+    return arguments[valueIndex]
+}
+
+func jsonValue(_ value: String) -> String {
+    guard JSONSerialization.isValidJSONObject([value]),
+          let data = try? JSONSerialization.data(withJSONObject: [value], options: []),
+          let encoded = String(data: data, encoding: .utf8) else {
+        return "\"<encoding-failed>\""
+    }
+    return String(encoded.dropFirst().dropLast())
+}
+
+func jsonArray(_ values: [String]) -> String {
+    guard JSONSerialization.isValidJSONObject(values),
+          let data = try? JSONSerialization.data(withJSONObject: values, options: []),
+          let encoded = String(data: data, encoding: .utf8) else {
+        return "[\"<encoding-failed>\"]"
+    }
+    return encoded
+}
+
+let command = argumentValue(after: "--command") ?? "status"
+let commandAllowed = allowedCommands.contains(command)
+let logPath = argumentValue(after: "--log")
 let payload = """
-event=helper-start
+event=helper-command
 timestampUtc=\(ISO8601DateFormatter().string(from: Date()))
 pid=\(getpid())
 uid=\(getuid())
 euid=\(geteuid())
-arguments=\(arguments.joined(separator: " "))
+commandJson=\(jsonValue(command))
+allowed=\(commandAllowed)
+effect=dry-run
+argumentsJson=\(jsonArray(arguments))
 
 """
 
@@ -287,6 +379,9 @@ if let logPath {
 }
 
 print(payload, terminator: "")
+if !commandAllowed {
+    exit(64)
+}
 SWIFT
 }
 
@@ -402,7 +497,7 @@ capture_optional "app-signing-or-auth-model-before-sign" "$CODESIGN" -dvvv "$APP
 capture_required "app-signing-or-auth-model" "$CODESIGN" -dvvv "$APP_DIR"
 capture_required "helper-signing-or-auth-model" "$CODESIGN" -dvvv "$MACOS_DIR/$HELPER_NAME"
 capture_caller_auth_model_required
-capture_required "fixed-command-api" "$MACOS_DIR/$APP_NAME" status
+capture_fixed_command_api_required
 capture_optional "spctl-or-gatekeeper-assessment" spctl -a -vv "$APP_DIR"
 capture_required "helper-status-before-approval" "$MACOS_DIR/$APP_NAME" status
 
@@ -499,7 +594,7 @@ manifest_row() {
     manifest_row "app-signing-or-auth-model" "evidence" "evidence/app-signing-or-auth-model.txt" "ad-hoc app signature captured"
     manifest_row "helper-signing-or-auth-model" "evidence" "evidence/helper-signing-or-auth-model.txt" "ad-hoc helper signature captured"
     manifest_row "caller-auth-model" "evidence" "evidence/caller-auth-model.txt" "binary hashes captured; pairing token not implemented"
-    manifest_row "fixed-command-api" "TODO" "" "Bag Mode helper command API still needs status/enableBagMode/disableBagMode/repair/uninstall evidence"
+    manifest_row "fixed-command-api" "TODO" "" "Dry-run command parser smoke captured at evidence/fixed-command-api.txt; replace with approved helper command evidence"
     manifest_row "spctl-or-gatekeeper-assessment" "evidence" "evidence/spctl-or-gatekeeper-assessment.txt" "Gatekeeper assessment captured"
     manifest_row "helper-install-or-register" "$REGISTER_EVIDENCE_STATUS" "$REGISTER_EVIDENCE_PATH" "$REGISTER_NOTE"
     manifest_row "helper-status-after-approval" "TODO" "" "Capture after System Settings approval or fallback bootstrap"
@@ -562,7 +657,8 @@ $README_INVOCATION
 $MODE_NOTICE
 
 This is not complete #27 evidence. It prepares an ad-hoc signed app/helper
-bundle and records local status, signing, layout, and Gatekeeper evidence.
+bundle and records local status, signing, layout, dry-run command parser smoke,
+and Gatekeeper evidence.
 
 To attempt registration, run a new artifact with:
 

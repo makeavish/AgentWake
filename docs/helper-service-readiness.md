@@ -128,8 +128,11 @@ scripts/helper-service-smappservice-prototype.sh \
 ```
 
 The default run builds an ad-hoc signed app/helper bundle, captures local
-layout/signing/status evidence, and leaves lifecycle rows as `TODO`. To attempt
-registration during an intentional interactive prototype, rerun with
+layout/signing/status evidence, and captures dry-run command parser smoke output
+for `status`, `enableBagMode`, `disableBagMode`, `repair`, and `uninstall`.
+That parser smoke does not satisfy the required `fixed-command-api` manifest
+row; registration, approved helper command API, and lifecycle rows remain
+`TODO`. To attempt registration during an intentional interactive prototype, rerun with
 `--register --i-understand-this-registers-helper`; that may require System
 Settings approval before the helper bootstraps.
 

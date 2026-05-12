@@ -2222,9 +2222,36 @@ if ! awk -F '\t' '$1 == "helper-install-or-register" && $2 == "TODO" { found = 1
     cat "$helper_smappservice_prepare/prototype-manifest.tsv" >&2
     exit 1
 fi
-if ! awk -F '\t' '$1 == "fixed-command-api" && $2 == "TODO" { found = 1 } END { exit !found }' "$helper_smappservice_prepare/prototype-manifest.tsv"; then
-    echo "SMAppService helper prototype harness should not claim Bag Mode command API evidence" >&2
+if ! awk -F '\t' '$1 == "fixed-command-api" && $2 == "TODO" && $4 ~ /Dry-run command parser smoke/ { found = 1 } END { exit !found }' "$helper_smappservice_prepare/prototype-manifest.tsv"; then
+    echo "SMAppService helper prototype harness should leave fixed command API row as TODO until approved helper evidence exists" >&2
     cat "$helper_smappservice_prepare/prototype-manifest.tsv" >&2
+    exit 1
+fi
+for allowed_command in status enableBagMode disableBagMode repair uninstall; do
+    if ! grep -Fq "commandJson=\"$allowed_command\"" "$helper_smappservice_prepare/evidence/fixed-command-api.txt"; then
+        echo "SMAppService helper prototype fixed command API evidence missing allowed command: $allowed_command" >&2
+        cat "$helper_smappservice_prepare/evidence/fixed-command-api.txt" >&2
+        exit 1
+    fi
+    if ! grep -Fq "observedExitCode[$allowed_command]=0" "$helper_smappservice_prepare/evidence/fixed-command-api.txt"; then
+        echo "SMAppService helper prototype fixed command API did not accept allowed command: $allowed_command" >&2
+        cat "$helper_smappservice_prepare/evidence/fixed-command-api.txt" >&2
+        exit 1
+    fi
+done
+if ! grep -Fq 'commandJson="arbitraryShellCommand"' "$helper_smappservice_prepare/evidence/fixed-command-api.txt"; then
+    echo "SMAppService helper prototype fixed command API evidence missing rejected command" >&2
+    cat "$helper_smappservice_prepare/evidence/fixed-command-api.txt" >&2
+    exit 1
+fi
+if ! grep -Fq 'allowed=false' "$helper_smappservice_prepare/evidence/fixed-command-api.txt"; then
+    echo "SMAppService helper prototype fixed command API did not mark arbitrary command as rejected" >&2
+    cat "$helper_smappservice_prepare/evidence/fixed-command-api.txt" >&2
+    exit 1
+fi
+if ! grep -Fq 'observedExitCode[arbitraryShellCommand]=64' "$helper_smappservice_prepare/evidence/fixed-command-api.txt"; then
+    echo "SMAppService helper prototype fixed command API did not reject arbitrary command with exit 64" >&2
+    cat "$helper_smappservice_prepare/evidence/fixed-command-api.txt" >&2
     exit 1
 fi
 if scripts/helper-service-prototype-verify.sh --manifest "$helper_smappservice_prepare/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then

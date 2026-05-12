@@ -245,9 +245,11 @@ scripts/helper-service-smappservice-prototype.sh \
 ```
 
 The default mode is intentionally incomplete evidence: it builds an ad-hoc
-signed app/helper bundle and captures layout/signing/status outputs, but leaves
-registration, approval, reboot, update, uninstall, and failure-case rows as
-`TODO`. Registration requires an explicit acknowledgement flag:
+signed app/helper bundle and captures layout/signing/status outputs plus
+dry-run command parser smoke output for `status`, `enableBagMode`,
+`disableBagMode`, `repair`, and `uninstall`, but leaves the required
+`fixed-command-api`, registration, approval, reboot, update, uninstall, and
+failure-case rows as `TODO`. Registration requires an explicit acknowledgement flag:
 `--register --i-understand-this-registers-helper`.
 
 Use the non-mutating prototype scaffold when starting a new #27 evidence
