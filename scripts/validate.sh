@@ -880,6 +880,105 @@ temperature_proof_required_checks=(
 printf '$ combined-sensor-signal\ncaptured combined thermal pressure and numeric data\n' >"$temperature_proof_evidence_dir/combined-sensor-signal.txt"
 scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_manifest" >/dev/null
 
+temperature_proof_scaffold="$bag_mode_smoke_dir/temperature-proof-scaffold"
+scripts/temperature-provider-proof-scaffold.sh --output-dir "$temperature_proof_scaffold" >/dev/null
+for required_file in provider-manifest.tsv README.md scaffold-config.txt; do
+    if [[ ! -f "$temperature_proof_scaffold/$required_file" ]]; then
+        echo "Temperature provider proof scaffold did not write expected file: $required_file" >&2
+        exit 1
+    fi
+done
+if [[ -f "$temperature_proof_scaffold/validation-config.txt" || -f "$temperature_proof_scaffold/manual-result.md" ]]; then
+    echo "Temperature provider proof scaffold wrote evidence-shaped files before real capture" >&2
+    exit 1
+fi
+if ! grep -q '^scaffoldFormat=temperature-provider-proof-scaffold-v1$' "$temperature_proof_scaffold/scaffold-config.txt"; then
+    echo "Temperature provider proof scaffold did not record expected scaffold format" >&2
+    exit 1
+fi
+if [[ "$(head -n 1 "$temperature_proof_scaffold/provider-manifest.tsv")" != $'checkId\tstatus\tevidencePath\tnote' ]]; then
+    echo "Temperature provider proof scaffold wrote an unexpected manifest header" >&2
+    cat "$temperature_proof_scaffold/provider-manifest.tsv" >&2
+    exit 1
+fi
+if ! awk -F '\t' 'NR == 1 { next } NF != 4 { exit 1 }' "$temperature_proof_scaffold/provider-manifest.tsv"; then
+    echo "Temperature provider proof scaffold wrote a manifest row with an unexpected field count" >&2
+    cat "$temperature_proof_scaffold/provider-manifest.tsv" >&2
+    exit 1
+fi
+temperature_proof_scaffold_expected_ids="$bag_mode_smoke_dir/temperature-proof-scaffold-expected-ids"
+temperature_proof_scaffold_actual_ids="$bag_mode_smoke_dir/temperature-proof-scaffold-actual-ids"
+{
+    for check_id in "${temperature_proof_required_checks[@]}"; do
+        printf '%s\n' "$check_id"
+    done
+    printf '%s\n' "combined-sensor-signal"
+    printf '%s\n' "provider-update-or-restart"
+} | sort >"$temperature_proof_scaffold_expected_ids"
+tail -n +2 "$temperature_proof_scaffold/provider-manifest.tsv" | awk -F '\t' '{ print $1 }' | sort >"$temperature_proof_scaffold_actual_ids"
+if ! diff -u "$temperature_proof_scaffold_expected_ids" "$temperature_proof_scaffold_actual_ids" >"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof scaffold wrote an unexpected manifest row set" >&2
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+for check_id in "${temperature_proof_required_checks[@]}"; do
+    if ! awk -F '\t' -v check_id="$check_id" '$1 == check_id && $2 == "TODO" { found = 1 } END { exit !found }' "$temperature_proof_scaffold/provider-manifest.tsv"; then
+        echo "Temperature provider proof scaffold missing required TODO row: $check_id" >&2
+        cat "$temperature_proof_scaffold/provider-manifest.tsv" >&2
+        exit 1
+    fi
+done
+if ! awk -F '\t' '$1 == "combined-sensor-signal" && $2 == "n/a" { combined = 1 } $1 == "provider-update-or-restart" && $2 == "n/a" { restart = 1 } END { exit !(combined && restart) }' "$temperature_proof_scaffold/provider-manifest.tsv"; then
+    echo "Temperature provider proof scaffold missing optional n/a rows" >&2
+    cat "$temperature_proof_scaffold/provider-manifest.tsv" >&2
+    exit 1
+fi
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_scaffold/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted the TODO scaffold manifest" >&2
+    exit 1
+fi
+if ! grep -q "missing file: .*validation-config.txt" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_proof_scaffold_file="$bag_mode_smoke_dir/temperature-proof-scaffold-file"
+touch "$temperature_proof_scaffold_file"
+if scripts/temperature-provider-proof-scaffold.sh --output-dir "$temperature_proof_scaffold_file" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof scaffold accepted an output path that is not a directory" >&2
+    exit 1
+fi
+if ! grep -q "not a directory" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_proof_scaffold_non_empty="$bag_mode_smoke_dir/temperature-proof-scaffold-non-empty"
+mkdir -p "$temperature_proof_scaffold_non_empty"
+touch "$temperature_proof_scaffold_non_empty/existing"
+if scripts/temperature-provider-proof-scaffold.sh --output-dir "$temperature_proof_scaffold_non_empty" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof scaffold overwrote a non-empty output directory" >&2
+    exit 1
+fi
+if ! grep -q "Output directory is not empty" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if zsh scripts/temperature-provider-proof-scaffold.sh --output-dir "$bag_mode_smoke_dir/temperature-proof-scaffold-zsh" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof scaffold unexpectedly ran under explicit zsh" >&2
+    exit 1
+fi
+if ! grep -q "requires bash" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if zsh scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_manifest" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier unexpectedly ran under explicit zsh" >&2
+    exit 1
+fi
+if ! grep -q "requires bash" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
 temperature_proof_placeholder_dir="$bag_mode_smoke_dir/temperature-proof-placeholder"
 cp -R "$temperature_proof_dir" "$temperature_proof_placeholder_dir"
 sed -i '' 's/- Result: inconclusive/- Result: pass | fail | inconclusive/' "$temperature_proof_placeholder_dir/manual-result.md"

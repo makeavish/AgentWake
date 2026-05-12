@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+if [[ -z "${BASH_VERSION:-}" ]]; then
+    echo "This script requires bash. Run it as: bash scripts/temperature-provider-proof-verify.sh ..." >&2
+    exit 2
+fi
 set -euo pipefail
 
 MANIFEST_FILE=""
@@ -488,7 +492,7 @@ verify_manifest() {
 
     local row_count=0
     local line_number=1
-    local line field_count check_id status evidence_path note
+    local line field_count check_id row_status evidence_path note
     while IFS= read -r line || [[ -n "${line:-}" ]]; do
         line_number=$((line_number + 1))
         [[ -z "${line:-}" ]] && continue
@@ -500,7 +504,7 @@ verify_manifest() {
             continue
         fi
         check_id="$(trim_value "$(awk -F '\t' '{ print $1 }' <<<"$line")")"
-        status="$(trim_value "$(awk -F '\t' '{ print $2 }' <<<"$line")")"
+        row_status="$(trim_value "$(awk -F '\t' '{ print $2 }' <<<"$line")")"
         evidence_path="$(trim_value "$(awk -F '\t' '{ print $3 }' <<<"$line")")"
         note="$(trim_value "$(awk -F '\t' '{ print $4 }' <<<"$line")")"
 
@@ -518,17 +522,17 @@ verify_manifest() {
         fi
         SEEN_CHECK_IDS+=("$check_id")
         if [[ "$check_id" == "combined-sensor-signal" ]]; then
-            COMBINED_SENSOR_STATUS="$status"
+            COMBINED_SENSOR_STATUS="$row_status"
         fi
 
         if is_required_id "$check_id"; then
-            if [[ "$status" != "evidence" ]]; then
+            if [[ "$row_status" != "evidence" ]]; then
                 record_error "$check_id" "required check must use status evidence"
                 continue
             fi
             verify_evidence_path "$check_id" "$evidence_path"
         else
-            case "$status" in
+            case "$row_status" in
                 evidence)
                     verify_evidence_path "$check_id" "$evidence_path"
                     ;;

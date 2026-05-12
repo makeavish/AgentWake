@@ -130,6 +130,18 @@ scripts/temperature-provider-proof-verify.sh \
   --manifest .build/temperature-provider-proof/<case-id>/provider-manifest.tsv
 ```
 
+To start the package layout without inventing rows by hand, generate a
+non-mutating scaffold:
+
+```bash
+scripts/temperature-provider-proof-scaffold.sh \
+  --output-dir .build/temperature-provider-proof/<case-id>
+```
+
+The scaffold is not evidence. It intentionally omits `validation-config.txt`
+and `manual-result.md`, and writes `TODO` manifest rows so the verifier fails
+until real helper/root provider output is captured.
+
 The verifier expects three files at the manifest root:
 
 - `validation-config.txt`

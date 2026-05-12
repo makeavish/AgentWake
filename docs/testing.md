@@ -180,6 +180,18 @@ scripts/temperature-provider-proof-verify.sh \
   --manifest .build/temperature-provider-proof/<case-id>/provider-manifest.tsv
 ```
 
+Use the non-mutating provider proof scaffold when starting a new #25 evidence
+package:
+
+```sh
+scripts/temperature-provider-proof-scaffold.sh \
+  --output-dir .build/temperature-provider-proof/local-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+The scaffold is not evidence. It intentionally omits `validation-config.txt`
+and `manual-result.md`, and required manifest rows start as `TODO`, so it should
+fail the verifier until real helper/root provider evidence is captured.
+
 The verifier checks that `validation-config.txt`, `manual-result.md`, and the
 TSV manifest contain rows/fields for helper-owned numeric provider evidence,
 freshness within 10s, 5s/30s cadence, 1s timeout, prompt-free sampling,
