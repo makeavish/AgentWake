@@ -204,6 +204,203 @@ if ! grep -q '^batteryFreshWithin10Seconds=true$' "$temperature_fake_dir/validat
     exit 1
 fi
 
+echo "==> helper service readiness harness smoke"
+helper_readiness_dir="$bag_mode_smoke_dir/helper-readiness"
+scripts/helper-service-readiness.sh --output-dir "$helper_readiness_dir" >/dev/null
+for required_file in \
+    codesigning-identities.txt \
+    codesigning-identities.status \
+    installer-identities.txt \
+    installer-identities.status \
+    xcodebuild-version.txt \
+    xcodebuild-version.status \
+    swift-version.txt \
+    swift-version.status \
+    pkgbuild-path.txt \
+    pkgbuild-path.status \
+    productbuild-path.txt \
+    productbuild-path.status \
+    xcode-select-path.txt \
+    xcode-select-path.status \
+    macos-sdk-path.txt \
+    macos-sdk-path.status \
+    codesign-path.txt \
+    codesign-path.status \
+    notarytool-path.txt \
+    notarytool-path.status \
+    validation-config.txt \
+    summary.md
+do
+    if [[ ! -f "$helper_readiness_dir/$required_file" ]]; then
+        echo "Helper readiness harness did not write expected file: $required_file" >&2
+        exit 1
+    fi
+done
+if ! grep -q '^metadataRedacted=true$' "$helper_readiness_dir/validation-config.txt"; then
+    echo "Helper readiness harness did not record redacted metadata mode" >&2
+    exit 1
+fi
+if grep -Eq '[A-Fa-f0-9]{40}|Developer ID|Apple Development|Apple Distribution|Team ID|[()]' "$helper_readiness_dir/codesigning-identities.txt"; then
+    echo "Helper readiness harness wrote raw signing identity details" >&2
+    cat "$helper_readiness_dir/codesigning-identities.txt" >&2
+    exit 1
+fi
+if grep -Eq '[A-Fa-f0-9]{40}|Developer ID|Apple Development|Apple Distribution|Team ID|[()]' "$helper_readiness_dir/installer-identities.txt"; then
+    echo "Helper readiness harness wrote raw installer identity details" >&2
+    cat "$helper_readiness_dir/installer-identities.txt" >&2
+    exit 1
+fi
+
+helper_file_output="$bag_mode_smoke_dir/helper-output-file"
+touch "$helper_file_output"
+if scripts/helper-service-readiness.sh --output-dir "$helper_file_output" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper readiness harness accepted an output path that is not a directory" >&2
+    exit 1
+fi
+if ! grep -q 'not a directory' "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+helper_non_empty_dir="$bag_mode_smoke_dir/helper-non-empty"
+mkdir -p "$helper_non_empty_dir"
+touch "$helper_non_empty_dir/existing"
+if scripts/helper-service-readiness.sh --output-dir "$helper_non_empty_dir" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper readiness harness overwrote a non-empty evidence directory" >&2
+    exit 1
+fi
+if ! grep -q 'Output directory is not empty' "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+helper_bad_env_dir="$bag_mode_smoke_dir/helper-bad-env"
+if CLAWSHELL_HELPER_READINESS_TIMEOUT_SECONDS=abc \
+    scripts/helper-service-readiness.sh --output-dir "$helper_bad_env_dir" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper readiness harness accepted an invalid timeout value" >&2
+    exit 1
+fi
+if [[ -e "$helper_bad_env_dir" ]]; then
+    echo "Helper readiness harness created evidence for an invalid timeout value" >&2
+    exit 1
+fi
+
+helper_fake_bin="$bag_mode_smoke_dir/helper-fakes"
+mkdir -p "$helper_fake_bin"
+cat >"$helper_fake_bin/security" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *"-p codesigning"* ]]; then
+    cat <<EOT
+  1) 0123456789ABCDEF0123456789ABCDEF01234567 "Apple Development: Example Person (TEAMID1234)"
+     1 valid identities found
+EOT
+else
+    echo "     0 valid identities found"
+fi
+EOF
+cat >"$helper_fake_bin/xcodebuild" <<'EOF'
+#!/usr/bin/env bash
+echo "Xcode 99.0"
+EOF
+cat >"$helper_fake_bin/swift" <<'EOF'
+#!/usr/bin/env bash
+echo "Swift fake"
+EOF
+cat >"$helper_fake_bin/pkgbuild" <<'EOF'
+#!/usr/bin/env bash
+echo "$0"
+EOF
+cat >"$helper_fake_bin/productbuild" <<'EOF'
+#!/usr/bin/env bash
+echo "$0"
+EOF
+cat >"$helper_fake_bin/xcode-select" <<'EOF'
+#!/usr/bin/env bash
+echo "/Applications/Xcode.app/Contents/Developer"
+EOF
+cat >"$helper_fake_bin/xcrun" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+    "--sdk macosx --show-sdk-path") echo "/Applications/Xcode.app/SDKs/MacOSX.sdk" ;;
+    "--find codesign") echo "/usr/bin/codesign" ;;
+    "--find notarytool") echo "/usr/bin/notarytool" ;;
+    *) exit 1 ;;
+esac
+EOF
+chmod +x "$helper_fake_bin/security" "$helper_fake_bin/xcodebuild" "$helper_fake_bin/swift" \
+    "$helper_fake_bin/pkgbuild" "$helper_fake_bin/productbuild" "$helper_fake_bin/xcode-select" "$helper_fake_bin/xcrun"
+
+helper_fake_dev_dir="$bag_mode_smoke_dir/helper-fake-development"
+PATH="$helper_fake_bin:$PATH" scripts/helper-service-readiness.sh --output-dir "$helper_fake_dev_dir" >/dev/null
+if ! grep -q '^appleDevelopmentIdentityCount=1$' "$helper_fake_dev_dir/validation-config.txt"; then
+    echo "Helper readiness harness did not count fake Apple Development identity" >&2
+    exit 1
+fi
+if ! grep -q '^developerIDApplicationIdentityCount=0$' "$helper_fake_dev_dir/validation-config.txt"; then
+    echo "Helper readiness harness misclassified fake Apple Development as Developer ID Application" >&2
+    exit 1
+fi
+if ! grep -q '^signedPrototypeReady=false$' "$helper_fake_dev_dir/validation-config.txt"; then
+    echo "Helper readiness harness accepted Apple Development identity for distribution readiness" >&2
+    exit 1
+fi
+if grep -Eq '[A-Fa-f0-9]{40}|Example Person|TEAMID1234|Apple Development|[()]' "$helper_fake_dev_dir/codesigning-identities.txt"; then
+    echo "Helper readiness harness leaked fake raw signing identity details" >&2
+    cat "$helper_fake_dev_dir/codesigning-identities.txt" >&2
+    exit 1
+fi
+if grep -Eq '[A-Fa-f0-9]{40}|Example Person|TEAMID1234|Apple Development|[()]' "$helper_fake_dev_dir/installer-identities.txt"; then
+    echo "Helper readiness harness leaked fake raw installer identity details" >&2
+    cat "$helper_fake_dev_dir/installer-identities.txt" >&2
+    exit 1
+fi
+
+cat >"$helper_fake_bin/security" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *"-p codesigning"* ]]; then
+    cat <<EOT
+  1) 0123456789ABCDEF0123456789ABCDEF01234567 "Developer ID Application: Example Corp (TEAMID1234)"
+     1 valid identities found
+EOT
+else
+    cat <<EOT
+  1) 89ABCDEF0123456789ABCDEF0123456789ABCDEF "Developer ID Installer: Example Corp (TEAMID1234)"
+     1 valid identities found
+EOT
+fi
+EOF
+
+helper_fake_dist_dir="$bag_mode_smoke_dir/helper-fake-distribution"
+PATH="$helper_fake_bin:$PATH" scripts/helper-service-readiness.sh --output-dir "$helper_fake_dist_dir" >/dev/null
+if ! grep -q '^developerIDApplicationIdentityCount=1$' "$helper_fake_dist_dir/validation-config.txt"; then
+    echo "Helper readiness harness did not count fake Developer ID Application identity" >&2
+    exit 1
+fi
+if ! grep -q '^developerIDInstallerIdentityCount=1$' "$helper_fake_dist_dir/validation-config.txt"; then
+    echo "Helper readiness harness did not count fake Developer ID Installer identity" >&2
+    exit 1
+fi
+if ! grep -q '^signedPrototypeReady=true$' "$helper_fake_dist_dir/validation-config.txt"; then
+    echo "Helper readiness harness did not accept fake distribution prerequisites" >&2
+    exit 1
+fi
+
+helper_timeout_bin="$bag_mode_smoke_dir/helper-timeout-fake"
+mkdir -p "$helper_timeout_bin"
+cat >"$helper_timeout_bin/security" <<'EOF'
+#!/usr/bin/env bash
+sleep 5
+EOF
+chmod +x "$helper_timeout_bin/security"
+helper_timeout_dir="$bag_mode_smoke_dir/helper-timeout"
+CLAWSHELL_HELPER_READINESS_TIMEOUT_SECONDS=1 \
+PATH="$helper_timeout_bin:$PATH" scripts/helper-service-readiness.sh --output-dir "$helper_timeout_dir" >/dev/null
+if ! grep -q '^timedOut=true$' "$helper_timeout_dir/codesigning-identities.status"; then
+    echo "Helper readiness harness did not record timeout for hanging security command" >&2
+    cat "$helper_timeout_dir/codesigning-identities.status" >&2
+    exit 1
+fi
+
 echo "==> swift test discovery"
 test_list_output="$(mktemp)"
 test_list_error="$(mktemp)"

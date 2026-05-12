@@ -108,6 +108,16 @@ scripts/temperature-provider-validation.sh --output-dir .build/temperature-provi
 
 The harness writes `validation-config.txt`, command outputs, command status files, and `summary.md`. It never uses sudo and must not mark `bagModeTemperatureProviderReady=true`; production provider readiness requires the signed-helper follow-up.
 
+## Helper Service Readiness Harness
+
+Use the non-mutating helper readiness harness before attempting a signed `SMAppService` prototype:
+
+```sh
+scripts/helper-service-readiness.sh --output-dir .build/helper-service-readiness/local-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+The harness records code-signing identity count and local tool availability. It does not install, register, approve, unregister, or run a helper.
+
 ## Manual Hardware Checklist
 
 Hardware validation is gated and must be run intentionally on supported machines. Do not intentionally overheat hardware; thermal cutoff validation uses mocks or simulated sensor providers.

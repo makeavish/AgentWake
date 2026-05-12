@@ -63,7 +63,11 @@ Each case must record the exact command applied, rollback command, `pmset -g cus
 
 ## Helper Spike
 
-The helper proof must answer whether `SMAppService` LaunchDaemon is viable for signed Homebrew distribution.
+The helper proof must answer whether `SMAppService` LaunchDaemon is viable for the signed helper path. Homebrew cask install/upgrade/uninstall semantics are a related packaging gate unless the signed prototype is exercised through a cask-installed app.
+
+Current artifact: [Helper Service Readiness](helper-service-readiness.md).
+
+The May 12, 2026 source/readiness check keeps `SMAppService` as the source-backed V1 target to prototype, but this local environment has no Developer ID signing identities and no full Xcode-backed `xcodebuild`, so the signed install/update/uninstall prototype is not complete. The signed prototype run is tracked in [#27](https://github.com/makeavish/ClawShell/issues/27).
 
 Required notes:
 
