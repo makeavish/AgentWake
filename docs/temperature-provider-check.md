@@ -144,6 +144,48 @@ available. On the current machine, non-interactive sampling still records
 `sudoPasswordRequired`, so the package remains incomplete proof until helper or
 root-equivalent sampling is available.
 
+To build the no-membership `SMAppService` provider candidate without changing
+helper registration state, run:
+
+```bash
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/smappservice-prepare-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+The default mode builds an ad-hoc signed app/helper bundle whose LaunchDaemon
+helper runs one timeout-bounded `powermetrics` sample after registration and
+approval. Mutating registration uses the same prepared artifact and requires:
+
+```bash
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/<same-smappservice-provider-artifact> \
+  --register \
+  --i-understand-this-registers-provider
+```
+
+After approval, append non-mutating provider output from the same artifact with:
+
+```bash
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/<same-smappservice-provider-artifact> \
+  --capture-post-approval
+```
+
+The append mode captures helper runtime context, `powermetrics` output/status,
+`launchctl`, and unified logs. It does not promote manifest rows automatically;
+review the captured output before mapping it to provider proof rows.
+
+After cleanup approval, unregister the same prototype helper with:
+
+```bash
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/<same-smappservice-provider-artifact> \
+  --capture-unregister \
+  --i-understand-this-registers-provider
+```
+
+This records follow-up status, `launchctl`, and unified log output for cleanup.
+
 To start the package layout without inventing rows by hand, generate a
 non-mutating scaffold:
 

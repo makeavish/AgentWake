@@ -169,6 +169,45 @@ artifact is intentionally incomplete and should fail the structural verifier
 until real helper/root samples, cadence, coverage, and fail-closed evidence are
 attached.
 
+To build the no-membership `SMAppService` provider candidate without changing
+helper registration state, run:
+
+```sh
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/smappservice-prepare-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+Mutating registration uses the same prepared artifact and requires:
+
+```sh
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/<same-smappservice-provider-artifact> \
+  --register \
+  --i-understand-this-registers-provider
+```
+
+After macOS approval, append helper-owned provider output to the same artifact with:
+
+```sh
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/<same-smappservice-provider-artifact> \
+  --capture-post-approval
+```
+
+The append mode captures helper runtime context, `powermetrics` output/status,
+`launchctl`, and unified logs without auto-promoting manifest rows.
+
+After cleanup approval, unregister the same prototype helper with:
+
+```sh
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/<same-smappservice-provider-artifact> \
+  --capture-unregister \
+  --i-understand-this-registers-provider
+```
+
+This records follow-up status, `launchctl`, and unified log output for cleanup.
+
 The mocked fail-closed safety contract is covered in `BagModeSafetyPolicy` and `ClawShellCoreChecks`: warning, cutoff, stale, unavailable, permission-denied, parse-failed, helper-crashed, unsupported-hardware, timeout, insufficient closed-bag coverage, missing/invalid battery, battery floor, and hysteresis transitions are executable checks. This does not select or validate the no-membership helper temperature provider.
 
 Before attaching helper provider proof, run:

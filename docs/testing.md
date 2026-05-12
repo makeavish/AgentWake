@@ -196,6 +196,49 @@ The proof-attempt harness is non-mutating and uses `sudo -n` only. On machines
 without helper/root-equivalent authorization, it records permission evidence and
 leaves the real proof rows as `TODO`, so verifier failure is expected.
 
+To build the no-membership `SMAppService` provider candidate without changing
+helper registration state:
+
+```sh
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/smappservice-prepare-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+The default mode builds an ad-hoc signed app/helper bundle whose LaunchDaemon
+helper runs one timeout-bounded `powermetrics` sample after registration and
+approval. Mutating registration uses the same prepared artifact and requires:
+
+```sh
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/<same-smappservice-provider-artifact> \
+  --register \
+  --i-understand-this-registers-provider
+```
+
+After approval, append non-mutating provider output from the same artifact with:
+
+```sh
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/<same-smappservice-provider-artifact> \
+  --capture-post-approval
+```
+
+The append mode captures helper runtime context, powermetrics output/status,
+`launchctl`, and unified logs. It does not promote manifest rows automatically;
+review the captured output before mapping it to provider proof rows.
+
+After cleanup approval, unregister the same prototype helper with:
+
+```sh
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/<same-smappservice-provider-artifact> \
+  --capture-unregister \
+  --i-understand-this-registers-provider
+```
+
+This calls `unregister()` from the existing app bundle and records follow-up
+status, `launchctl`, and unified log output.
+
 Use the non-mutating provider proof scaffold when starting a new #25 evidence
 package:
 

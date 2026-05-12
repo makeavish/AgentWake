@@ -1372,6 +1372,469 @@ if ! grep -q "active-cadence-samples" "$bag_mode_smoke_error"; then
     exit 1
 fi
 
+echo "==> temperature provider SMAppService proof harness smoke"
+temperature_smappservice_provider_prepare="$bag_mode_smoke_dir/temperature-smappservice-provider-prepare"
+scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_prepare" >/dev/null
+for required_file in \
+    validation-config.txt \
+    manual-result.md \
+    provider-manifest.tsv \
+    README.md \
+    ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype \
+    ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon \
+    evidence/provider-command-or-api.txt \
+    evidence/processinfo-supplemental-signal.txt \
+    evidence/helper-ownership-model.txt \
+    evidence/temperature-provider-status-before-approval.txt \
+    evidence/no-user-visible-prompts.txt \
+    evidence/logs.txt
+do
+    if [[ ! -f "$temperature_smappservice_provider_prepare/$required_file" ]]; then
+        echo "Temperature SMAppService provider harness did not write expected file: $required_file" >&2
+        exit 1
+    fi
+done
+if ! grep -q '^helperInstallPath=smappservice$' "$temperature_smappservice_provider_prepare/validation-config.txt"; then
+    echo "Temperature SMAppService provider harness did not record smappservice path" >&2
+    cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^helperOwned=false$' "$temperature_smappservice_provider_prepare/validation-config.txt"; then
+    echo "Temperature SMAppService provider harness overclaimed helper ownership before approval" >&2
+    cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^providerProofReady=false$' "$temperature_smappservice_provider_prepare/validation-config.txt"; then
+    echo "Temperature SMAppService provider harness overclaimed provider proof readiness" >&2
+    cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^registerAttempted=false$' "$temperature_smappservice_provider_prepare/validation-config.txt"; then
+    echo "Temperature SMAppService provider harness unexpectedly attempted registration in default mode" >&2
+    cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
+    exit 1
+fi
+for todo_row in \
+    helper-ownership-context \
+    numeric-temperature-output \
+    timeout-enforcement \
+    permission-behavior \
+    freshness-samples \
+    active-cadence-samples \
+    idle-cadence-samples
+do
+    if ! awk -F '\t' -v check_id="$todo_row" '$1 == check_id && $2 == "TODO" { found = 1 } END { exit !found }' "$temperature_smappservice_provider_prepare/provider-manifest.tsv"; then
+        echo "Temperature SMAppService provider harness should leave incomplete row as TODO: $todo_row" >&2
+        cat "$temperature_smappservice_provider_prepare/provider-manifest.tsv" >&2
+        exit 1
+    fi
+done
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_smappservice_provider_prepare/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted incomplete SMAppService provider proof attempt" >&2
+    exit 1
+fi
+if ! grep -q "helperOwned" "$bag_mode_smoke_error" && ! grep -q "required check must use status evidence" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_smappservice_provider_register_without_ack="$bag_mode_smoke_dir/temperature-smappservice-provider-register-without-ack"
+if scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_register_without_ack" --register >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness allowed register without acknowledgement" >&2
+    exit 1
+fi
+if ! grep -q -- "--i-understand-this-registers-provider" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_smappservice_provider_register_missing="$bag_mode_smoke_dir/temperature-smappservice-provider-register-missing"
+if scripts/temperature-provider-smappservice-proof.sh \
+    --output-dir "$temperature_smappservice_provider_register_missing" \
+    --register \
+    --i-understand-this-registers-provider >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness allowed register without a prepared artifact" >&2
+    exit 1
+fi
+if ! grep -q "existing artifact directory" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_smappservice_provider_unregister_without_ack="$bag_mode_smoke_dir/temperature-smappservice-provider-unregister-without-ack"
+if scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_unregister_without_ack" --capture-unregister >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness allowed unregister capture without acknowledgement" >&2
+    exit 1
+fi
+if ! grep -q -- "--i-understand-this-registers-provider" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_prepare" --capture-post-approval --capture-unregister --i-understand-this-registers-provider >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness allowed combined append capture modes" >&2
+    exit 1
+fi
+if ! grep -q "Use only one" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_smappservice_provider_register_fake="$bag_mode_smoke_dir/temperature-smappservice-provider-register-fake"
+mkdir -p "$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS" \
+    "$temperature_smappservice_provider_register_fake/evidence" \
+    "$temperature_smappservice_provider_register_fake/runtime"
+{
+    printf '%s\n' '#!/usr/bin/env bash'
+    printf '%s\n' 'set -euo pipefail'
+    printf '%s\n' 'command="${1:-status}"'
+    printf '%s\n' 'echo "command=$command"'
+    printf '%s\n' 'echo "plistName=com.makeavish.ClawShell.TemperatureProviderPrototype.daemon.plist"'
+    printf '%s\n' 'case "$command" in'
+    printf '%s\n' '  register)'
+    printf '%s\n' '    echo "statusBeforeRaw=3"'
+    printf '%s\n' '    echo "statusBeforeDescription=SMAppServiceStatus(rawValue: 3)"'
+    printf '%s\n' '    echo "registerResult=success"'
+    printf '%s\n' '    echo "statusAfterRaw=2"'
+    printf '%s\n' '    echo "statusAfterDescription=SMAppServiceStatus(rawValue: 2)"'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  status)'
+    printf '%s\n' '    echo "statusBeforeRaw=2"'
+    printf '%s\n' '    echo "statusBeforeDescription=SMAppServiceStatus(rawValue: 2)"'
+    printf '%s\n' '    echo "statusAfterRaw=2"'
+    printf '%s\n' '    echo "statusAfterDescription=SMAppServiceStatus(rawValue: 2)"'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  *) exit 64 ;;'
+    printf '%s\n' 'esac'
+} >"$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon"
+chmod +x "$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype" \
+    "$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon"
+{
+    printf 'evidenceFormat=temperature-provider-proof-v1\n'
+    printf 'registerAttempted=false\n'
+} >"$temperature_smappservice_provider_register_fake/validation-config.txt"
+cp "$temperature_smappservice_provider_prepare/provider-manifest.tsv" "$temperature_smappservice_provider_register_fake/provider-manifest.tsv"
+scripts/temperature-provider-smappservice-proof.sh \
+    --output-dir "$temperature_smappservice_provider_register_fake" \
+    --register \
+    --i-understand-this-registers-provider >/dev/null
+if ! grep -q '^registerAttempted=true$' "$temperature_smappservice_provider_register_fake/validation-config.txt"; then
+    echo "Temperature SMAppService provider register capture did not update registerAttempted" >&2
+    cat "$temperature_smappservice_provider_register_fake/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^registerCaptureAttempted=true$' "$temperature_smappservice_provider_register_fake/validation-config.txt"; then
+    echo "Temperature SMAppService provider register capture did not update registerCaptureAttempted" >&2
+    cat "$temperature_smappservice_provider_register_fake/validation-config.txt" >&2
+    exit 1
+fi
+for register_capture in \
+    provider-register \
+    temperature-provider-status-after-register
+do
+    if [[ ! -s "$temperature_smappservice_provider_register_fake/evidence/$register_capture.txt" ]]; then
+        echo "Temperature SMAppService provider register capture missing evidence: $register_capture" >&2
+        exit 1
+    fi
+    if [[ ! -s "$temperature_smappservice_provider_register_fake/evidence/$register_capture.status" ]]; then
+        echo "Temperature SMAppService provider register capture missing status: $register_capture" >&2
+        exit 1
+    fi
+done
+if [[ ! -s "$temperature_smappservice_provider_register_fake/register-capture.md" ]]; then
+    echo "Temperature SMAppService provider register capture missing summary" >&2
+    exit 1
+fi
+temperature_smappservice_provider_register_symlink_executable="$bag_mode_smoke_dir/temperature-smappservice-provider-register-symlink-executable"
+cp -R "$temperature_smappservice_provider_register_fake" "$temperature_smappservice_provider_register_symlink_executable"
+rm -f "$temperature_smappservice_provider_register_symlink_executable/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype"
+ln -s /bin/echo "$temperature_smappservice_provider_register_symlink_executable/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype"
+if scripts/temperature-provider-smappservice-proof.sh \
+    --output-dir "$temperature_smappservice_provider_register_symlink_executable" \
+    --register \
+    --i-understand-this-registers-provider >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider register capture ran a symlinked controller path" >&2
+    exit 1
+fi
+if ! grep -q "regular executable artifact path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_smappservice_provider_register_symlink_summary="$bag_mode_smoke_dir/temperature-smappservice-provider-register-symlink-summary"
+cp -R "$temperature_smappservice_provider_register_fake" "$temperature_smappservice_provider_register_symlink_summary"
+rm -f "$temperature_smappservice_provider_register_symlink_summary/register-capture.md"
+ln -s /etc/hosts "$temperature_smappservice_provider_register_symlink_summary/register-capture.md"
+if scripts/temperature-provider-smappservice-proof.sh \
+    --output-dir "$temperature_smappservice_provider_register_symlink_summary" \
+    --register \
+    --i-understand-this-registers-provider >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider register capture followed a symlinked summary path" >&2
+    exit 1
+fi
+if ! grep -q "requires regular capture path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_smappservice_provider_capture_missing="$bag_mode_smoke_dir/temperature-smappservice-provider-capture-missing"
+if scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_capture_missing" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness allowed post-approval capture without an existing artifact" >&2
+    exit 1
+fi
+if ! grep -q "existing artifact directory" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_smappservice_provider_file="$bag_mode_smoke_dir/temperature-smappservice-provider-file"
+touch "$temperature_smappservice_provider_file"
+if scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_file" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness accepted an output path that is not a directory" >&2
+    exit 1
+fi
+if ! grep -q "not a directory" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_smappservice_provider_non_empty="$bag_mode_smoke_dir/temperature-smappservice-provider-non-empty"
+mkdir -p "$temperature_smappservice_provider_non_empty"
+touch "$temperature_smappservice_provider_non_empty/existing"
+if scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_non_empty" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness overwrote a non-empty output directory" >&2
+    exit 1
+fi
+if ! grep -q "Output directory is not empty" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_smappservice_provider_bad_env="$bag_mode_smoke_dir/temperature-smappservice-provider-bad-env"
+if CLAWSHELL_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS=abc \
+    scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_bad_env" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness accepted an invalid timeout value" >&2
+    exit 1
+fi
+if [[ -e "$temperature_smappservice_provider_bad_env" ]]; then
+    echo "Temperature SMAppService provider harness created evidence for an invalid timeout value" >&2
+    exit 1
+fi
+if zsh scripts/temperature-provider-smappservice-proof.sh --output-dir "$bag_mode_smoke_dir/temperature-smappservice-provider-zsh" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness unexpectedly ran under explicit zsh" >&2
+    exit 1
+fi
+if ! grep -q "requires bash" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST=1m \
+    scripts/temperature-provider-smappservice-proof.sh \
+    --output-dir "$temperature_smappservice_provider_prepare" \
+    --capture-post-approval >/dev/null
+if ! grep -q '^postApprovalCaptureAttempted=true$' "$temperature_smappservice_provider_prepare/validation-config.txt"; then
+    echo "Temperature SMAppService provider post-approval capture did not update validation config" >&2
+    cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
+    exit 1
+fi
+for post_approval_capture in \
+    temperature-provider-status-after-approval \
+    helper-ownership-context \
+    numeric-temperature-output \
+    permission-behavior \
+    timeout-enforcement \
+    launchctl-status \
+    logs
+do
+    if [[ ! -s "$temperature_smappservice_provider_prepare/evidence/$post_approval_capture.txt" ]]; then
+        echo "Temperature SMAppService provider post-approval capture missing evidence: $post_approval_capture" >&2
+        exit 1
+    fi
+    if [[ ! -s "$temperature_smappservice_provider_prepare/evidence/$post_approval_capture.status" ]]; then
+        echo "Temperature SMAppService provider post-approval capture missing status: $post_approval_capture" >&2
+        exit 1
+    fi
+done
+for unpromoted_capture_row in \
+    helper-ownership-context \
+    numeric-temperature-output \
+    timeout-enforcement \
+    permission-behavior
+do
+    if ! awk -F '\t' -v check_id="$unpromoted_capture_row" '$1 == check_id && $2 == "TODO" { found = 1 } END { exit !found }' "$temperature_smappservice_provider_prepare/provider-manifest.tsv"; then
+        echo "Temperature SMAppService provider post-approval capture should not auto-promote row: $unpromoted_capture_row" >&2
+        cat "$temperature_smappservice_provider_prepare/provider-manifest.tsv" >&2
+        exit 1
+    fi
+done
+temperature_smappservice_provider_runtime_success="$bag_mode_smoke_dir/temperature-smappservice-provider-runtime-success"
+cp -R "$temperature_smappservice_provider_prepare" "$temperature_smappservice_provider_runtime_success"
+cat >"$temperature_smappservice_provider_runtime_success/runtime/provider.log" <<'EOF'
+event=temperature-provider-sample
+uid=0
+euid=0
+providerSource=powermetrics
+timedOut=false
+exitCode=0
+helperOwned=true
+numericTemperatureObserved=true
+EOF
+cat >"$temperature_smappservice_provider_runtime_success/runtime/numeric-temperature-output.txt" <<'EOF'
+$ /usr/bin/powermetrics -n 1 -i 1000 --samplers thermal
+CPU die temperature: 42 C
+--- stderr ---
+EOF
+cat >"$temperature_smappservice_provider_runtime_success/runtime/numeric-temperature-output.status" <<'EOF'
+command=/usr/bin/powermetrics -n 1 -i 1000 --samplers thermal
+durationSeconds=1
+timeoutSeconds=1
+timedOut=false
+exitCode=0
+helperOwned=true
+numericTemperatureObserved=true
+runError=none
+EOF
+CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST=1m \
+    scripts/temperature-provider-smappservice-proof.sh \
+    --output-dir "$temperature_smappservice_provider_runtime_success" \
+    --capture-post-approval >/dev/null
+for successful_runtime_capture in \
+    helper-ownership-context \
+    numeric-temperature-output \
+    permission-behavior \
+    timeout-enforcement
+do
+    if ! grep -q '^exitCode=0$' "$temperature_smappservice_provider_runtime_success/evidence/$successful_runtime_capture.status"; then
+        echo "Temperature SMAppService provider post-approval capture did not accept present runtime source: $successful_runtime_capture" >&2
+        cat "$temperature_smappservice_provider_runtime_success/evidence/$successful_runtime_capture.status" >&2
+        cat "$temperature_smappservice_provider_runtime_success/evidence/$successful_runtime_capture.txt" >&2
+        exit 1
+    fi
+done
+if ! grep -q 'helperOwned=true' "$temperature_smappservice_provider_runtime_success/evidence/helper-ownership-context.txt"; then
+    echo "Temperature SMAppService provider post-approval capture missed helper-owned runtime context" >&2
+    cat "$temperature_smappservice_provider_runtime_success/evidence/helper-ownership-context.txt" >&2
+    exit 1
+fi
+if ! grep -q 'CPU die temperature: 42 C' "$temperature_smappservice_provider_runtime_success/evidence/numeric-temperature-output.txt"; then
+    echo "Temperature SMAppService provider post-approval capture missed numeric runtime output" >&2
+    cat "$temperature_smappservice_provider_runtime_success/evidence/numeric-temperature-output.txt" >&2
+    exit 1
+fi
+for status_capture in \
+    permission-behavior \
+    timeout-enforcement
+do
+    for required_status_field in \
+        'timedOut=false' \
+        'exitCode=0' \
+        'helperOwned=true' \
+        'numericTemperatureObserved=true'
+    do
+        if ! grep -q "$required_status_field" "$temperature_smappservice_provider_runtime_success/evidence/$status_capture.txt"; then
+            echo "Temperature SMAppService provider post-approval capture missed runtime status field: $required_status_field in $status_capture" >&2
+            cat "$temperature_smappservice_provider_runtime_success/evidence/$status_capture.txt" >&2
+            exit 1
+        fi
+    done
+done
+temperature_smappservice_provider_symlink_source="$bag_mode_smoke_dir/temperature-smappservice-provider-symlink-source"
+cp -R "$temperature_smappservice_provider_prepare" "$temperature_smappservice_provider_symlink_source"
+rm -f "$temperature_smappservice_provider_symlink_source/runtime/numeric-temperature-output.txt"
+ln -s /etc/hosts "$temperature_smappservice_provider_symlink_source/runtime/numeric-temperature-output.txt"
+CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST=1m \
+    scripts/temperature-provider-smappservice-proof.sh \
+    --output-dir "$temperature_smappservice_provider_symlink_source" \
+    --capture-post-approval >/dev/null
+if ! grep -q "symlinkSource=" "$temperature_smappservice_provider_symlink_source/evidence/numeric-temperature-output.txt"; then
+    echo "Temperature SMAppService provider post-approval capture followed a symlinked runtime source" >&2
+    cat "$temperature_smappservice_provider_symlink_source/evidence/numeric-temperature-output.txt" >&2
+    exit 1
+fi
+if ! grep -q '^exitCode=1$' "$temperature_smappservice_provider_symlink_source/evidence/numeric-temperature-output.status"; then
+    echo "Temperature SMAppService provider post-approval capture did not fail symlinked runtime source" >&2
+    cat "$temperature_smappservice_provider_symlink_source/evidence/numeric-temperature-output.status" >&2
+    exit 1
+fi
+temperature_smappservice_provider_non_regular_source="$bag_mode_smoke_dir/temperature-smappservice-provider-non-regular-source"
+cp -R "$temperature_smappservice_provider_prepare" "$temperature_smappservice_provider_non_regular_source"
+rm -f "$temperature_smappservice_provider_non_regular_source/runtime/numeric-temperature-output.txt"
+mkdir "$temperature_smappservice_provider_non_regular_source/runtime/numeric-temperature-output.txt"
+CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST=1m \
+    scripts/temperature-provider-smappservice-proof.sh \
+    --output-dir "$temperature_smappservice_provider_non_regular_source" \
+    --capture-post-approval >/dev/null
+if ! grep -q "nonRegularSource=" "$temperature_smappservice_provider_non_regular_source/evidence/numeric-temperature-output.txt"; then
+    echo "Temperature SMAppService provider post-approval capture read a non-regular runtime source" >&2
+    cat "$temperature_smappservice_provider_non_regular_source/evidence/numeric-temperature-output.txt" >&2
+    exit 1
+fi
+if ! grep -q '^exitCode=1$' "$temperature_smappservice_provider_non_regular_source/evidence/numeric-temperature-output.status"; then
+    echo "Temperature SMAppService provider post-approval capture did not fail non-regular runtime source" >&2
+    cat "$temperature_smappservice_provider_non_regular_source/evidence/numeric-temperature-output.status" >&2
+    exit 1
+fi
+temperature_smappservice_provider_unregister_fake="$bag_mode_smoke_dir/temperature-smappservice-provider-unregister-fake"
+mkdir -p "$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS" \
+    "$temperature_smappservice_provider_unregister_fake/evidence" \
+    "$temperature_smappservice_provider_unregister_fake/runtime"
+{
+    printf '%s\n' '#!/usr/bin/env bash'
+    printf '%s\n' 'set -euo pipefail'
+    printf '%s\n' 'command="${1:-status}"'
+    printf '%s\n' 'echo "command=$command"'
+    printf '%s\n' 'echo "plistName=com.makeavish.ClawShell.TemperatureProviderPrototype.daemon.plist"'
+    printf '%s\n' 'case "$command" in'
+    printf '%s\n' '  unregister)'
+    printf '%s\n' '    echo "statusBeforeRaw=1"'
+    printf '%s\n' '    echo "statusBeforeDescription=SMAppServiceStatus(rawValue: 1)"'
+    printf '%s\n' '    echo "unregisterResult=success"'
+    printf '%s\n' '    echo "statusAfterRaw=0"'
+    printf '%s\n' '    echo "statusAfterDescription=SMAppServiceStatus(rawValue: 0)"'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  status)'
+    printf '%s\n' '    echo "statusBeforeRaw=0"'
+    printf '%s\n' '    echo "statusBeforeDescription=SMAppServiceStatus(rawValue: 0)"'
+    printf '%s\n' '    echo "statusAfterRaw=0"'
+    printf '%s\n' '    echo "statusAfterDescription=SMAppServiceStatus(rawValue: 0)"'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  *) exit 64 ;;'
+    printf '%s\n' 'esac'
+} >"$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon"
+chmod +x "$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype" \
+    "$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon"
+{
+    printf 'evidenceFormat=temperature-provider-proof-v1\n'
+    printf 'unregisterAttempted=false\n'
+} >"$temperature_smappservice_provider_unregister_fake/validation-config.txt"
+cp "$temperature_smappservice_provider_prepare/provider-manifest.tsv" "$temperature_smappservice_provider_unregister_fake/provider-manifest.tsv"
+CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST=1m \
+    scripts/temperature-provider-smappservice-proof.sh \
+    --output-dir "$temperature_smappservice_provider_unregister_fake" \
+    --capture-unregister \
+    --i-understand-this-registers-provider >/dev/null
+if ! grep -q '^unregisterAttempted=true$' "$temperature_smappservice_provider_unregister_fake/validation-config.txt"; then
+    echo "Temperature SMAppService provider unregister capture did not update unregisterAttempted" >&2
+    cat "$temperature_smappservice_provider_unregister_fake/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^unregisterCaptureAttempted=true$' "$temperature_smappservice_provider_unregister_fake/validation-config.txt"; then
+    echo "Temperature SMAppService provider unregister capture did not update unregisterCaptureAttempted" >&2
+    cat "$temperature_smappservice_provider_unregister_fake/validation-config.txt" >&2
+    exit 1
+fi
+for unregister_capture in \
+    provider-unregister \
+    temperature-provider-status-after-unregister \
+    launchctl-status-after-unregister \
+    logs-after-unregister
+do
+    if [[ ! -s "$temperature_smappservice_provider_unregister_fake/evidence/$unregister_capture.txt" ]]; then
+        echo "Temperature SMAppService provider unregister capture missing evidence: $unregister_capture" >&2
+        exit 1
+    fi
+    if [[ ! -s "$temperature_smappservice_provider_unregister_fake/evidence/$unregister_capture.status" ]]; then
+        echo "Temperature SMAppService provider unregister capture missing status: $unregister_capture" >&2
+        exit 1
+    fi
+done
+if [[ ! -s "$temperature_smappservice_provider_unregister_fake/unregister-capture.md" ]]; then
+    echo "Temperature SMAppService provider unregister capture missing summary" >&2
+    exit 1
+fi
+
 echo "==> temperature provider proof verifier smoke"
 temperature_proof_dir="$bag_mode_smoke_dir/temperature-proof"
 temperature_proof_manifest="$temperature_proof_dir/provider-manifest.tsv"
