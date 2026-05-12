@@ -454,6 +454,69 @@ if ! grep -q '^scaffoldFormat=bag-mode-primitive-matrix-scaffold-v1$' "$bag_mode
     echo "Bag Mode primitive matrix scaffold did not record expected scaffold format" >&2
     exit 1
 fi
+if [[ "$(head -n 1 "$bag_mode_matrix_scaffold/matrix-manifest.tsv")" != $'caseId\tstatus\tevidenceDir\tnaReason' ]]; then
+    echo "Bag Mode primitive matrix scaffold wrote an unexpected manifest header" >&2
+    cat "$bag_mode_matrix_scaffold/matrix-manifest.tsv" >&2
+    exit 1
+fi
+if ! awk -F '\t' 'NR == 1 { next } NF != 4 { exit 1 }' "$bag_mode_matrix_scaffold/matrix-manifest.tsv"; then
+    echo "Bag Mode primitive matrix scaffold wrote a manifest row with an unexpected field count" >&2
+    cat "$bag_mode_matrix_scaffold/matrix-manifest.tsv" >&2
+    exit 1
+fi
+bag_mode_matrix_scaffold_todo_cases=(
+    apple-silicon-ac-internal-open-normal
+    apple-silicon-ac-internal-closed-normal
+    apple-silicon-ac-internal-reopen-normal
+    apple-silicon-battery-internal-open-normal
+    apple-silicon-battery-internal-closed-normal
+    apple-silicon-battery-internal-reopen-normal
+    apple-silicon-ac-external-display-normal
+    apple-silicon-battery-external-display-normal
+    apple-silicon-ac-no-external-display-normal
+    apple-silicon-battery-no-external-display-normal
+    apple-silicon-ac-internal-app-quit
+    apple-silicon-battery-internal-app-quit
+    apple-silicon-ac-internal-crash
+    apple-silicon-battery-internal-crash
+    apple-silicon-ac-internal-reboot-held
+    apple-silicon-battery-internal-reboot-held
+    macos-13-host
+    macos-14-host
+    macos-15plus-host
+    intel-host
+)
+bag_mode_matrix_scaffold_expected_ids="$bag_mode_smoke_dir/matrix-scaffold-expected-ids"
+bag_mode_matrix_scaffold_actual_ids="$bag_mode_smoke_dir/matrix-scaffold-actual-ids"
+{
+    for case_id in "${bag_mode_matrix_scaffold_todo_cases[@]}"; do
+        printf '%s\n' "$case_id"
+    done
+    printf '%s\n' "helper-restart-after-27"
+    printf '%s\n' "helper-upgrade-after-27"
+} | sort >"$bag_mode_matrix_scaffold_expected_ids"
+tail -n +2 "$bag_mode_matrix_scaffold/matrix-manifest.tsv" | awk -F '\t' '{ print $1 }' | sort >"$bag_mode_matrix_scaffold_actual_ids"
+if ! diff -u "$bag_mode_matrix_scaffold_expected_ids" "$bag_mode_matrix_scaffold_actual_ids" >"$bag_mode_smoke_error"; then
+    echo "Bag Mode primitive matrix scaffold wrote an unexpected manifest row set" >&2
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+for case_id in "${bag_mode_matrix_scaffold_todo_cases[@]}"; do
+    if ! awk -F '\t' -v case_id="$case_id" '$1 == case_id && $2 == "TODO" { found = 1 } END { exit !found }' "$bag_mode_matrix_scaffold/matrix-manifest.tsv"; then
+        echo "Bag Mode primitive matrix scaffold missing TODO row: $case_id" >&2
+        cat "$bag_mode_matrix_scaffold/matrix-manifest.tsv" >&2
+        exit 1
+    fi
+done
+if ! awk -F '\t' '
+    $1 == "helper-restart-after-27" && $2 == "deferred" && $4 != "" { restart = 1 }
+    $1 == "helper-upgrade-after-27" && $2 == "deferred" && $4 != "" { upgrade = 1 }
+    END { exit !(restart && upgrade) }
+' "$bag_mode_matrix_scaffold/matrix-manifest.tsv"; then
+    echo "Bag Mode primitive matrix scaffold missing helper deferred rows with reasons" >&2
+    cat "$bag_mode_matrix_scaffold/matrix-manifest.tsv" >&2
+    exit 1
+fi
 if scripts/bag-mode-primitive-matrix-verify.sh --manifest "$bag_mode_matrix_scaffold/matrix-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Bag Mode primitive matrix verifier accepted the TODO scaffold manifest" >&2
     exit 1
