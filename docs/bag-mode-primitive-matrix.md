@@ -8,6 +8,8 @@ Follow-up: [#29](https://github.com/makeavish/ClawShell/issues/29)
 
 Harness artifact: [PR #22](https://github.com/makeavish/ClawShell/pull/22)
 
+Latest local baseline-only artifact: `.build/power-validation/bag-mode-baseline-20260512T104304Z`
+
 ## Question
 
 Is `pmset disablesleep` reliable enough across ClawShell's required Bag Mode matrix?
@@ -26,6 +28,11 @@ PR #22 added `scripts/bag-mode-primitive-validation.sh`, a dedicated harness for
 - refresh apply-mode metadata so baseline captures are not mistaken for #29 evidence
 
 This proves the evidence workflow exists. It does not prove the primitive is reliable.
+
+The latest local baseline-only artifact records `mode=baseline-only`,
+`testOnly=false`, `candidateCommand=/usr/bin/pmset disablesleep 1`, and
+redacted metadata. It is a starting point for a later mutating run with
+`--apply --continue`; it is not pass/fail matrix evidence for #29.
 
 ## Missing Evidence
 
