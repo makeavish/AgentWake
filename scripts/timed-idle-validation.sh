@@ -149,6 +149,9 @@ grep -E '^[[:space:]]+pid .* (PreventUserIdleSystemSleep|PreventSystemSleep|NoId
     >"$OUTPUT_DIR/non-clawshell-late-sleep-blockers.txt" || true
 blocker_count="$(wc -l <"$OUTPUT_DIR/non-clawshell-late-sleep-blockers.txt" | tr -d '[:space:]')"
 echo "nonClawShellLateSleepBlockerCount=$blocker_count" >>"$OUTPUT_DIR/validation-config.txt"
+"$ROOT_DIR/scripts/sleep-blocker-guidance.sh" \
+    "$OUTPUT_DIR/non-clawshell-late-sleep-blockers.txt" \
+    >"$OUTPUT_DIR/non-clawshell-late-sleep-blocker-guidance.txt"
 
 if grep -q '^idleSleepThresholdExceeded=true$' "$OUTPUT_DIR/validation-config.txt" \
     && [[ "$late_clawshell_assertion" == "present" ]] \
@@ -174,7 +177,7 @@ Phases:
 - during-late: snapshot after the late offset, intended to exceed the configured idle sleep interval
 - after: snapshot after ClawShell releases the normal assertion
 
-This harness does not change pmset settings. It documents observed behavior under the machine's current AC/battery profile. Treat the result as conclusive only when validation-config.txt has conclusive=true. When conclusive=false, inspect non-clawshell-late-sleep-blockers.txt and the active sleep threshold fields.
+This harness does not change pmset settings. It documents observed behavior under the machine's current AC/battery profile. Treat the result as conclusive only when validation-config.txt has conclusive=true. When conclusive=false, inspect non-clawshell-late-sleep-blockers.txt, non-clawshell-late-sleep-blocker-guidance.txt, and the active sleep threshold fields.
 EOF
 
 echo "Timed idle validation written to $OUTPUT_DIR"

@@ -94,7 +94,12 @@ Use the timed idle preflight helper before a clean run to avoid spending a full 
 scripts/timed-idle-preflight.sh
 ```
 
-Preflight is only a readiness check. It does not create validation evidence. #5 closed by explicit owner sign-off on the documented non-conclusive lifecycle evidence.
+Preflight is only a readiness check. It does not create validation evidence.
+When it finds non-ClawShell blockers, it prints cleanup hints for common
+assertions such as WindowServer `UserIsActive`, powerd display-on,
+sharingd/Handoff, Slack/WebRTC, coreaudiod audio activity, and Codex/Electron.
+#5 closed by explicit owner sign-off on the documented non-conclusive lifecycle
+evidence.
 
 See [power-validation.md](power-validation.md) for the current normal assertion policy, disk/display assertion status, timed-idle caveats, and hardware result matrix.
 

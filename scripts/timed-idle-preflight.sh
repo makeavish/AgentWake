@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DURATION="${CLAWSHELL_TIMED_IDLE_DURATION:-90}"
 LATE_OFFSET="${CLAWSHELL_TIMED_IDLE_LATE_OFFSET:-70}"
 
@@ -89,6 +90,14 @@ if [[ "$blocker_count" != "0" ]]; then
     echo
     echo "Non-ClawShell sleep blockers:"
     cat "$work_dir/non-clawshell-sleep-blockers.txt"
+    "$ROOT_DIR/scripts/sleep-blocker-guidance.sh" \
+        "$work_dir/non-clawshell-sleep-blockers.txt" \
+        >"$work_dir/non-clawshell-sleep-blocker-guidance.txt"
+    if [[ -s "$work_dir/non-clawshell-sleep-blocker-guidance.txt" ]]; then
+        echo
+        echo "Suggested cleanup:"
+        cat "$work_dir/non-clawshell-sleep-blocker-guidance.txt"
+    fi
 fi
 
 if [[ "$threshold_ok" == "1" && "$blocker_count" == "0" ]]; then

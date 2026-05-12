@@ -29,13 +29,90 @@ for script in scripts/*.sh; do
     bash -n "$script"
 done
 
+echo "==> timed idle blocker guidance smoke"
+timed_idle_guidance_dir="$(mktemp -d)"
+timed_idle_guidance_error="$(mktemp)"
+timed_idle_guidance_output="$timed_idle_guidance_dir/preflight.out"
+trap 'rm -f "$timed_idle_guidance_error"; rm -rf "$timed_idle_guidance_dir"' EXIT
+timed_idle_fake_bin="$timed_idle_guidance_dir/bin"
+mkdir -p "$timed_idle_fake_bin"
+cat >"$timed_idle_fake_bin/pmset" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == "-g batt" ]]; then
+    echo "Now drawing from 'Battery Power'"
+    exit 0
+fi
+if [[ "$*" == "-g custom" ]]; then
+    cat <<'CUSTOM'
+Battery Power:
+ sleep 1
+AC Power:
+ sleep 10
+CUSTOM
+    exit 0
+fi
+if [[ "$*" == "-g assertions" ]]; then
+    cat <<'ASSERTIONS'
+Assertion status system-wide:
+   pid 585(WindowServer): [0x1] 00:00:00 UserIsActive named: "keyboard activity"
+   pid 526(powerd): [0x2] 00:01:00 PreventUserIdleSystemSleep named: "Powerd - Prevent sleep while display is on"
+   pid 995(sharingd): [0x3] 00:02:00 PreventUserIdleSystemSleep named: "Handoff"
+   pid 61379(Slack): [0x4] 00:03:00 NoIdleSleepAssertion named: "WebRTC has active PeerConnections"
+   pid 597(coreaudiod): [0x5] 00:04:00 PreventUserIdleSystemSleep named: "com.apple.audio.BuiltInMicrophoneDevice.context.preventuseridlesleep"
+   pid 35118(Codex): [0x6] 00:05:00 NoIdleSleepAssertion named: "Electron"
+   pid 42(ExampleApp): [0x7] 00:06:00 PreventSystemSleep named: "example"
+   pid 222(Google Chrome Helper (Renderer)): [0x8] 00:07:00 NoIdleSleepAssertion named: "WebRTC has active PeerConnections"
+ASSERTIONS
+    exit 0
+fi
+echo "unexpected pmset args: $*" >&2
+exit 1
+EOF
+chmod +x "$timed_idle_fake_bin/pmset"
+if PATH="$timed_idle_fake_bin:$PATH" scripts/timed-idle-preflight.sh >"$timed_idle_guidance_output" 2>"$timed_idle_guidance_error"; then
+    echo "Timed idle preflight passed despite fake non-ClawShell blockers" >&2
+    cat "$timed_idle_guidance_output" >&2
+    exit 1
+fi
+if ! grep -q '^idleSleepThresholdExceeded=true$' "$timed_idle_guidance_output" ||
+   ! grep -q '^nonClawShellSleepBlockerCount=8$' "$timed_idle_guidance_output"; then
+    echo "Timed idle preflight did not record expected threshold and blocker count" >&2
+    cat "$timed_idle_guidance_output" >&2
+    exit 1
+fi
+for expected in \
+    'WindowServer/UserIsActive' \
+    'powerd/display-on' \
+    'sharingd/Handoff' \
+    'Slack/WebRTC' \
+    'coreaudiod/audio' \
+    'Codex/Electron' \
+    'ExampleApp: pause or quit' \
+    'Chrome: close tabs'
+do
+    if ! grep -q "$expected" "$timed_idle_guidance_output"; then
+        echo "Timed idle preflight guidance missing: $expected" >&2
+        cat "$timed_idle_guidance_output" >&2
+        exit 1
+    fi
+done
+printf '%s\n%s\n' \
+    '   pid 1(Slack): [0x1] 00:00:00 NoIdleSleepAssertion named: "WebRTC has active PeerConnections"' \
+    '   pid 2(Slack): [0x2] 00:00:01 NoIdleSleepAssertion named: "WebRTC has active PeerConnections"' \
+    | scripts/sleep-blocker-guidance.sh >"$timed_idle_guidance_dir/deduped.out"
+if [[ "$(grep -c 'Slack/WebRTC' "$timed_idle_guidance_dir/deduped.out")" != "1" ]]; then
+    echo "Sleep blocker guidance did not deduplicate repeated blocker classes" >&2
+    cat "$timed_idle_guidance_dir/deduped.out" >&2
+    exit 1
+fi
+
 echo "==> bag mode primitive harness smoke"
 bag_mode_smoke_dir="$(mktemp -d)"
 bag_mode_smoke_error="$(mktemp)"
 test_list_output=""
 test_list_error=""
 temperature_validation_before=""
-trap '[[ -n "$test_list_output" ]] && rm -f "$test_list_output"; [[ -n "$test_list_error" ]] && rm -f "$test_list_error"; [[ -n "$temperature_validation_before" ]] && rm -f "$temperature_validation_before"; rm -f "$bag_mode_smoke_error"; rm -rf "$bag_mode_smoke_dir"' EXIT
+trap '[[ -n "$test_list_output" ]] && rm -f "$test_list_output"; [[ -n "$test_list_error" ]] && rm -f "$test_list_error"; [[ -n "$temperature_validation_before" ]] && rm -f "$temperature_validation_before"; rm -f "$timed_idle_guidance_error" "$bag_mode_smoke_error"; rm -rf "$timed_idle_guidance_dir" "$bag_mode_smoke_dir"' EXIT
 
 if scripts/bag-mode-primitive-validation.sh --output-dir "$bag_mode_smoke_dir/missing-ack" --apply >"$bag_mode_smoke_error" 2>&1; then
     echo "Bag Mode primitive harness allowed --apply without acknowledgement" >&2
