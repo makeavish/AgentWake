@@ -1409,6 +1409,29 @@ if ! grep -q '^providerProofReady=false$' "$temperature_smappservice_provider_pr
     cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
     exit 1
 fi
+if ! grep -q '^showInitialUsage=true$' "$temperature_smappservice_provider_prepare/validation-config.txt"; then
+    echo "Temperature SMAppService provider harness did not record initial-usage powermetrics mode" >&2
+    cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q -- '--show-initial-usage' "$temperature_smappservice_provider_prepare/evidence/provider-command-or-api.txt"; then
+    echo "Temperature SMAppService provider harness did not wire --show-initial-usage into the LaunchDaemon command" >&2
+    cat "$temperature_smappservice_provider_prepare/evidence/provider-command-or-api.txt" >&2
+    exit 1
+fi
+temperature_smappservice_provider_no_initial="$bag_mode_smoke_dir/temperature-smappservice-provider-no-initial"
+CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE=false \
+    scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_no_initial" >/dev/null
+if ! grep -q '^showInitialUsage=false$' "$temperature_smappservice_provider_no_initial/validation-config.txt"; then
+    echo "Temperature SMAppService provider harness did not record disabled initial-usage mode" >&2
+    cat "$temperature_smappservice_provider_no_initial/validation-config.txt" >&2
+    exit 1
+fi
+if grep -q -- '--show-initial-usage' "$temperature_smappservice_provider_no_initial/evidence/provider-command-or-api.txt"; then
+    echo "Temperature SMAppService provider harness wired --show-initial-usage while it was disabled" >&2
+    cat "$temperature_smappservice_provider_no_initial/evidence/provider-command-or-api.txt" >&2
+    exit 1
+fi
 if ! grep -q '^registerAttempted=false$' "$temperature_smappservice_provider_prepare/validation-config.txt"; then
     echo "Temperature SMAppService provider harness unexpectedly attempted registration in default mode" >&2
     cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
@@ -1611,6 +1634,20 @@ if [[ -e "$temperature_smappservice_provider_bad_env" ]]; then
     echo "Temperature SMAppService provider harness created evidence for an invalid timeout value" >&2
     exit 1
 fi
+temperature_smappservice_provider_bad_bool="$bag_mode_smoke_dir/temperature-smappservice-provider-bad-bool"
+if CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE=maybe \
+    scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_bad_bool" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature SMAppService provider harness accepted an invalid initial-usage flag" >&2
+    exit 1
+fi
+if ! grep -q "CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE must be true or false" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if [[ -e "$temperature_smappservice_provider_bad_bool" ]]; then
+    echo "Temperature SMAppService provider harness created evidence for an invalid initial-usage flag" >&2
+    exit 1
+fi
 if zsh scripts/temperature-provider-smappservice-proof.sh --output-dir "$bag_mode_smoke_dir/temperature-smappservice-provider-zsh" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature SMAppService provider harness unexpectedly ran under explicit zsh" >&2
     exit 1
@@ -1671,14 +1708,15 @@ helperOwned=true
 numericTemperatureObserved=true
 EOF
 cat >"$temperature_smappservice_provider_runtime_success/runtime/numeric-temperature-output.txt" <<'EOF'
-$ /usr/bin/powermetrics -n 1 -i 1000 --samplers thermal
+$ /usr/bin/powermetrics --show-initial-usage -n 1 -i 1000 --samplers thermal
 CPU die temperature: 42 C
 --- stderr ---
 EOF
 cat >"$temperature_smappservice_provider_runtime_success/runtime/numeric-temperature-output.status" <<'EOF'
-command=/usr/bin/powermetrics -n 1 -i 1000 --samplers thermal
+command=/usr/bin/powermetrics --show-initial-usage -n 1 -i 1000 --samplers thermal
 durationSeconds=1
 timeoutSeconds=1
+showInitialUsage=true
 timedOut=false
 exitCode=0
 helperOwned=true
@@ -1720,6 +1758,7 @@ do
         'timedOut=false' \
         'exitCode=0' \
         'helperOwned=true' \
+        'showInitialUsage=true' \
         'numericTemperatureObserved=true'
     do
         if ! grep -q "$required_status_field" "$temperature_smappservice_provider_runtime_success/evidence/$status_capture.txt"; then
