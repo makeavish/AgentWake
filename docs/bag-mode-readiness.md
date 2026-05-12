@@ -2,6 +2,20 @@
 
 Bag Mode is blocked until the primitive, helper, and safety-provider spikes produce concrete evidence. This page is the operator checklist for issue #7.
 
+## Current Blockers
+
+As of the May 12, 2026 local rechecks, production Bag Mode remains blocked by
+three evidence issues:
+
+| Issue | Current local state | Next operator action |
+|---|---|---|
+| [#29](https://github.com/makeavish/ClawShell/issues/29) primitive matrix | Real hardware `pmset disablesleep` matrix evidence is still missing. | Run the primitive matrix on target hardware, fill `manual-result.md`, verify the manifest, and attach pass/fail/inconclusive evidence. |
+| [#27](https://github.com/makeavish/ClawShell/issues/27) signed helper prototype | `.build/helper-service-readiness/recheck-20260512T100451Z` records full Xcode discovered, Developer ID Application identities = 0, Developer ID Installer identities = 0, and `signedPrototypeReady=false`. | Install/import valid Developer ID identities, rerun helper readiness, then capture signed `SMAppService` install/update/uninstall evidence. |
+| [#25](https://github.com/makeavish/ClawShell/issues/25) thermal provider proof | `.build/temperature-provider-helper-readiness/recheck-20260512T100451Z` records `powermetricsAvailable=true`, `sudoNonInteractiveAvailable=false`, `powermetricsHelperPermissionState=sudoPasswordRequired`, and `providerProofReady=false`. | Run helper/root-equivalent sampling that does not prompt during Bag Mode, then capture provider freshness, cadence, timeout, coverage, and fail-closed evidence. |
+
+Readiness harnesses, scaffolds, and verifier success are support gates only.
+They do not close #7 without the real evidence above.
+
 ## Primitive Validation
 
 `pmset disablesleep` is still only a candidate primitive. Start with a baseline-only capture:
