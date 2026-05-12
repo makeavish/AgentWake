@@ -2754,7 +2754,7 @@ if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smapps
     echo "SMAppService helper prototype harness allowed post-approval capture on malformed artifact" >&2
     exit 1
 fi
-if ! grep -q "missing required executable artifact path" "$bag_mode_smoke_error"; then
+if ! grep -q "missing required artifact directory path" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
@@ -2769,6 +2769,61 @@ do
         exit 1
     fi
 done
+helper_smappservice_capture_symlink_executable="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-executable"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_executable"
+rm -f "$helper_smappservice_capture_symlink_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
+ln -s /bin/echo "$helper_smappservice_capture_symlink_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_executable" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype post-approval capture ran a symlinked controller path" >&2
+    exit 1
+fi
+if ! grep -q "regular executable artifact path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_capture_symlink_plist="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-plist"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_plist"
+rm -f "$helper_smappservice_capture_symlink_plist/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.ClawShell.HelperPrototype.daemon.plist"
+ln -s /etc/hosts "$helper_smappservice_capture_symlink_plist/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.ClawShell.HelperPrototype.daemon.plist"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_plist" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype post-approval capture accepted a symlinked LaunchDaemon plist" >&2
+    exit 1
+fi
+if ! grep -q "regular bundle metadata path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_capture_symlink_config="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-config"
+helper_smappservice_capture_config_victim="$bag_mode_smoke_dir/helper-smappservice-capture-config-victim"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_config"
+printf 'victim-before\n' >"$helper_smappservice_capture_config_victim"
+rm -f "$helper_smappservice_capture_symlink_config/validation-config.txt"
+ln -s "$helper_smappservice_capture_config_victim" "$helper_smappservice_capture_symlink_config/validation-config.txt"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_config" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype post-approval capture accepted a symlinked validation config" >&2
+    exit 1
+fi
+if ! grep -q "regular artifact file path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if [[ "$(cat "$helper_smappservice_capture_config_victim")" != "victim-before" ]]; then
+    echo "SMAppService helper prototype post-approval capture followed validation-config symlink" >&2
+    cat "$helper_smappservice_capture_config_victim" >&2
+    exit 1
+fi
+helper_smappservice_capture_non_regular_manifest="$bag_mode_smoke_dir/helper-smappservice-capture-non-regular-manifest"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_non_regular_manifest"
+rm -f "$helper_smappservice_capture_non_regular_manifest/prototype-manifest.tsv"
+mkdir "$helper_smappservice_capture_non_regular_manifest/prototype-manifest.tsv"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_non_regular_manifest" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype post-approval capture accepted a non-regular prototype manifest" >&2
+    exit 1
+fi
+if ! grep -q "regular artifact file path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
 helper_smappservice_capture_bad_evidence="$bag_mode_smoke_dir/helper-smappservice-capture-bad-evidence"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_bad_evidence"
 rm -rf "$helper_smappservice_capture_bad_evidence/evidence"
@@ -2912,6 +2967,36 @@ do
         exit 1
     fi
 done
+helper_smappservice_capture_symlink_source="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-source"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_source"
+rm -f "$helper_smappservice_capture_symlink_source/runtime/helper.log"
+ln -s /etc/hosts "$helper_smappservice_capture_symlink_source/runtime/helper.log"
+CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_source" --capture-post-approval >/dev/null
+if ! grep -q "symlinkSource=" "$helper_smappservice_capture_symlink_source/evidence/helper-bootstrap-after-approval.txt"; then
+    echo "SMAppService helper prototype post-approval capture followed a symlinked runtime source" >&2
+    cat "$helper_smappservice_capture_symlink_source/evidence/helper-bootstrap-after-approval.txt" >&2
+    exit 1
+fi
+if ! grep -q '^exitCode=1$' "$helper_smappservice_capture_symlink_source/evidence/helper-bootstrap-after-approval.status"; then
+    echo "SMAppService helper prototype post-approval capture did not fail symlinked runtime source" >&2
+    cat "$helper_smappservice_capture_symlink_source/evidence/helper-bootstrap-after-approval.status" >&2
+    exit 1
+fi
+helper_smappservice_capture_non_regular_source="$bag_mode_smoke_dir/helper-smappservice-capture-non-regular-source"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_non_regular_source"
+rm -f "$helper_smappservice_capture_non_regular_source/runtime/helper.log"
+mkdir "$helper_smappservice_capture_non_regular_source/runtime/helper.log"
+CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_non_regular_source" --capture-post-approval >/dev/null
+if ! grep -q "nonRegularSource=" "$helper_smappservice_capture_non_regular_source/evidence/helper-bootstrap-after-approval.txt"; then
+    echo "SMAppService helper prototype post-approval capture read a non-regular runtime source" >&2
+    cat "$helper_smappservice_capture_non_regular_source/evidence/helper-bootstrap-after-approval.txt" >&2
+    exit 1
+fi
+if ! grep -q '^exitCode=1$' "$helper_smappservice_capture_non_regular_source/evidence/helper-bootstrap-after-approval.status"; then
+    echo "SMAppService helper prototype post-approval capture did not fail non-regular runtime source" >&2
+    cat "$helper_smappservice_capture_non_regular_source/evidence/helper-bootstrap-after-approval.status" >&2
+    exit 1
+fi
 helper_smappservice_unregister_without_ack="$bag_mode_smoke_dir/helper-smappservice-unregister-without-ack"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_unregister_without_ack" --unregister >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype harness allowed unregister without acknowledgement" >&2
@@ -2938,10 +3023,45 @@ if ! grep -q "Use only one" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
+helper_smappservice_capture_unregister_symlink_executable="$bag_mode_smoke_dir/helper-smappservice-capture-unregister-symlink-executable"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_unregister_symlink_executable"
+rm -f "$helper_smappservice_capture_unregister_symlink_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
+ln -s /bin/echo "$helper_smappservice_capture_unregister_symlink_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
+if scripts/helper-service-smappservice-prototype.sh \
+    --output-dir "$helper_smappservice_capture_unregister_symlink_executable" \
+    --capture-unregister \
+    --i-understand-this-registers-helper >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype unregister capture ran a symlinked controller path" >&2
+    exit 1
+fi
+if ! grep -q "regular executable artifact path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_capture_unregister_non_regular_executable="$bag_mode_smoke_dir/helper-smappservice-capture-unregister-non-regular-executable"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_unregister_non_regular_executable"
+rm -f "$helper_smappservice_capture_unregister_non_regular_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
+mkdir "$helper_smappservice_capture_unregister_non_regular_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
+if scripts/helper-service-smappservice-prototype.sh \
+    --output-dir "$helper_smappservice_capture_unregister_non_regular_executable" \
+    --capture-unregister \
+    --i-understand-this-registers-helper >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype unregister capture ran a non-regular controller path" >&2
+    exit 1
+fi
+if ! grep -q "regular executable artifact path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
 helper_smappservice_capture_unregister_fake="$bag_mode_smoke_dir/helper-smappservice-capture-unregister-fake"
 mkdir -p "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/MacOS" \
+    "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons" \
     "$helper_smappservice_capture_unregister_fake/evidence" \
     "$helper_smappservice_capture_unregister_fake/runtime"
+cp "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/Info.plist" \
+    "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/Info.plist"
+cp "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.ClawShell.HelperPrototype.daemon.plist" \
+    "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.ClawShell.HelperPrototype.daemon.plist"
 {
     printf '%s\n' '#!/usr/bin/env bash'
     printf '%s\n' 'set -euo pipefail'
