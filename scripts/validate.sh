@@ -4,6 +4,91 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+normalize_xcode_developer_dir() {
+    local candidate="$1"
+
+    if [[ -x "$candidate/usr/bin/xcodebuild" ]]; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
+    if [[ -x "$candidate/Contents/Developer/usr/bin/xcodebuild" ]]; then
+        printf '%s\n' "$candidate/Contents/Developer"
+        return 0
+    fi
+
+    return 1
+}
+
+discover_swift_test_developer_dir() {
+    local candidate
+    local selected_developer_dir
+
+    if [[ -n "${CLAWSHELL_SWIFT_TEST_DEVELOPER_DIR:-}" ]] &&
+       candidate="$(normalize_xcode_developer_dir "$CLAWSHELL_SWIFT_TEST_DEVELOPER_DIR")"; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
+    if [[ -n "${DEVELOPER_DIR:-}" ]] &&
+       candidate="$(normalize_xcode_developer_dir "$DEVELOPER_DIR")"; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
+    selected_developer_dir="$(xcode-select -p 2>/dev/null || true)"
+    if [[ "$selected_developer_dir" == *".app/Contents/Developer" ]] &&
+       candidate="$(normalize_xcode_developer_dir "$selected_developer_dir")"; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
+    for candidate in /Applications/Xcode*.app; do
+        [[ -d "$candidate" ]] || continue
+        if candidate="$(normalize_xcode_developer_dir "$candidate")"; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+swift_test_list_with_developer_dir() {
+    local developer_dir="$1"
+    local output_file="$2"
+    local error_file="$3"
+
+    if [[ -n "$developer_dir" ]]; then
+        DEVELOPER_DIR="$developer_dir" swift test list >"$output_file" 2>"$error_file"
+    else
+        swift test list >"$output_file" 2>"$error_file"
+    fi
+}
+
+swift_test_with_developer_dir() {
+    local developer_dir="$1"
+
+    if [[ -n "$developer_dir" ]]; then
+        DEVELOPER_DIR="$developer_dir" swift test
+    else
+        swift test
+    fi
+}
+
+swift_test_unavailable_only() {
+    local error_file="$1"
+
+    grep -q 'This toolchain does not provide Testing or XCTest' "$error_file" || return 1
+
+    if grep -E '(^|[[:space:]])error:' "$error_file" |
+       grep -v -E 'This toolchain does not provide Testing or XCTest|emit-module command failed with exit code 1|fatalError$' >/dev/null; then
+        return 1
+    fi
+
+    return 0
+}
+
 echo "==> swift --version"
 swift --version
 
@@ -28,6 +113,29 @@ echo "==> shell script syntax"
 for script in scripts/*.sh; do
     bash -n "$script"
 done
+
+echo "==> swift test unavailable classifier smoke"
+swift_test_classifier_dir="$(mktemp -d)"
+swift_test_classifier_known="$swift_test_classifier_dir/known.err"
+swift_test_classifier_mixed="$swift_test_classifier_dir/mixed.err"
+cat >"$swift_test_classifier_known" <<'EOF'
+error: emit-module command failed with exit code 1 (use -v to see invocation)
+/tmp/Test.swift:1:8: error: This toolchain does not provide Testing or XCTest. Run `swift run ClawShellCoreChecks` for portable checks.
+error: fatalError
+EOF
+cat >"$swift_test_classifier_mixed" <<'EOF'
+error: emit-module command failed with exit code 1 (use -v to see invocation)
+/tmp/Test.swift:1:8: error: This toolchain does not provide Testing or XCTest. Run `swift run ClawShellCoreChecks` for portable checks.
+/tmp/Other.swift:2:4: error: cannot find 'brokenSymbol' in scope
+EOF
+if ! swift_test_unavailable_only "$swift_test_classifier_known"; then
+    echo "Swift test unavailable classifier rejected the known Testing/XCTest failure" >&2
+    exit 1
+fi
+if swift_test_unavailable_only "$swift_test_classifier_mixed"; then
+    echo "Swift test unavailable classifier accepted an unrelated compiler error" >&2
+    exit 1
+fi
 
 echo "==> timed idle blocker guidance smoke"
 timed_idle_guidance_dir="$(mktemp -d)"
@@ -1688,8 +1796,39 @@ fi
 echo "==> swift test discovery"
 test_list_output="$(mktemp)"
 test_list_error="$(mktemp)"
+test_developer_dir=""
+test_discovered_with_xcode=false
 
-if swift test list >"$test_list_output" 2>"$test_list_error"; then
+if swift_test_list_with_developer_dir "" "$test_list_output" "$test_list_error"; then
+    :
+else
+    if swift_test_unavailable_only "$test_list_error"; then
+        discovered_developer_dir="$(discover_swift_test_developer_dir || true)"
+        if [[ -n "$discovered_developer_dir" ]]; then
+            echo "==> swift test discovery with discovered Xcode: $discovered_developer_dir"
+            : >"$test_list_output"
+            : >"$test_list_error"
+            if swift_test_list_with_developer_dir "$discovered_developer_dir" "$test_list_output" "$test_list_error"; then
+                test_developer_dir="$discovered_developer_dir"
+                test_discovered_with_xcode=true
+            elif swift_test_unavailable_only "$test_list_error"; then
+                echo "==> swift test skipped: discovered Xcode still does not provide Testing or XCTest"
+                exit 0
+            else
+                cat "$test_list_error" >&2
+                exit 1
+            fi
+        else
+            echo "==> swift test skipped: this toolchain does not provide Testing or XCTest"
+            exit 0
+        fi
+    else
+        cat "$test_list_error" >&2
+        exit 1
+    fi
+fi
+
+if [[ -s "$test_list_output" ]]; then
     missing_targets=()
     for target in ClawShellCoreTests ClawShellContractTests; do
         if ! grep -q "$target" "$test_list_output"; then
@@ -1704,12 +1843,15 @@ if swift test list >"$test_list_output" 2>"$test_list_error"; then
     fi
 
     echo "==> swift test"
-    swift test
-else
-    if grep -q 'This toolchain does not provide Testing or XCTest' "$test_list_error"; then
-        echo "==> swift test skipped: this toolchain does not provide Testing or XCTest"
-    else
-        cat "$test_list_error" >&2
-        exit 1
+    if [[ "$test_discovered_with_xcode" == true ]]; then
+        echo "==> using discovered Xcode for swift test: $test_developer_dir"
     fi
+    swift_test_with_developer_dir "$test_developer_dir"
+else
+    if [[ "$test_discovered_with_xcode" == true ]]; then
+        echo "swift test list with discovered Xcode produced no output" >&2
+    else
+        echo "swift test list produced no output" >&2
+    fi
+    exit 1
 fi

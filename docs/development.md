@@ -24,7 +24,7 @@ scripts/validate.sh
 The first checks cover the state/menu model, lifecycle component boundaries, persistence/privacy contracts, and a short AppKit launch smoke. AppKit behavior is intentionally thin until the detection, assertion, and integration issues add real behavior.
 The portable checks now also cover the V1 integration primitives: adapter redaction/no-op behavior, Claude Code and Codex config patching, native Codex hook reduction, owned-block removal, and integration removal suppression.
 
-The local Command Line Tools environment may lack `Testing` and `XCTest`, so `ClawShellCoreChecks` remains the portable assertion gate for those machines. On CI and full toolchains with `Testing` or `XCTest`, `swift test` runs the standard SwiftPM test targets.
+The local Command Line Tools environment may lack `Testing` and `XCTest`, so `ClawShellCoreChecks` remains the portable assertion gate for those machines. When full Xcode is installed under `/Applications`, `scripts/validate.sh` uses it through `DEVELOPER_DIR` for SwiftPM tests without requiring `sudo xcode-select`. On CI and full toolchains with `Testing` or `XCTest`, `swift test` runs the standard SwiftPM test targets.
 
 See [testing.md](testing.md) for the full validation matrix, contract-test structure, power snapshot harness, and manual hardware checklist.
 

@@ -16,9 +16,14 @@ The script runs:
 - `swift build`
 - `swift run ClawShellCoreChecks`
 - `swift run ClawShell --smoke-test`
-- `swift test` only when the active toolchain can discover both required ClawShell test targets
+- `swift test` when the active toolchain, or a full Xcode discovered under `/Applications`, can discover both required ClawShell test targets
 
-If the local toolchain cannot import `Testing` or `XCTest`, the script skips SwiftPM tests with an explicit message. If test discovery succeeds but either required target is missing, the script fails instead of passing with partial coverage.
+If the active Command Line Tools environment cannot import `Testing` or `XCTest`,
+the script tries a discovered full Xcode by setting `DEVELOPER_DIR` for SwiftPM
+test discovery and execution. If no usable full Xcode is available, it skips
+SwiftPM tests with an explicit message. If test discovery succeeds but either
+required target is missing, the script fails instead of passing with partial
+coverage.
 
 ## Unit Test Matrix
 
