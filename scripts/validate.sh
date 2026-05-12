@@ -1590,6 +1590,31 @@ if ! grep -q '^scaffoldFormat=smappservice-prototype-scaffold-v1$' "$helper_prot
     echo "Helper service prototype scaffold did not record expected scaffold format" >&2
     exit 1
 fi
+if [[ "$(head -n 1 "$helper_prototype_scaffold/prototype-manifest.tsv")" != $'checkId\tstatus\tevidencePath\tnote' ]]; then
+    echo "Helper service prototype scaffold wrote an unexpected manifest header" >&2
+    cat "$helper_prototype_scaffold/prototype-manifest.tsv" >&2
+    exit 1
+fi
+if ! awk -F '\t' 'NR == 1 { next } NF != 4 { exit 1 }' "$helper_prototype_scaffold/prototype-manifest.tsv"; then
+    echo "Helper service prototype scaffold wrote a manifest row with an unexpected field count" >&2
+    cat "$helper_prototype_scaffold/prototype-manifest.tsv" >&2
+    exit 1
+fi
+helper_prototype_scaffold_expected_ids="$bag_mode_smoke_dir/helper-prototype-scaffold-expected-ids"
+helper_prototype_scaffold_actual_ids="$bag_mode_smoke_dir/helper-prototype-scaffold-actual-ids"
+{
+    for check_id in "${helper_prototype_required_checks[@]}"; do
+        printf '%s\n' "$check_id"
+    done
+    printf '%s\n' "package-installer-signing"
+    printf '%s\n' "homebrew-cask-semantics"
+} | sort >"$helper_prototype_scaffold_expected_ids"
+tail -n +2 "$helper_prototype_scaffold/prototype-manifest.tsv" | awk -F '\t' '{ print $1 }' | sort >"$helper_prototype_scaffold_actual_ids"
+if ! diff -u "$helper_prototype_scaffold_expected_ids" "$helper_prototype_scaffold_actual_ids" >"$bag_mode_smoke_error"; then
+    echo "Helper service prototype scaffold wrote an unexpected manifest row set" >&2
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
 for check_id in "${helper_prototype_required_checks[@]}"; do
     if ! awk -F '\t' -v check_id="$check_id" '$1 == check_id && $2 == "TODO" { found = 1 } END { exit !found }' "$helper_prototype_scaffold/prototype-manifest.tsv"; then
         echo "Helper service prototype scaffold missing required TODO row: $check_id" >&2
@@ -1597,8 +1622,12 @@ for check_id in "${helper_prototype_required_checks[@]}"; do
         exit 1
     fi
 done
-if ! awk -F '\t' '$1 == "package-installer-signing" && $2 == "n/a" { package = 1 } $1 == "homebrew-cask-semantics" && $2 == "n/a" { cask = 1 } END { exit !(package && cask) }' "$helper_prototype_scaffold/prototype-manifest.tsv"; then
-    echo "Helper service prototype scaffold missing optional n/a rows" >&2
+if ! awk -F '\t' '
+    $1 == "package-installer-signing" && $2 == "n/a" && $4 != "" { package = 1 }
+    $1 == "homebrew-cask-semantics" && $2 == "n/a" && $4 != "" { cask = 1 }
+    END { exit !(package && cask) }
+' "$helper_prototype_scaffold/prototype-manifest.tsv"; then
+    echo "Helper service prototype scaffold missing optional n/a rows with notes" >&2
     cat "$helper_prototype_scaffold/prototype-manifest.tsv" >&2
     exit 1
 fi
