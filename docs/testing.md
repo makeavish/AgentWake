@@ -141,6 +141,20 @@ The harness writes `validation-config.txt`, command outputs, command status file
 
 Thermal cutoff and fail-closed behavior are tested with mocked provider inputs through `BagModeSafetyPolicy`. These tests cover warning, cutoff, stale, unavailable, permission-denied, parse-failed, helper-crashed, unsupported-hardware, timeout, coverage-insufficient, missing/invalid battery, battery floor, and hysteresis transitions without intentionally heating hardware.
 
+Use the helper provider proof verifier before attaching #25 evidence:
+
+```sh
+scripts/temperature-provider-proof-verify.sh \
+  --manifest .build/temperature-provider-proof/<case-id>/provider-manifest.tsv
+```
+
+The verifier checks that `validation-config.txt`, `manual-result.md`, and the
+TSV manifest contain rows/fields for helper-owned numeric provider evidence,
+freshness within 10s, 5s/30s cadence, 1s timeout, prompt-free sampling,
+ProcessInfo as supplemental-only, closed-bag coverage, fail-closed cases, logs,
+and conditional combined-signal evidence. It is a structural gate only; it does
+not select a provider or run privileged sampling.
+
 ## Helper Service Readiness Harness
 
 Use the non-mutating helper readiness harness before attempting a signed `SMAppService` prototype:

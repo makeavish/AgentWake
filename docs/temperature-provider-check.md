@@ -83,3 +83,120 @@ No production Bag Mode temperature provider is selected from the non-root app-si
 `ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. `powermetrics` was not validated as a provider in this artifact; [#25](https://github.com/makeavish/ClawShell/issues/25) must prove helper/root output, freshness, cadence, timeout, and coverage.
 
 Production Bag Mode remains blocked until [#25](https://github.com/makeavish/ClawShell/issues/25) validates a signed-helper or equivalent provider that can supply fresh, permission-compatible thermal evidence with the required fail-closed behavior.
+
+## Helper Provider Proof Verifier
+
+Before attaching helper/helper-equivalent provider proof to #25, run:
+
+```bash
+scripts/temperature-provider-proof-verify.sh \
+  --manifest .build/temperature-provider-proof/<case-id>/provider-manifest.tsv
+```
+
+The verifier expects three files at the manifest root:
+
+- `validation-config.txt`
+- `manual-result.md`
+- `provider-manifest.tsv`
+
+`validation-config.txt` must record the machine-readable proof shape:
+
+```text
+evidenceFormat=temperature-provider-proof-v1
+metadataRedacted=true
+macOSVersion=15.0
+cpu=Apple Silicon
+hardwareClass=MacBook
+providerSource=powermetrics
+helperOwned=true
+processInfoSupplementalOnly=true
+numericCutoffSource=true
+noUserVisiblePrompts=true
+freshnessMaxAgeSeconds=10
+activeCadenceSeconds=5
+idleCadenceSeconds=30
+timeoutSeconds=1
+closedBagCoverage=requires-combined-signals
+failClosedContract=covered
+result=inconclusive
+```
+
+`manual-result.md` must use filled checklist fields:
+
+```markdown
+# Temperature Provider Proof Result
+
+## Provider Case
+- Case ID: apple-silicon-powermetrics-helper
+- Provider source: powermetrics
+- Helper-owned provider: yes
+- Numeric cutoff source: yes
+- No user-visible prompts: yes
+- ProcessInfo role: supplemental-only
+
+## Sampling
+- Freshest reading age seconds: 4
+- Active cadence seconds: 5
+- Idle cadence seconds: 30
+- Timeout seconds: 1
+
+## Coverage
+- Closed-bag coverage: requires-combined-signals
+- Fail-closed cases recorded: yes
+
+## Conclusion
+- Result: inconclusive
+```
+
+The verifier compares `manual-result.md` against `validation-config.txt` for
+provider source, freshness, cadence, timeout, closed-bag coverage, and result.
+
+`provider-manifest.tsv` must use this tab-separated header:
+
+```tsv
+checkId	status	evidencePath	note
+```
+
+Required manifest `checkId` rows:
+
+- `provider-command-or-api`
+- `helper-ownership-context`
+- `numeric-temperature-output`
+- `freshness-samples`
+- `active-cadence-samples`
+- `idle-cadence-samples`
+- `timeout-enforcement`
+- `timeout-fail-closed`
+- `permission-behavior`
+- `no-user-visible-prompts`
+- `closed-bag-coverage-analysis`
+- `processinfo-supplemental-signal`
+- `safety-contract-tests`
+- `unavailable-fail-closed`
+- `stale-fail-closed`
+- `permission-denied-fail-closed`
+- `parse-failed-fail-closed`
+- `helper-crashed-fail-closed`
+- `unsupported-hardware-fail-closed`
+- `logs`
+
+Optional manifest rows are:
+
+- `combined-sensor-signal`, required when `closedBagCoverage=requires-combined-signals`
+- `provider-update-or-restart`, when the prototype exercises provider restart/update behavior
+
+Required rows must use `status=evidence`. Optional rows may use
+`status=evidence` or `status=n/a` with an explicit note, except
+`combined-sensor-signal` must be evidence when
+`closedBagCoverage=requires-combined-signals`.
+
+Example manifest row:
+
+```tsv
+numeric-temperature-output	evidence	evidence/numeric-temperature-output.txt	captured helper output attached
+```
+
+Evidence paths must be relative, non-empty, inside the evidence package, and free
+of symlink components. Evidence files must contain real captured output rather
+than `TODO`, `<paste output>`, or placeholder text. Verifier success is
+structural only; it does not prove the provider is reliable or close #25.

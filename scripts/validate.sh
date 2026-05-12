@@ -350,6 +350,242 @@ if ! grep -q '^batteryFreshWithin10Seconds=true$' "$temperature_fake_dir/validat
     exit 1
 fi
 
+echo "==> temperature provider proof verifier smoke"
+temperature_proof_dir="$bag_mode_smoke_dir/temperature-proof"
+temperature_proof_manifest="$temperature_proof_dir/provider-manifest.tsv"
+temperature_proof_evidence_dir="$temperature_proof_dir/evidence"
+mkdir -p "$temperature_proof_evidence_dir"
+cat >"$temperature_proof_dir/validation-config.txt" <<'EOF'
+evidenceFormat=temperature-provider-proof-v1
+metadataRedacted=true
+macOSVersion=15.0
+cpu=Apple Silicon
+hardwareClass=MacBook
+providerSource=powermetrics
+helperOwned=true
+processInfoSupplementalOnly=true
+numericCutoffSource=true
+noUserVisiblePrompts=true
+freshnessMaxAgeSeconds=10
+activeCadenceSeconds=5
+idleCadenceSeconds=30
+timeoutSeconds=1
+closedBagCoverage=requires-combined-signals
+failClosedContract=covered
+result=inconclusive
+EOF
+cat >"$temperature_proof_dir/manual-result.md" <<'EOF'
+# Temperature Provider Proof Result
+
+## Provider Case
+- Case ID: validate-temperature-proof
+- Provider source: powermetrics
+- Helper-owned provider: yes
+- Numeric cutoff source: yes
+- No user-visible prompts: yes
+- ProcessInfo role: supplemental-only
+
+## Sampling
+- Freshest reading age seconds: 4
+- Active cadence seconds: 5
+- Idle cadence seconds: 30
+- Timeout seconds: 1
+
+## Coverage
+- Closed-bag coverage: requires-combined-signals
+- Fail-closed cases recorded: yes
+
+## Conclusion
+- Result: inconclusive
+EOF
+temperature_proof_required_checks=(
+    provider-command-or-api
+    helper-ownership-context
+    numeric-temperature-output
+    freshness-samples
+    active-cadence-samples
+    idle-cadence-samples
+    timeout-enforcement
+    timeout-fail-closed
+    permission-behavior
+    no-user-visible-prompts
+    closed-bag-coverage-analysis
+    processinfo-supplemental-signal
+    safety-contract-tests
+    unavailable-fail-closed
+    stale-fail-closed
+    permission-denied-fail-closed
+    parse-failed-fail-closed
+    helper-crashed-fail-closed
+    unsupported-hardware-fail-closed
+    logs
+)
+{
+    printf 'checkId\tstatus\tevidencePath\tnote\n'
+    for check_id in "${temperature_proof_required_checks[@]}"; do
+        printf '$ %s\ncaptured temperature provider proof output for %s\n' "$check_id" "$check_id" >"$temperature_proof_evidence_dir/$check_id.txt"
+        printf '%s\tevidence\tevidence/%s.txt\tevidence attached\n' "$check_id" "$check_id"
+    done
+    printf 'combined-sensor-signal\tevidence\tevidence/combined-sensor-signal.txt\tcombined signal evidence attached\n'
+    printf 'provider-update-or-restart\tn/a\t\tProvider restart not exercised in this smoke\n'
+} >"$temperature_proof_manifest"
+printf '$ combined-sensor-signal\ncaptured combined thermal pressure and numeric data\n' >"$temperature_proof_evidence_dir/combined-sensor-signal.txt"
+scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_manifest" >/dev/null
+
+temperature_proof_placeholder_dir="$bag_mode_smoke_dir/temperature-proof-placeholder"
+cp -R "$temperature_proof_dir" "$temperature_proof_placeholder_dir"
+sed -i '' 's/- Result: inconclusive/- Result: pass | fail | inconclusive/' "$temperature_proof_placeholder_dir/manual-result.md"
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_placeholder_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted placeholder manual result" >&2
+    exit 1
+fi
+if ! grep -q "Result" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_proof_missing_dir="$bag_mode_smoke_dir/temperature-proof-missing-row"
+cp -R "$temperature_proof_dir" "$temperature_proof_missing_dir"
+grep -v '^logs	' "$temperature_proof_missing_dir/provider-manifest.tsv" >"$temperature_proof_missing_dir/provider-manifest.tmp"
+mv "$temperature_proof_missing_dir/provider-manifest.tmp" "$temperature_proof_missing_dir/provider-manifest.tsv"
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_missing_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted a missing required row" >&2
+    exit 1
+fi
+if ! grep -q "logs" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_proof_stale_dir="$bag_mode_smoke_dir/temperature-proof-stale"
+cp -R "$temperature_proof_dir" "$temperature_proof_stale_dir"
+sed -i '' 's/- Freshest reading age seconds: 4/- Freshest reading age seconds: 11/' "$temperature_proof_stale_dir/manual-result.md"
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_stale_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted stale readings beyond freshnessMaxAgeSeconds" >&2
+    exit 1
+fi
+if ! grep -q "Freshest reading age" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_proof_processinfo_dir="$bag_mode_smoke_dir/temperature-proof-processinfo-sole"
+cp -R "$temperature_proof_dir" "$temperature_proof_processinfo_dir"
+sed -i '' 's/processInfoSupplementalOnly=true/processInfoSupplementalOnly=false/' "$temperature_proof_processinfo_dir/validation-config.txt"
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_processinfo_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted ProcessInfo as non-supplemental cutoff source" >&2
+    exit 1
+fi
+if ! grep -q "processInfoSupplementalOnly" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_proof_prompt_dir="$bag_mode_smoke_dir/temperature-proof-user-prompt"
+cp -R "$temperature_proof_dir" "$temperature_proof_prompt_dir"
+sed -i '' 's/noUserVisiblePrompts=true/noUserVisiblePrompts=false/' "$temperature_proof_prompt_dir/validation-config.txt"
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_prompt_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted provider path requiring user-visible prompts" >&2
+    exit 1
+fi
+if ! grep -q "noUserVisiblePrompts" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_proof_coverage_dir="$bag_mode_smoke_dir/temperature-proof-insufficient-pass"
+cp -R "$temperature_proof_dir" "$temperature_proof_coverage_dir"
+sed -i '' 's/closedBagCoverage=requires-combined-signals/closedBagCoverage=insufficient/' "$temperature_proof_coverage_dir/validation-config.txt"
+sed -i '' 's/result=inconclusive/result=pass/' "$temperature_proof_coverage_dir/validation-config.txt"
+sed -i '' 's/- Closed-bag coverage: requires-combined-signals/- Closed-bag coverage: insufficient/' "$temperature_proof_coverage_dir/manual-result.md"
+sed -i '' 's/- Result: inconclusive/- Result: pass/' "$temperature_proof_coverage_dir/manual-result.md"
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_coverage_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted pass with insufficient closed-bag coverage" >&2
+    exit 1
+fi
+if ! grep -q "closedBagCoverage=insufficient" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_proof_intel_pass_dir="$bag_mode_smoke_dir/temperature-proof-intel-pass"
+cp -R "$temperature_proof_dir" "$temperature_proof_intel_pass_dir"
+sed -i '' 's/cpu=Apple Silicon/cpu=Intel/' "$temperature_proof_intel_pass_dir/validation-config.txt"
+sed -i '' 's/result=inconclusive/result=pass/' "$temperature_proof_intel_pass_dir/validation-config.txt"
+sed -i '' 's/- Result: inconclusive/- Result: pass/' "$temperature_proof_intel_pass_dir/manual-result.md"
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_intel_pass_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted pass without Apple Silicon evidence" >&2
+    exit 1
+fi
+if ! grep -q "Apple Silicon" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_proof_desktop_pass_dir="$bag_mode_smoke_dir/temperature-proof-desktop-pass"
+cp -R "$temperature_proof_dir" "$temperature_proof_desktop_pass_dir"
+sed -i '' 's/hardwareClass=MacBook/hardwareClass=desktop/' "$temperature_proof_desktop_pass_dir/validation-config.txt"
+sed -i '' 's/result=inconclusive/result=pass/' "$temperature_proof_desktop_pass_dir/validation-config.txt"
+sed -i '' 's/- Result: inconclusive/- Result: pass/' "$temperature_proof_desktop_pass_dir/manual-result.md"
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_desktop_pass_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted pass without MacBook evidence" >&2
+    exit 1
+fi
+if ! grep -q "MacBook" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_proof_combined_missing_dir="$bag_mode_smoke_dir/temperature-proof-combined-missing"
+cp -R "$temperature_proof_dir" "$temperature_proof_combined_missing_dir"
+grep -v '^combined-sensor-signal	' "$temperature_proof_combined_missing_dir/provider-manifest.tsv" >"$temperature_proof_combined_missing_dir/provider-manifest.tmp"
+mv "$temperature_proof_combined_missing_dir/provider-manifest.tmp" "$temperature_proof_combined_missing_dir/provider-manifest.tsv"
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_combined_missing_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted missing combined-sensor evidence" >&2
+    exit 1
+fi
+if ! grep -q "combined-sensor-signal" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_proof_combined_na_dir="$bag_mode_smoke_dir/temperature-proof-combined-na"
+cp -R "$temperature_proof_dir" "$temperature_proof_combined_na_dir"
+sed -i '' 's#combined-sensor-signal	evidence	evidence/combined-sensor-signal.txt	combined signal evidence attached#combined-sensor-signal	n/a		Combined signal evidence omitted in this negative smoke#' "$temperature_proof_combined_na_dir/provider-manifest.tsv"
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_combined_na_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted N/A combined-sensor evidence" >&2
+    exit 1
+fi
+if ! grep -q "combined-sensor-signal" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_proof_placeholder_evidence_dir="$bag_mode_smoke_dir/temperature-proof-placeholder-evidence"
+cp -R "$temperature_proof_dir" "$temperature_proof_placeholder_evidence_dir"
+echo 'TODO paste output here' >"$temperature_proof_placeholder_evidence_dir/evidence/numeric-temperature-output.txt"
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_placeholder_evidence_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted placeholder evidence content" >&2
+    exit 1
+fi
+if ! grep -q "placeholder" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_proof_symlink_dir="$bag_mode_smoke_dir/temperature-proof-symlink-evidence"
+cp -R "$temperature_proof_dir" "$temperature_proof_symlink_dir"
+rm "$temperature_proof_symlink_dir/evidence/numeric-temperature-output.txt"
+ln -s /etc/hosts "$temperature_proof_symlink_dir/evidence/numeric-temperature-output.txt"
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_symlink_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted symlink evidence outside the package" >&2
+    exit 1
+fi
+if ! grep -q "symlink" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
 echo "==> helper service readiness harness smoke"
 helper_readiness_dir="$bag_mode_smoke_dir/helper-readiness"
 scripts/helper-service-readiness.sh --output-dir "$helper_readiness_dir" >/dev/null

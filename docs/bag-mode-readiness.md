@@ -113,9 +113,21 @@ The May 12, 2026 non-root source check did not select a production provider. `Pr
 
 The mocked fail-closed safety contract is covered in `BagModeSafetyPolicy` and `ClawShellCoreChecks`: warning, cutoff, stale, unavailable, permission-denied, parse-failed, helper-crashed, unsupported-hardware, timeout, insufficient closed-bag coverage, missing/invalid battery, battery floor, and hysteresis transitions are executable checks. This does not select or validate the signed-helper temperature provider.
 
+Before attaching helper provider proof, run:
+
+```sh
+scripts/temperature-provider-proof-verify.sh \
+  --manifest .build/temperature-provider-proof/<case-id>/provider-manifest.tsv
+```
+
+This verifies evidence structure only. The provider still needs real
+helper/helper-equivalent samples for source, freshness, cadence, timeout,
+permission behavior, fail-closed behavior, and closed-bag coverage.
+
 Required notes:
 
-- Source tested: SMC, `powermetrics`, `ProcessInfo.thermalState`, or other
+- Numeric cutoff source tested: SMC, `powermetrics`, IOReport, or other helper-owned source
+- `ProcessInfo.thermalState` role: supplemental-only
 - Permission prompt or root requirement
 - Reading freshness and timeout behavior
 - Parse failure behavior
