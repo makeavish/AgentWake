@@ -326,8 +326,17 @@ capture_file_snapshot() {
     status=0
     set +e
     {
-        printf '$ test -s %q && sed -n 1,200p %q\n' "$source_file" "$source_file"
-        if [[ -s "$source_file" ]]; then
+        printf '$ test -f %q && test -s %q && sed -n 1,200p %q\n' "$source_file" "$source_file" "$source_file"
+        if [[ -L "$source_file" ]]; then
+            echo "symlinkSource=$source_file"
+            status=1
+        elif [[ ! -e "$source_file" ]]; then
+            echo "missingOrEmpty=$source_file"
+            status=1
+        elif [[ ! -f "$source_file" ]]; then
+            echo "nonRegularSource=$source_file"
+            status=1
+        elif [[ -s "$source_file" ]]; then
             sed -n '1,200p' "$source_file"
             status=$?
         else
@@ -379,9 +388,42 @@ require_writable_capture_targets() {
 
 require_existing_capture_artifact() {
     for required_path in \
+        "$APP_DIR" \
+        "$CONTENTS_DIR" \
+        "$MACOS_DIR" \
+        "$CONTENTS_DIR/Library" \
+        "$LAUNCHD_DIR"
+    do
+        if [[ -L "$required_path" ]]; then
+            echo "$CAPTURE_ACTION_NAME requires a real artifact directory path, not a symlink: $required_path" >&2
+            exit 73
+        fi
+        if [[ ! -d "$required_path" ]]; then
+            echo "$CAPTURE_ACTION_NAME missing required artifact directory path: $required_path" >&2
+            exit 73
+        fi
+    done
+    for required_path in \
+        "$CONTENTS_DIR/Info.plist" \
+        "$LAUNCHD_DIR/$PLIST_NAME"
+    do
+        if [[ -L "$required_path" || ( -e "$required_path" && ! -f "$required_path" ) ]]; then
+            echo "$CAPTURE_ACTION_NAME requires regular bundle metadata path: $required_path" >&2
+            exit 73
+        fi
+        if [[ ! -f "$required_path" ]]; then
+            echo "$CAPTURE_ACTION_NAME missing required bundle metadata path: $required_path" >&2
+            exit 73
+        fi
+    done
+    for required_path in \
         "$MACOS_DIR/$APP_NAME" \
         "$MACOS_DIR/$HELPER_NAME"
     do
+        if [[ -L "$required_path" || ( -e "$required_path" && ! -f "$required_path" ) ]]; then
+            echo "$CAPTURE_ACTION_NAME requires regular executable artifact path: $required_path" >&2
+            exit 73
+        fi
         if [[ ! -x "$required_path" ]]; then
             echo "$CAPTURE_ACTION_NAME missing required executable artifact path: $required_path" >&2
             exit 73
@@ -409,6 +451,10 @@ require_existing_capture_artifact() {
         "$CONFIG_FILE" \
         "$MANIFEST_FILE"
     do
+        if [[ -L "$required_path" || ( -e "$required_path" && ! -f "$required_path" ) ]]; then
+            echo "$CAPTURE_ACTION_NAME requires regular artifact file path: $required_path" >&2
+            exit 73
+        fi
         if [[ ! -f "$required_path" ]]; then
             echo "$CAPTURE_ACTION_NAME missing required artifact file path: $required_path" >&2
             exit 73
