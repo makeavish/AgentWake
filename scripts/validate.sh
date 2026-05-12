@@ -1729,8 +1729,18 @@ for check_id in "${helper_prototype_required_checks[@]}"; do
     fi
 done
 if ! awk -F '\t' '
-    $1 == "package-installer-signing" && $2 == "n/a" && $4 != "" { package = 1 }
-    $1 == "homebrew-cask-semantics" && $2 == "n/a" && $4 != "" { cask = 1 }
+    function trim(value) {
+        gsub(/\r/, "", value)
+        sub(/^[[:space:]]*/, "", value)
+        sub(/[[:space:]]*$/, "", value)
+        return value
+    }
+    function usable_note(value) {
+        value = trim(value)
+        return value != "" && value != "TODO" && value != "TBD" && !(value ~ /</ && value ~ />/) && value !~ / \| /
+    }
+    $1 == "package-installer-signing" && $2 == "n/a" && usable_note($4) { package = 1 }
+    $1 == "homebrew-cask-semantics" && $2 == "n/a" && usable_note($4) { cask = 1 }
     END { exit !(package && cask) }
 ' "$helper_prototype_scaffold/prototype-manifest.tsv"; then
     echo "Helper service prototype scaffold missing optional n/a rows with notes" >&2
