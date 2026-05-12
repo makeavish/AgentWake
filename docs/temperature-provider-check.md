@@ -8,7 +8,7 @@ Follow-up: [#25](https://github.com/makeavish/ClawShell/issues/25)
 
 App-side artifact: `.build/temperature-provider-validation/local-20260512T023358Z`
 
-Helper-equivalent preflight artifact: `.build/temperature-provider-helper-readiness/current-20260512T062706Z`
+Helper-equivalent preflight artifact: `.build/temperature-provider-helper-readiness/recheck-20260512T100451Z`
 
 ## Question
 
@@ -88,7 +88,7 @@ recorded as evidence instead of blocking the run.
 Command used:
 
 ```bash
-scripts/temperature-provider-helper-readiness.sh --output-dir .build/temperature-provider-helper-readiness/current-20260512T062706Z
+scripts/temperature-provider-helper-readiness.sh --output-dir .build/temperature-provider-helper-readiness/recheck-20260512T100451Z
 ```
 
 Captured values from `validation-config.txt`:

@@ -6,7 +6,7 @@ Issue: [#7](https://github.com/makeavish/ClawShell/issues/7)
 
 Follow-up: [#27](https://github.com/makeavish/ClawShell/issues/27)
 
-Local artifact: `.build/helper-service-readiness/current-xcode-normalized-20260512T055656Z`
+Local artifact: `.build/helper-service-readiness/recheck-20260512T100451Z`
 
 ## Question
 
@@ -35,7 +35,7 @@ Sources:
 Command used:
 
 ```bash
-scripts/helper-service-readiness.sh --output-dir .build/helper-service-readiness/current-xcode-normalized-20260512T055656Z
+scripts/helper-service-readiness.sh --output-dir .build/helper-service-readiness/recheck-20260512T100451Z
 ```
 
 Captured result:
