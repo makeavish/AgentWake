@@ -119,6 +119,20 @@ The scaffold is not evidence. It intentionally omits `validation-config.txt`
 and `manual-result.md`, and writes `TODO` manifest rows so the verifier fails
 until real helper output is captured.
 
+To build the first no-membership `SMAppService` candidate without registering
+anything, use:
+
+```bash
+scripts/helper-service-smappservice-prototype.sh \
+  --output-dir .build/helper-service-prototype/smappservice-prepare-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+The default run builds an ad-hoc signed app/helper bundle, captures local
+layout/signing/status evidence, and leaves lifecycle rows as `TODO`. To attempt
+registration during an intentional interactive prototype, rerun with
+`--register --i-understand-this-registers-helper`; that may require System
+Settings approval before the helper bootstraps.
+
 The verifier expects three files at the manifest root:
 
 - `validation-config.txt`

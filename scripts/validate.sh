@@ -1866,6 +1866,109 @@ if ! grep -q "missing file: .*validation-config.txt" "$bag_mode_smoke_error"; th
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
+
+helper_smappservice_prepare="$bag_mode_smoke_dir/helper-smappservice-prepare-&-xml"
+scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" >/dev/null
+for required_file in validation-config.txt manual-result.md prototype-manifest.tsv README.md; do
+    if [[ ! -f "$helper_smappservice_prepare/$required_file" ]]; then
+        echo "SMAppService helper prototype harness did not write expected file: $required_file" >&2
+        exit 1
+    fi
+done
+if [[ ! -x "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype" ]]; then
+    echo "SMAppService helper prototype harness did not build controller executable" >&2
+    exit 1
+fi
+if [[ ! -x "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon" ]]; then
+    echo "SMAppService helper prototype harness did not build helper executable" >&2
+    exit 1
+fi
+if ! grep -q '^helperInstallPath=smappservice$' "$helper_smappservice_prepare/validation-config.txt"; then
+    echo "SMAppService helper prototype harness did not record smappservice path" >&2
+    exit 1
+fi
+if ! grep -q '^registerAttempted=false$' "$helper_smappservice_prepare/validation-config.txt"; then
+    echo "SMAppService helper prototype harness unexpectedly attempted registration in default mode" >&2
+    exit 1
+fi
+for required_status in \
+    app-bundle-or-install-layout \
+    launchdaemon-plist \
+    app-signing-or-auth-model \
+    helper-signing-or-auth-model \
+    caller-auth-model \
+    fixed-command-api \
+    helper-status-before-approval
+do
+    if ! grep -q '^exitCode=0$' "$helper_smappservice_prepare/evidence/$required_status.status"; then
+        echo "SMAppService helper prototype required capture failed: $required_status" >&2
+        cat "$helper_smappservice_prepare/evidence/$required_status.status" >&2
+        cat "$helper_smappservice_prepare/evidence/$required_status.txt" >&2
+        exit 1
+    fi
+done
+if ! awk -F '\t' '$1 == "helper-install-or-register" && $2 == "TODO" { found = 1 } END { exit !found }' "$helper_smappservice_prepare/prototype-manifest.tsv"; then
+    echo "SMAppService helper prototype harness should leave register row as TODO in default mode" >&2
+    cat "$helper_smappservice_prepare/prototype-manifest.tsv" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "fixed-command-api" && $2 == "TODO" { found = 1 } END { exit !found }' "$helper_smappservice_prepare/prototype-manifest.tsv"; then
+    echo "SMAppService helper prototype harness should not claim Bag Mode command API evidence" >&2
+    cat "$helper_smappservice_prepare/prototype-manifest.tsv" >&2
+    exit 1
+fi
+if scripts/helper-service-prototype-verify.sh --manifest "$helper_smappservice_prepare/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper service prototype verifier accepted incomplete SMAppService prepare artifact" >&2
+    exit 1
+fi
+if ! grep -q "helper-install-or-register" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if ! grep -q "fixed-command-api" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_register_without_ack="$bag_mode_smoke_dir/helper-smappservice-register-without-ack"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_register_without_ack" --register >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness allowed register without acknowledgement" >&2
+    exit 1
+fi
+if ! grep -q -- "--i-understand-this-registers-helper" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_unregister_without_ack="$bag_mode_smoke_dir/helper-smappservice-unregister-without-ack"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_unregister_without_ack" --unregister >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness allowed unregister without acknowledgement" >&2
+    exit 1
+fi
+if ! grep -q -- "--i-understand-this-registers-helper" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_file="$bag_mode_smoke_dir/helper-smappservice-file"
+touch "$helper_smappservice_file"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_file" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness accepted an output path that is not a directory" >&2
+    exit 1
+fi
+if ! grep -q "not a directory" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_non_empty="$bag_mode_smoke_dir/helper-smappservice-non-empty"
+mkdir -p "$helper_smappservice_non_empty"
+touch "$helper_smappservice_non_empty/existing"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_non_empty" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness overwrote a non-empty output directory" >&2
+    exit 1
+fi
+if ! grep -q "Output directory is not empty" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
 helper_prototype_scaffold_file="$bag_mode_smoke_dir/helper-prototype-scaffold-file"
 touch "$helper_prototype_scaffold_file"
 if scripts/helper-service-prototype-scaffold.sh --output-dir "$helper_prototype_scaffold_file" >/dev/null 2>"$bag_mode_smoke_error"; then

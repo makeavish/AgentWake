@@ -225,6 +225,20 @@ scripts/helper-service-prototype-verify.sh \
   --manifest .build/helper-service-prototype/<case-id>/prototype-manifest.tsv
 ```
 
+To build the no-membership `SMAppService` candidate package without changing
+helper registration state:
+
+```sh
+scripts/helper-service-smappservice-prototype.sh \
+  --output-dir .build/helper-service-prototype/smappservice-prepare-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+The default mode is intentionally incomplete evidence: it builds an ad-hoc
+signed app/helper bundle and captures layout/signing/status outputs, but leaves
+registration, approval, reboot, update, uninstall, and failure-case rows as
+`TODO`. Registration requires an explicit acknowledgement flag:
+`--register --i-understand-this-registers-helper`.
+
 Use the non-mutating prototype scaffold when starting a new #27 evidence
 package:
 
