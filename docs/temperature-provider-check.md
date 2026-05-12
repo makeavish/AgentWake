@@ -130,6 +130,20 @@ scripts/temperature-provider-proof-verify.sh \
   --manifest .build/temperature-provider-proof/<case-id>/provider-manifest.tsv
 ```
 
+To capture the first no-prompt `powermetrics` proof attempt without waiting for
+an interactive helper/root flow, run:
+
+```bash
+scripts/temperature-provider-powermetrics-proof.sh \
+  --output-dir .build/temperature-provider-proof/powermetrics-attempt-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+This package records the prompt-free `powermetrics` attempt, permission state,
+timeout behavior, ProcessInfo supplemental state, and numeric output if
+available. On the current machine, non-interactive sampling still records
+`sudoPasswordRequired`, so the package remains incomplete proof until helper or
+root-equivalent sampling is available.
+
 To start the package layout without inventing rows by hand, generate a
 non-mutating scaffold:
 

@@ -185,6 +185,17 @@ scripts/temperature-provider-proof-verify.sh \
   --manifest .build/temperature-provider-proof/<case-id>/provider-manifest.tsv
 ```
 
+To run a no-prompt `powermetrics` proof attempt package:
+
+```sh
+scripts/temperature-provider-powermetrics-proof.sh \
+  --output-dir .build/temperature-provider-proof/powermetrics-attempt-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+The proof-attempt harness is non-mutating and uses `sudo -n` only. On machines
+without helper/root-equivalent authorization, it records permission evidence and
+leaves the real proof rows as `TODO`, so verifier failure is expected.
+
 Use the non-mutating provider proof scaffold when starting a new #25 evidence
 package:
 

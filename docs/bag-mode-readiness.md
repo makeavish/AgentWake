@@ -155,6 +155,20 @@ The preflight records whether helper-equivalent `powermetrics` sampling can run
 without a user-visible prompt. It does not prove provider freshness, cadence,
 closed-bag coverage, fail-closed behavior, or reliability.
 
+To create a no-prompt `powermetrics` proof-attempt package, run:
+
+```sh
+scripts/temperature-provider-powermetrics-proof.sh \
+  --output-dir .build/temperature-provider-proof/powermetrics-attempt-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+This records the command path, helper/root-equivalent permission behavior,
+timeout behavior, ProcessInfo supplemental state, and numeric output when
+available. If non-interactive root/helper authorization is unavailable, the
+artifact is intentionally incomplete and should fail the structural verifier
+until real helper/root samples, cadence, coverage, and fail-closed evidence are
+attached.
+
 The mocked fail-closed safety contract is covered in `BagModeSafetyPolicy` and `ClawShellCoreChecks`: warning, cutoff, stale, unavailable, permission-denied, parse-failed, helper-crashed, unsupported-hardware, timeout, insufficient closed-bag coverage, missing/invalid battery, battery floor, and hysteresis transitions are executable checks. This does not select or validate the no-membership helper temperature provider.
 
 Before attaching helper provider proof, run:
