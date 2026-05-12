@@ -151,6 +151,19 @@ scripts/helper-service-readiness.sh --output-dir .build/helper-service-readiness
 
 The harness records code-signing identity count and local tool availability. It does not install, register, approve, unregister, or run a helper.
 
+Use the signed prototype evidence verifier before attaching #27 evidence:
+
+```sh
+scripts/helper-service-prototype-verify.sh \
+  --manifest .build/helper-service-prototype/<case-id>/prototype-manifest.tsv
+```
+
+The verifier checks `validation-config.txt`, `manual-result.md`, and the TSV
+manifest for the required app/helper signing, `SMAppService`, approval,
+bootstrap, reboot, update, uninstall, failure-case, `launchctl`, and log
+evidence rows. It is a structural gate only; it does not sign, install,
+register, approve, unregister, or run a helper.
+
 ## Manual Hardware Checklist
 
 Hardware validation is gated and must be run intentionally on supported machines. Do not intentionally overheat hardware; thermal cutoff validation uses mocks or simulated sensor providers.

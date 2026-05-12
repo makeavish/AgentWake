@@ -74,6 +74,17 @@ Current artifact: [Helper Service Readiness](helper-service-readiness.md).
 
 The May 12, 2026 source/readiness check keeps `SMAppService` as the source-backed V1 target to prototype, but this local environment has no Developer ID signing identities and no full Xcode-backed `xcodebuild`, so the signed install/update/uninstall prototype is not complete. The signed prototype run is tracked in [#27](https://github.com/makeavish/ClawShell/issues/27).
 
+Before attaching the signed prototype package, run:
+
+```sh
+scripts/helper-service-prototype-verify.sh \
+  --manifest .build/helper-service-prototype/<case-id>/prototype-manifest.tsv
+```
+
+This verifies evidence structure only. The signed prototype still requires a real
+signed app/helper bundle, admin approval, helper bootstrap, reboot, update,
+uninstall, failure-case, `launchctl`, log, and optional cask/package evidence.
+
 Required notes:
 
 - Bundle layout and launchd label

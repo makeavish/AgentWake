@@ -89,6 +89,126 @@ Follow-up [#27](https://github.com/makeavish/ClawShell/issues/27) must produce t
 - failure cases for unsigned caller, wrong bundle id, wrong label/plist path, wrong user, stale app version, denied approval, and revoked approval
 - Homebrew cask behavior if the prototype is exercised through `brew install --cask`, `brew upgrade --cask`, or `brew uninstall --cask`; otherwise track cask semantics separately from the helper prototype
 
+Before attaching a signed prototype evidence package to #27, run the structural
+verifier:
+
+```bash
+scripts/helper-service-prototype-verify.sh \
+  --manifest .build/helper-service-prototype/<case-id>/prototype-manifest.tsv
+```
+
+The verifier expects three files at the manifest root:
+
+- `validation-config.txt`
+- `manual-result.md`
+- `prototype-manifest.tsv`
+
+`validation-config.txt` must record the machine-readable prototype shape:
+
+```text
+evidenceFormat=smappservice-prototype-v1
+metadataRedacted=true
+macOSVersion=15.0
+appBundleIdentifier=com.example.ClawShell
+helperLabel=com.example.ClawShell.Helper
+launchDaemonPlist=ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist
+developerIDApplicationSigned=true
+packageInstallerUsed=false
+homebrewCaskUsed=false
+result=inconclusive
+```
+
+`manual-result.md` must use filled checklist fields:
+
+```markdown
+# Helper Service Prototype Result
+
+## Prototype Case
+- Case ID: apple-silicon-smappservice-signed
+- macOS: 15.0
+- App bundle: /Applications/ClawShell.app
+- LaunchDaemon plist: ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist
+- SMAppService API: SMAppService.daemon(plistName:)
+
+## Signing
+- App signed: yes
+- Helper signed: yes
+- Designated requirements recorded: yes
+- Package installer used: no
+- Package signed with Developer ID Installer: N/A - no package installer used
+
+## Lifecycle
+- Register status transition: requiresApproval -> enabled
+- System Settings approval confirmed: yes
+- Helper bootstraps after approval: yes
+- Helper bootstraps after reboot: yes
+- Old helper inactive after update: yes
+- Ledger compatibility or repair checked: yes
+- Uninstall unloaded helper: yes
+- Helper-owned Bag Mode state removed: yes
+
+## Failure Cases
+- Failure cases recorded: yes
+- Homebrew cask used: no
+- Homebrew cask registers helper during install: N/A - cask not used
+
+## Conclusion
+- Result: inconclusive
+```
+
+The verifier compares `manual-result.md` against `validation-config.txt`.
+`macOS`, `LaunchDaemon plist`, and `Result` must match `macOSVersion`,
+`launchDaemonPlist`, and `result`.
+
+`prototype-manifest.tsv` must use this tab-separated header:
+
+```tsv
+checkId	status	evidencePath	note
+```
+
+Required rows must use `status=evidence` and point to relative, non-empty files
+or directories inside the evidence package. Evidence paths and evidence
+directories must not contain symlink components, and evidence files must contain
+real captured output rather than `TODO`, `<paste output>`, or placeholder text.
+Optional rows are `package-installer-signing` and `homebrew-cask-semantics`; use
+`status=n/a` with an explicit note when those paths were not exercised. Verifier
+success means the evidence package is structurally complete only. It does not
+prove the helper prototype passed or close #27 by itself.
+
+Required manifest `checkId` rows:
+
+- `app-bundle-layout`
+- `launchdaemon-plist`
+- `app-codesign`
+- `helper-codesign`
+- `app-designated-requirement`
+- `helper-designated-requirement`
+- `spctl-assessment`
+- `smappservice-register`
+- `smappservice-status-requires-approval`
+- `system-settings-approval`
+- `smappservice-status-enabled`
+- `helper-bootstrap-after-approval`
+- `post-reboot-helper-bootstrap`
+- `helper-update-old-inactive`
+- `helper-update-ledger-compatibility`
+- `helper-uninstall-unregister`
+- `helper-uninstall-state-cleanup`
+- `failure-unsigned-caller`
+- `failure-wrong-bundle-id-or-label`
+- `failure-wrong-user`
+- `failure-stale-app-version`
+- `failure-denied-or-revoked-approval`
+- `launchctl-status`
+- `log-evidence`
+
+Optional manifest `checkId` rows:
+
+- `package-installer-signing` when `packageInstallerUsed=true`; otherwise
+  include an `n/a` row with the reason no package installer was used.
+- `homebrew-cask-semantics` when `homebrewCaskUsed=true`; otherwise include an
+  `n/a` row with the reason no cask path was exercised.
+
 ## Conclusion
 
 The helper path is source-backed but not locally validated as a signed prototype. Production Bag Mode remains blocked until #27 records install/update/uninstall evidence with a real signing identity and full macOS app bundle.

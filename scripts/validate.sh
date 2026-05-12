@@ -547,6 +547,240 @@ if ! grep -q '^timedOut=true$' "$helper_timeout_dir/codesigning-identities.statu
     exit 1
 fi
 
+echo "==> helper service prototype verifier smoke"
+helper_prototype_dir="$bag_mode_smoke_dir/helper-prototype"
+helper_prototype_manifest="$helper_prototype_dir/prototype-manifest.tsv"
+helper_prototype_evidence_dir="$helper_prototype_dir/evidence"
+mkdir -p "$helper_prototype_evidence_dir"
+cat >"$helper_prototype_dir/validation-config.txt" <<'EOF'
+evidenceFormat=smappservice-prototype-v1
+metadataRedacted=true
+macOSVersion=15.0
+appBundleIdentifier=com.example.ClawShell
+helperLabel=com.example.ClawShell.Helper
+launchDaemonPlist=ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist
+developerIDApplicationSigned=true
+packageInstallerUsed=false
+homebrewCaskUsed=false
+result=pass
+EOF
+cat >"$helper_prototype_dir/manual-result.md" <<'EOF'
+# Helper Service Prototype Result
+
+## Prototype Case
+- Case ID: validate-helper-smoke
+- macOS: 15.0
+- App bundle: /Applications/ClawShell.app
+- LaunchDaemon plist: ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist
+- SMAppService API: SMAppService.daemon(plistName:)
+
+## Signing
+- App signed: yes
+- Helper signed: yes
+- Designated requirements recorded: yes
+- Package installer used: no
+- Package signed with Developer ID Installer: N/A - no package installer used
+
+## Lifecycle
+- Register status transition: requiresApproval -> enabled
+- System Settings approval confirmed: yes
+- Helper bootstraps after approval: yes
+- Helper bootstraps after reboot: yes
+- Old helper inactive after update: yes
+- Ledger compatibility or repair checked: yes
+- Uninstall unloaded helper: yes
+- Helper-owned Bag Mode state removed: yes
+
+## Failure Cases
+- Failure cases recorded: yes
+- Homebrew cask used: no
+- Homebrew cask registers helper during install: N/A - cask not used
+
+## Conclusion
+- Result: pass
+EOF
+helper_prototype_required_checks=(
+    app-bundle-layout
+    launchdaemon-plist
+    app-codesign
+    helper-codesign
+    app-designated-requirement
+    helper-designated-requirement
+    spctl-assessment
+    smappservice-register
+    smappservice-status-requires-approval
+    system-settings-approval
+    smappservice-status-enabled
+    helper-bootstrap-after-approval
+    post-reboot-helper-bootstrap
+    helper-update-old-inactive
+    helper-update-ledger-compatibility
+    helper-uninstall-unregister
+    helper-uninstall-state-cleanup
+    failure-unsigned-caller
+    failure-wrong-bundle-id-or-label
+    failure-wrong-user
+    failure-stale-app-version
+    failure-denied-or-revoked-approval
+    launchctl-status
+    log-evidence
+)
+{
+    printf 'checkId\tstatus\tevidencePath\tnote\n'
+    for check_id in "${helper_prototype_required_checks[@]}"; do
+        printf '$ %s\ncaptured helper prototype output for %s\n' "$check_id" "$check_id" >"$helper_prototype_evidence_dir/$check_id.txt"
+        printf '%s\tevidence\tevidence/%s.txt\tevidence attached\n' "$check_id" "$check_id"
+    done
+    printf 'package-installer-signing\tn/a\t\tNo package installer used in this smoke\n'
+    printf 'homebrew-cask-semantics\tn/a\t\tNo Homebrew cask used in this smoke\n'
+} >"$helper_prototype_manifest"
+scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_manifest" >/dev/null
+
+helper_prototype_placeholder_dir="$bag_mode_smoke_dir/helper-prototype-placeholder"
+cp -R "$helper_prototype_dir" "$helper_prototype_placeholder_dir"
+sed -i '' 's/- Result: pass/- Result: pass | fail | inconclusive/' "$helper_prototype_placeholder_dir/manual-result.md"
+if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_placeholder_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper service prototype verifier accepted placeholder manual result" >&2
+    exit 1
+fi
+if ! grep -q "Result" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+helper_prototype_missing_dir="$bag_mode_smoke_dir/helper-prototype-missing-row"
+cp -R "$helper_prototype_dir" "$helper_prototype_missing_dir"
+grep -v '^log-evidence	' "$helper_prototype_missing_dir/prototype-manifest.tsv" >"$helper_prototype_missing_dir/prototype-manifest.tmp"
+mv "$helper_prototype_missing_dir/prototype-manifest.tmp" "$helper_prototype_missing_dir/prototype-manifest.tsv"
+if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_missing_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper service prototype verifier accepted a missing required row" >&2
+    exit 1
+fi
+if ! grep -q "log-evidence" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+helper_prototype_empty_dir="$bag_mode_smoke_dir/helper-prototype-empty-evidence"
+cp -R "$helper_prototype_dir" "$helper_prototype_empty_dir"
+: >"$helper_prototype_empty_dir/evidence/app-codesign.txt"
+if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_empty_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper service prototype verifier accepted empty evidence" >&2
+    exit 1
+fi
+if ! grep -q "empty" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+helper_prototype_placeholder_evidence_dir="$bag_mode_smoke_dir/helper-prototype-placeholder-evidence"
+cp -R "$helper_prototype_dir" "$helper_prototype_placeholder_evidence_dir"
+echo 'TODO paste output here' >"$helper_prototype_placeholder_evidence_dir/evidence/app-codesign.txt"
+if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_placeholder_evidence_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper service prototype verifier accepted placeholder evidence content" >&2
+    exit 1
+fi
+if ! grep -q "placeholder" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+helper_prototype_symlink_dir="$bag_mode_smoke_dir/helper-prototype-symlink-evidence"
+cp -R "$helper_prototype_dir" "$helper_prototype_symlink_dir"
+rm "$helper_prototype_symlink_dir/evidence/app-codesign.txt"
+ln -s /etc/hosts "$helper_prototype_symlink_dir/evidence/app-codesign.txt"
+if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_symlink_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper service prototype verifier accepted symlink evidence outside the package" >&2
+    exit 1
+fi
+if ! grep -q "symlink" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+helper_prototype_dir_symlink_dir="$bag_mode_smoke_dir/helper-prototype-directory-symlink-evidence"
+cp -R "$helper_prototype_dir" "$helper_prototype_dir_symlink_dir"
+mkdir "$helper_prototype_dir_symlink_dir/evidence/app-codesign-dir"
+printf '$ app-codesign\ncaptured app codesign output\n' >"$helper_prototype_dir_symlink_dir/evidence/app-codesign-dir/output.txt"
+ln -s /etc/hosts "$helper_prototype_dir_symlink_dir/evidence/app-codesign-dir/escaped-hosts"
+sed -i '' 's#app-codesign	evidence	evidence/app-codesign.txt#app-codesign	evidence	evidence/app-codesign-dir#' "$helper_prototype_dir_symlink_dir/prototype-manifest.tsv"
+if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_dir_symlink_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper service prototype verifier accepted symlink evidence inside a directory" >&2
+    exit 1
+fi
+if ! grep -q "symlink" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+helper_prototype_mismatch_dir="$bag_mode_smoke_dir/helper-prototype-config-manual-mismatch"
+cp -R "$helper_prototype_dir" "$helper_prototype_mismatch_dir"
+sed -i '' 's/- Result: pass/- Result: fail/' "$helper_prototype_mismatch_dir/manual-result.md"
+if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_mismatch_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper service prototype verifier accepted mismatched config/manual result" >&2
+    exit 1
+fi
+if ! grep -q "Result field must match" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+helper_prototype_plist_mismatch_dir="$bag_mode_smoke_dir/helper-prototype-plist-mismatch"
+cp -R "$helper_prototype_dir" "$helper_prototype_plist_mismatch_dir"
+sed -i '' 's#ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist#ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist.bak#' "$helper_prototype_plist_mismatch_dir/manual-result.md"
+if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_plist_mismatch_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper service prototype verifier accepted mismatched LaunchDaemon plist" >&2
+    exit 1
+fi
+if ! grep -q "LaunchDaemon plist" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+helper_prototype_package_dir="$bag_mode_smoke_dir/helper-prototype-package-missing"
+cp -R "$helper_prototype_dir" "$helper_prototype_package_dir"
+sed -i '' 's/packageInstallerUsed=false/packageInstallerUsed=true/' "$helper_prototype_package_dir/validation-config.txt"
+sed -i '' 's/- Package installer used: no/- Package installer used: yes/' "$helper_prototype_package_dir/manual-result.md"
+sed -i '' 's/- Package signed with Developer ID Installer: N\/A - no package installer used/- Package signed with Developer ID Installer: yes/' "$helper_prototype_package_dir/manual-result.md"
+if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_package_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper service prototype verifier accepted package usage with N/A package signing evidence" >&2
+    exit 1
+fi
+if ! grep -q "package-installer-signing" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+helper_prototype_cask_na_dir="$bag_mode_smoke_dir/helper-prototype-cask-na"
+cp -R "$helper_prototype_dir" "$helper_prototype_cask_na_dir"
+sed -i '' 's/homebrewCaskUsed=false/homebrewCaskUsed=true/' "$helper_prototype_cask_na_dir/validation-config.txt"
+sed -i '' 's/- Homebrew cask used: no/- Homebrew cask used: yes/' "$helper_prototype_cask_na_dir/manual-result.md"
+sed -i '' 's/- Homebrew cask registers helper during install: N\/A - cask not used/- Homebrew cask registers helper during install: no/' "$helper_prototype_cask_na_dir/manual-result.md"
+if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_cask_na_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper service prototype verifier accepted cask usage with N/A cask evidence" >&2
+    exit 1
+fi
+if ! grep -q "homebrew-cask-semantics" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+helper_prototype_cask_dir="$bag_mode_smoke_dir/helper-prototype-cask-register"
+cp -R "$helper_prototype_dir" "$helper_prototype_cask_dir"
+sed -i '' 's/homebrewCaskUsed=false/homebrewCaskUsed=true/' "$helper_prototype_cask_dir/validation-config.txt"
+sed -i '' 's/- Homebrew cask used: no/- Homebrew cask used: yes/' "$helper_prototype_cask_dir/manual-result.md"
+sed -i '' 's/- Homebrew cask registers helper during install: N\/A - cask not used/- Homebrew cask registers helper during install: yes/' "$helper_prototype_cask_dir/manual-result.md"
+printf 'cask evidence\n' >"$helper_prototype_cask_dir/evidence/homebrew-cask-semantics.txt"
+sed -i '' 's/^homebrew-cask-semantics	n\/a		No Homebrew cask used in this smoke/homebrew-cask-semantics	evidence	evidence\/homebrew-cask-semantics.txt	cask evidence attached/' "$helper_prototype_cask_dir/prototype-manifest.tsv"
+if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_cask_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper service prototype verifier accepted cask install registering the helper" >&2
+    exit 1
+fi
+if ! grep -q "Homebrew cask install" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
 echo "==> swift test discovery"
 test_list_output="$(mktemp)"
 test_list_error="$(mktemp)"
