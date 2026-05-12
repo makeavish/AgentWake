@@ -56,6 +56,7 @@ The V1 integration layer has both portable checks and contract fixtures:
 - Adapter output is host-safe and empty on success/no-op, including when ClawShell is not running.
 - Claude Code patching preserves existing hook groups, adds only owned command handlers, and removes only handlers containing ClawShell's owner marker.
 - Codex patching owns the top-level `notify` command, forwards a previous notify command through the adapter, preserves unrelated TOML, and restores the previous notify line on removal.
+- Native Codex hook events are source-backed by the #7 early-signal check, but ClawShell runtime support remains #23.
 - Integration removal persists per-agent `doNotAutoInstall` suppression and writes a local audit event.
 
 ## Coverage Status
