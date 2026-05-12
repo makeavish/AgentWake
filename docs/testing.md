@@ -206,7 +206,11 @@ scripts/temperature-provider-smappservice-proof.sh \
 
 The default mode builds an ad-hoc signed app/helper bundle whose LaunchDaemon
 helper runs one timeout-bounded `powermetrics` sample after registration and
-approval. Mutating registration uses the same prepared artifact and requires:
+approval. New artifacts default to `powermetrics --show-initial-usage -n 1 -i
+1000 --samplers thermal`; set
+`CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE=false` only for comparison
+runs against the earlier command shape. Mutating registration uses the same
+prepared artifact and requires:
 
 ```sh
 scripts/temperature-provider-smappservice-proof.sh \

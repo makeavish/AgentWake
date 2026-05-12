@@ -177,6 +177,10 @@ scripts/temperature-provider-smappservice-proof.sh \
   --output-dir .build/temperature-provider-proof/smappservice-prepare-$(date -u +%Y%m%dT%H%M%SZ)
 ```
 
+New artifacts default to `powermetrics --show-initial-usage -n 1 -i 1000
+--samplers thermal` so the next #25 run can test whether an initial thermal
+sample beats the 1 second provider deadline.
+
 Mutating registration uses the same prepared artifact and requires:
 
 ```sh

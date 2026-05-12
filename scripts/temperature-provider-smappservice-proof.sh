@@ -136,6 +136,7 @@ fi
 
 TIMEOUT_SECONDS=${CLAWSHELL_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS:-1}
 SAMPLE_RATE_MS=${CLAWSHELL_TEMPERATURE_PROVIDER_SAMPLE_RATE_MS:-1000}
+SHOW_INITIAL_USAGE=${CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE:-true}
 FRESHNESS_SECONDS=${CLAWSHELL_TEMPERATURE_PROVIDER_FRESHNESS_SECONDS:-10}
 ACTIVE_CADENCE_SECONDS=${CLAWSHELL_TEMPERATURE_PROVIDER_ACTIVE_CADENCE_SECONDS:-5}
 IDLE_CADENCE_SECONDS=${CLAWSHELL_TEMPERATURE_PROVIDER_IDLE_CADENCE_SECONDS:-30}
@@ -149,8 +150,21 @@ require_positive_integer() {
     fi
 }
 
+require_bool() {
+    local name="$1"
+    local value="$2"
+    case "$value" in
+        true|false) ;;
+        *)
+            echo "$name must be true or false" >&2
+            exit 64
+            ;;
+    esac
+}
+
 require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS" "$TIMEOUT_SECONDS"
 require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_SAMPLE_RATE_MS" "$SAMPLE_RATE_MS"
+require_bool "CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE" "$SHOW_INITIAL_USAGE"
 require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_FRESHNESS_SECONDS" "$FRESHNESS_SECONDS"
 require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_ACTIVE_CADENCE_SECONDS" "$ACTIVE_CADENCE_SECONDS"
 require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_IDLE_CADENCE_SECONDS" "$IDLE_CADENCE_SECONDS"
@@ -632,7 +646,12 @@ let outputPath = argumentValue(after: "--sample-output")
 let statusPath = argumentValue(after: "--sample-status")
 let timeoutSeconds = Int(argumentValue(after: "--timeout-seconds") ?? "1") ?? 1
 let sampleRateMs = Int(argumentValue(after: "--sample-rate-ms") ?? "1000") ?? 1000
+let showInitialUsage = CommandLine.arguments.contains("--show-initial-usage")
 let powermetricsPath = "/usr/bin/powermetrics"
+var powermetricsArguments = ["-n", "1", "-i", "\(sampleRateMs)", "--samplers", "thermal"]
+if showInitialUsage {
+    powermetricsArguments.insert("--show-initial-usage", at: 0)
+}
 let started = Date()
 var timedOut = false
 var exitCode = 127
@@ -643,7 +662,7 @@ var stderrText = ""
 if FileManager.default.isExecutableFile(atPath: powermetricsPath) {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: powermetricsPath)
-    process.arguments = ["-n", "1", "-i", "\(sampleRateMs)", "--samplers", "thermal"]
+    process.arguments = powermetricsArguments
     let stdoutPipe = Pipe()
     let stderrPipe = Pipe()
     process.standardOutput = stdoutPipe
@@ -685,7 +704,7 @@ let numericObserved = combinedOutput.range(of: numericPattern, options: [.regula
 let helperOwned = geteuid() == 0
 let durationSeconds = Int(finished.timeIntervalSince(started).rounded(.up))
 
-let commandLine = "\(powermetricsPath) -n 1 -i \(sampleRateMs) --samplers thermal"
+let commandLine = "\(powermetricsPath) \(powermetricsArguments.joined(separator: " "))"
 let sampleOutput = """
 $ \(commandLine)
 \(stdoutText)
@@ -703,6 +722,7 @@ startedAt=\(ISO8601DateFormatter().string(from: started))
 finishedAt=\(ISO8601DateFormatter().string(from: finished))
 durationSeconds=\(durationSeconds)
 timeoutSeconds=\(timeoutSeconds)
+showInitialUsage=\(showInitialUsage)
 timedOut=\(timedOut)
 exitCode=\(exitCode)
 helperOwned=\(helperOwned)
@@ -724,6 +744,7 @@ providerSource=powermetrics
 powermetricsPath=\(powermetricsPath)
 sampleRateMs=\(sampleRateMs)
 timeoutSeconds=\(timeoutSeconds)
+showInitialUsage=\(showInitialUsage)
 timedOut=\(timedOut)
 exitCode=\(exitCode)
 helperOwned=\(helperOwned)
@@ -771,13 +792,17 @@ EOF
 }
 
 write_launchdaemon_plist() {
-    local helper_path helper_log sample_output sample_status stdout_log stderr_log
+    local helper_path helper_log sample_output sample_status stdout_log stderr_log show_initial_usage_arg
     helper_path="$(xml_escape "$MACOS_DIR/$HELPER_NAME")"
     helper_log="$(xml_escape "$RUNTIME_DIR/provider.log")"
     sample_output="$(xml_escape "$RUNTIME_DIR/numeric-temperature-output.txt")"
     sample_status="$(xml_escape "$RUNTIME_DIR/numeric-temperature-output.status")"
     stdout_log="$(xml_escape "$RUNTIME_DIR/provider.stdout.log")"
     stderr_log="$(xml_escape "$RUNTIME_DIR/provider.stderr.log")"
+    show_initial_usage_arg=""
+    if [[ "$SHOW_INITIAL_USAGE" == true ]]; then
+        show_initial_usage_arg="    <string>--show-initial-usage</string>"
+    fi
     cat >"$LAUNCHD_DIR/$PLIST_NAME" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -799,6 +824,7 @@ write_launchdaemon_plist() {
     <string>$TIMEOUT_SECONDS</string>
     <string>--sample-rate-ms</string>
     <string>$SAMPLE_RATE_MS</string>
+$show_initial_usage_arg
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -880,6 +906,7 @@ mode=prepare-or-register
 providerSource=powermetrics
 helperLabel=$HELPER_LABEL
 registerAttempted=$REGISTER
+showInitialUsage=$SHOW_INITIAL_USAGE
 providerProofReady=false
 EOF
 
@@ -905,6 +932,7 @@ caseId=$CASE_ID
 helperInstallPath=smappservice
 helperLabel=$HELPER_LABEL
 sampleRateMs=$SAMPLE_RATE_MS
+showInitialUsage=$SHOW_INITIAL_USAGE
 registerAttempted=$REGISTER
 unregisterAttempted=false
 postApprovalCaptureAttempted=false
