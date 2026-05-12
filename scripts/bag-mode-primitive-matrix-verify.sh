@@ -248,11 +248,15 @@ verify_case_dir() {
     require_file "$case_name" "$manual"
     [[ -f "$config" && -f "$manual" ]] || return
 
-    local case_id mode reboot_held metadata_redacted
+    local case_id mode test_only reboot_held metadata_redacted candidate_command previous_disablesleep config_rollback_command
     case_id="$(value_for_key caseId "$config" 2>/dev/null || true)"
     mode="$(value_for_key mode "$config" 2>/dev/null || true)"
+    test_only="$(value_for_key testOnly "$config" 2>/dev/null || true)"
     reboot_held="$(value_for_key rebootHeld "$config" 2>/dev/null || true)"
     metadata_redacted="$(value_for_key metadataRedacted "$config" 2>/dev/null || true)"
+    candidate_command="$(value_for_key candidateCommand "$config" 2>/dev/null || true)"
+    previous_disablesleep="$(value_for_key previousDisablesleep "$config" 2>/dev/null || true)"
+    config_rollback_command="$(value_for_key rollbackCommand "$config" 2>/dev/null || true)"
 
     if is_unfilled_value "$case_id"; then
         record_error "$case_name" "validation-config.txt caseId is missing or placeholder"
@@ -261,6 +265,17 @@ verify_case_dir() {
     fi
     if [[ "$mode" != "apply" ]]; then
         record_error "$case_name" "validation-config.txt mode must be apply for #29 evidence"
+    fi
+    if [[ "$test_only" != "false" ]]; then
+        record_error "$case_name" "validation-config.txt testOnly must be false for #29 evidence"
+    fi
+    if [[ "$candidate_command" != "/usr/bin/pmset disablesleep 1" ]]; then
+        record_error "$case_name" "validation-config.txt candidateCommand must be /usr/bin/pmset disablesleep 1"
+    fi
+    if [[ ! "$previous_disablesleep" =~ ^[0-9]+$ ]]; then
+        record_error "$case_name" "validation-config.txt previousDisablesleep must be numeric"
+    elif [[ "$config_rollback_command" != "/usr/bin/pmset disablesleep $previous_disablesleep" ]]; then
+        record_error "$case_name" "validation-config.txt rollbackCommand must restore previousDisablesleep"
     fi
     if [[ "$metadata_redacted" != "true" ]]; then
         record_error "$case_name" "validation-config.txt metadataRedacted must be true"
@@ -305,6 +320,8 @@ verify_case_dir() {
     prior_value="$(trim_value "$prior_value")"
     if [[ ! "$prior_value" =~ ^[0-9]+$ ]]; then
         record_error "$case_name" "Prior disablesleep value must be numeric"
+    elif [[ "$previous_disablesleep" =~ ^[0-9]+$ && "$prior_value" != "$previous_disablesleep" ]]; then
+        record_error "$case_name" "Prior disablesleep value must match validation-config previousDisablesleep"
     fi
 
     local macos_value macos_major reboot_state
@@ -320,13 +337,14 @@ verify_case_dir() {
     fi
 
     applied_command="$(field_value "Applied command" "$manual" 2>/dev/null || true)"
-    if [[ "$applied_command" != *"/usr/bin/pmset disablesleep 1"* ]]; then
+    if [[ ! "$applied_command" =~ (^|[^[:alnum:]_./-])/usr/bin/pmset[[:space:]]+disablesleep[[:space:]]+1([^0-9]|$) ]]; then
         record_error "$case_name" "Applied command must include /usr/bin/pmset disablesleep 1"
     fi
 
     rollback_command="$(field_value "Rollback command" "$manual" 2>/dev/null || true)"
-    if [[ "$rollback_command" != *"/usr/bin/pmset disablesleep"* ]]; then
-        record_error "$case_name" "Rollback command must include /usr/bin/pmset disablesleep"
+    if [[ "$prior_value" =~ ^[0-9]+$ &&
+          ! "$rollback_command" =~ (^|[^[:alnum:]_./-])/usr/bin/pmset[[:space:]]+disablesleep[[:space:]]+$prior_value([^0-9]|$) ]]; then
+        record_error "$case_name" "Rollback command must restore the prior disablesleep value"
     fi
 
     reboot_state="$(field_value "Reboot state after held primitive" "$manual" 2>/dev/null || true)"

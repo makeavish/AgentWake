@@ -22,7 +22,8 @@ PR #22 added `scripts/bag-mode-primitive-validation.sh`, a dedicated harness for
 - capture `pmset -g custom`, `pmset -g assertions`, IORegistry state, and redacted metadata
 - write rollback instructions before reboot-held validation
 - restore and verify the pre-run `disablesleep` value in non-reboot mutating runs
-- preserve existing evidence when continuing a run
+- preserve the baseline `before/` snapshot when continuing into apply mode
+- refresh apply-mode metadata so baseline captures are not mistaken for #29 evidence
 
 This proves the evidence workflow exists. It does not prove the primitive is reliable.
 
@@ -55,7 +56,7 @@ caseId	status	evidenceDir	naReason
 
 Use `status=evidence` for rows with a completed evidence directory, `status=n/a` for physically unavailable rows, and `status=deferred` for helper-dependent rows blocked on #27. `n/a` and `deferred` rows must include a concrete reason in `naReason`.
 
-The verifier fails missing files, baseline-only captures, placeholder manual fields, missing reboot state, missing IORegistry snapshots, incomplete snapshot directories, and placeholder N/A/deferred reasons. Passing the verifier only means the manifest and evidence package are structurally complete; it does not mean the primitive passed the hardware matrix.
+The verifier fails missing files, baseline-only captures, test-only fake-`pmset` captures, placeholder manual fields, missing reboot state, missing IORegistry snapshots, incomplete snapshot directories, and placeholder N/A/deferred reasons. Passing the verifier only means the manifest and evidence package are structurally complete; it does not mean the primitive passed the hardware matrix.
 
 ## Conclusion
 

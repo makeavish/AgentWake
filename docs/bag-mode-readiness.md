@@ -32,6 +32,23 @@ sudo scripts/bag-mode-primitive-validation.sh \
 
 Mutating mode requires root so rollback cannot stall on an expired sudo prompt. It records the prior `disablesleep` value, applies `/usr/bin/pmset disablesleep 1`, captures `during-applied/`, waits for the manual lid-close/reopen window, captures `after-lid-window/`, and restores the prior `disablesleep` value.
 
+If you started with a baseline-only directory, rerun that exact directory:
+
+```sh
+sudo scripts/bag-mode-primitive-validation.sh \
+  --output-dir .build/power-validation/<baseline-case-dir> \
+  --case-id apple-silicon-battery-internal \
+  --hold-seconds 300 \
+  --apply \
+  --continue \
+  --i-understand-this-changes-power-settings
+```
+
+The harness preserves the original `before/` snapshot, refreshes
+`validation-config.txt` to `mode=apply` with the captured prior `disablesleep`
+value, replaces the baseline README with the mutating run handoff, and then
+writes the remaining apply-mode snapshots.
+
 For reboot-while-held scenarios, use a dedicated evidence directory and run the explicit reboot mode:
 
 ```sh

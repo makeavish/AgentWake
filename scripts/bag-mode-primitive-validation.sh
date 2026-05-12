@@ -11,6 +11,17 @@ CONTINUE_OUTPUT=0
 REBOOT_HELD=0
 ROLLBACK_NEEDED=0
 PREVIOUS_DISABLESLEEP=""
+PMSET_BIN="/usr/bin/pmset"
+TEST_PMSET=0
+
+if [[ -n "${CLAWSHELL_PMSET_BIN:-}" ]]; then
+    if [[ "${CLAWSHELL_BAG_MODE_PRIMITIVE_TEST_PMSET:-0}" != "1" ]]; then
+        echo "CLAWSHELL_PMSET_BIN is for internal validation only; unset it for real #29 evidence." >&2
+        exit 2
+    fi
+    PMSET_BIN="$CLAWSHELL_PMSET_BIN"
+    TEST_PMSET=1
+fi
 
 usage() {
     cat <<'EOF'
@@ -33,6 +44,11 @@ Options:
 
 Environment:
   CLAWSHELL_BAG_MODE_HOLD_SECONDS=<seconds>
+
+Internal validation only:
+  CLAWSHELL_BAG_MODE_PRIMITIVE_TEST_PMSET=1 CLAWSHELL_PMSET_BIN=<path>
+      Runs against a fake pmset command. The matrix verifier rejects this
+      output as test-only evidence.
 EOF
 }
 
@@ -129,7 +145,7 @@ snapshot() {
 }
 
 current_disablesleep() {
-    /usr/bin/pmset -g custom | awk '
+    "$PMSET_BIN" -g custom | awk '
         BEGIN { found = "" }
         $1 == "disablesleep" { found = $2 }
         END {
@@ -150,8 +166,8 @@ rollback() {
     fi
 
     {
-        echo "$ /usr/bin/pmset disablesleep ${PREVIOUS_DISABLESLEEP}"
-        /usr/bin/pmset disablesleep "$PREVIOUS_DISABLESLEEP"
+        echo "$ ${PMSET_BIN} disablesleep ${PREVIOUS_DISABLESLEEP}"
+        "$PMSET_BIN" disablesleep "$PREVIOUS_DISABLESLEEP"
     } >"$OUTPUT_DIR/rollback-command.txt" 2>&1 || status=$?
 
     if [[ "$status" -ne 0 ]]; then
@@ -202,16 +218,27 @@ if [[ "$APPLY" == "1" ]]; then
     fi
 fi
 
+should_write_config=0
 if [[ ! -f "$OUTPUT_DIR/validation-config.txt" || "$CONTINUE_OUTPUT" != "1" ]]; then
+    should_write_config=1
+elif [[ "$APPLY" == "1" ]]; then
+    existing_mode="$(sed -n 's/^mode=//p' "$OUTPUT_DIR/validation-config.txt" | tail -n 1)"
+    if [[ "$existing_mode" == "baseline-only" ]]; then
+        should_write_config=1
+    fi
+fi
+
+if [[ "$should_write_config" == "1" ]]; then
     cat >"$OUTPUT_DIR/validation-config.txt" <<EOF
 caseId=${CASE_ID}
 capturedAtUTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 mode=$([[ "$APPLY" == "1" ]] && echo "apply" || echo "baseline-only")
+testOnly=$([[ "$TEST_PMSET" == "1" ]] && echo "true" || echo "false")
 rebootHeld=${REBOOT_HELD}
 holdSeconds=${HOLD_SECONDS}
-candidateCommand=/usr/bin/pmset disablesleep 1
+candidateCommand=${PMSET_BIN} disablesleep 1
 previousDisablesleep=${PREVIOUS_DISABLESLEEP:-not-captured}
-rollbackCommand=/usr/bin/pmset disablesleep ${PREVIOUS_DISABLESLEEP:-<previousDisablesleep>}
+rollbackCommand=${PMSET_BIN} disablesleep ${PREVIOUS_DISABLESLEEP:-<previousDisablesleep>}
 metadataRedacted=true
 EOF
 fi
@@ -281,26 +308,44 @@ EOF
 fi
 
 {
-    echo "$ /usr/bin/pmset disablesleep 1"
-    /usr/bin/pmset disablesleep 1
+    echo "$ ${PMSET_BIN} disablesleep 1"
+    "$PMSET_BIN" disablesleep 1
 } >"$OUTPUT_DIR/applied-command.txt" 2>&1
 ROLLBACK_NEEDED=1
 
 cat >"$OUTPUT_DIR/ROLLBACK_REQUIRED.txt" <<EOF
 Bag Mode primitive validation changed this setting:
 
-Applied: /usr/bin/pmset disablesleep 1
-Restore: /usr/bin/pmset disablesleep ${PREVIOUS_DISABLESLEEP}
+Applied: ${PMSET_BIN} disablesleep 1
+Restore: ${PMSET_BIN} disablesleep ${PREVIOUS_DISABLESLEEP}
 
 After reboot-held validation, run:
 
-sudo /usr/bin/pmset disablesleep ${PREVIOUS_DISABLESLEEP}
+sudo ${PMSET_BIN} disablesleep ${PREVIOUS_DISABLESLEEP}
 CLAWSHELL_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh "$OUTPUT_DIR/after-rollback"
+EOF
+
+cat >"$OUTPUT_DIR/README.txt" <<EOF
+Mutating Bag Mode primitive validation evidence is in progress.
+
+Fill in manual-result.md with the physical lid-close/reopen result and run:
+
+scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$OUTPUT_DIR"
 EOF
 
 snapshot "$OUTPUT_DIR/during-applied"
 
 if [[ "$REBOOT_HELD" == "1" ]]; then
+    cat >"$OUTPUT_DIR/README.txt" <<EOF
+Reboot-held Bag Mode primitive validation evidence is in progress.
+
+Rollback instructions were written to ROLLBACK_REQUIRED.txt. After reboot,
+capture post-reboot state, restore the prior disablesleep value, capture
+after-rollback state, fill in manual-result.md, and run:
+
+scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$OUTPUT_DIR"
+EOF
+
     cat <<EOF
 Bag Mode primitive is applied for reboot-held validation.
 
@@ -312,7 +357,7 @@ After reboot:
 1. Capture post-reboot state:
    CLAWSHELL_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh "$OUTPUT_DIR/post-reboot"
 2. Restore the prior value:
-   sudo /usr/bin/pmset disablesleep ${PREVIOUS_DISABLESLEEP}
+   sudo ${PMSET_BIN} disablesleep ${PREVIOUS_DISABLESLEEP}
 3. Capture rollback state:
    CLAWSHELL_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh "$OUTPUT_DIR/after-rollback"
 4. Fill in:
@@ -339,5 +384,13 @@ snapshot "$OUTPUT_DIR/after-lid-window"
 rollback strict
 ROLLBACK_NEEDED=0
 rm -f "$OUTPUT_DIR/ROLLBACK_REQUIRED.txt"
+
+cat >"$OUTPUT_DIR/README.txt" <<EOF
+Mutating Bag Mode primitive validation evidence written.
+
+Fill in manual-result.md with the physical lid-close/reopen result and run:
+
+scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$OUTPUT_DIR"
+EOF
 
 echo "Bag Mode primitive validation written to $OUTPUT_DIR"

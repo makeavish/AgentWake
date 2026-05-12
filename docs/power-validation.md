@@ -68,6 +68,10 @@ sudo scripts/bag-mode-primitive-validation.sh \
 ```
 
 Mutating runs record and restore the pre-run `disablesleep` value rather than assuming rollback is always `disablesleep 0`.
+When a baseline-only evidence directory is reused, pass that exact directory
+back with `--output-dir <baseline-dir> --apply --continue`. The harness keeps
+the original `before/` snapshot and refreshes `validation-config.txt` to
+apply-mode metadata before capturing the mutating snapshots.
 
 Latest local normal assertion smoke: `scripts/normal-assertion-validation.sh` was run for a short hold while the machine was on battery. The sanitized `during` snapshot showed a ClawShell-owned `PreventUserIdleSystemSleep` assertion, and the `after` snapshot no longer contained ClawShell-owned assertions.
 

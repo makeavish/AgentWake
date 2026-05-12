@@ -80,6 +80,109 @@ if [[ "$before_mtime" != "$after_mtime" ]]; then
     exit 1
 fi
 
+bag_mode_apply_bin="$bag_mode_smoke_dir/apply-bin"
+mkdir -p "$bag_mode_apply_bin"
+cat >"$bag_mode_apply_bin/id" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+    -u) echo 0 ;;
+    -un) echo "<redacted>" ;;
+    *) /usr/bin/id "$@" ;;
+esac
+EOF
+cat >"$bag_mode_apply_bin/pmset" <<'EOF'
+#!/usr/bin/env bash
+state_file="${CLAWSHELL_FAKE_PMSET_STATE:?}"
+log_file="${CLAWSHELL_FAKE_PMSET_LOG:?}"
+printf '%s\n' "$*" >>"$log_file"
+if [[ "${1:-}" == "-g" && "${2:-}" == "custom" ]]; then
+    printf 'Battery Power:\n'
+    printf ' disablesleep %s\n' "$(cat "$state_file")"
+    exit 0
+fi
+if [[ "${1:-}" == "-g" ]]; then
+    printf 'fake pmset %s output\n' "${2:-}"
+    exit 0
+fi
+if [[ "${1:-}" == "disablesleep" && "${2:-}" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$2" >"$state_file"
+    printf 'set disablesleep %s\n' "$2"
+    exit 0
+fi
+printf 'unexpected pmset args: %s\n' "$*" >&2
+exit 1
+EOF
+chmod +x "$bag_mode_apply_bin/id" "$bag_mode_apply_bin/pmset"
+
+bag_mode_apply_transition="$bag_mode_smoke_dir/apply-transition"
+bag_mode_apply_state="$bag_mode_smoke_dir/apply-state"
+bag_mode_apply_log="$bag_mode_smoke_dir/apply-commands.log"
+printf '2\n' >"$bag_mode_apply_state"
+touch "$bag_mode_apply_log"
+scripts/bag-mode-primitive-validation.sh \
+    --output-dir "$bag_mode_apply_transition" \
+    --case-id validate-apply-transition >/dev/null
+PATH="$bag_mode_apply_bin:$PATH" \
+CLAWSHELL_BAG_MODE_PRIMITIVE_TEST_PMSET=1 \
+CLAWSHELL_PMSET_BIN="$bag_mode_apply_bin/pmset" \
+CLAWSHELL_FAKE_PMSET_STATE="$bag_mode_apply_state" \
+CLAWSHELL_FAKE_PMSET_LOG="$bag_mode_apply_log" \
+    scripts/bag-mode-primitive-validation.sh \
+        --output-dir "$bag_mode_apply_transition" \
+        --case-id validate-apply-transition \
+        --hold-seconds 1 \
+        --apply \
+        --continue \
+        --i-understand-this-changes-power-settings >/dev/null
+if ! grep -q '^mode=apply$' "$bag_mode_apply_transition/validation-config.txt"; then
+    echo "Bag Mode primitive harness did not transition baseline config to apply mode" >&2
+    exit 1
+fi
+if ! grep -q '^testOnly=true$' "$bag_mode_apply_transition/validation-config.txt"; then
+    echo "Bag Mode primitive harness did not mark fake pmset transition as test-only" >&2
+    exit 1
+fi
+if ! grep -q '^previousDisablesleep=2$' "$bag_mode_apply_transition/validation-config.txt"; then
+    echo "Bag Mode primitive harness did not record previous disablesleep value during apply transition" >&2
+    exit 1
+fi
+if ! grep -q '^rollbackCommand=.*/pmset disablesleep 2$' "$bag_mode_apply_transition/validation-config.txt"; then
+    echo "Bag Mode primitive harness did not record rollback command during apply transition" >&2
+    exit 1
+fi
+if ! grep -q 'disablesleep 1' "$bag_mode_apply_transition/applied-command.txt"; then
+    echo "Bag Mode primitive harness did not apply disablesleep 1 during apply transition" >&2
+    exit 1
+fi
+if ! grep -q 'disablesleep 2' "$bag_mode_apply_transition/rollback-command.txt"; then
+    echo "Bag Mode primitive harness did not roll back to the captured prior value during apply transition" >&2
+    exit 1
+fi
+if [[ "$(cat "$bag_mode_apply_state")" != "2" ]]; then
+    echo "Bag Mode primitive harness fake pmset state did not return to captured prior value" >&2
+    exit 1
+fi
+if ! grep -q '^disablesleep 1$' "$bag_mode_apply_log" ||
+   ! grep -q '^disablesleep 2$' "$bag_mode_apply_log"; then
+    echo "Bag Mode primitive harness did not log distinct apply and rollback disablesleep commands" >&2
+    cat "$bag_mode_apply_log" >&2
+    exit 1
+fi
+if [[ ! -f "$bag_mode_apply_transition/during-applied/pmset-custom.txt" ||
+      ! -f "$bag_mode_apply_transition/after-lid-window/pmset-custom.txt" ||
+      ! -f "$bag_mode_apply_transition/after-rollback/pmset-custom.txt" ]]; then
+    echo "Bag Mode primitive harness did not write apply transition snapshots" >&2
+    exit 1
+fi
+if [[ -f "$bag_mode_apply_transition/ROLLBACK_REQUIRED.txt" ]]; then
+    echo "Bag Mode primitive harness left rollback marker after successful non-reboot apply transition" >&2
+    exit 1
+fi
+if grep -q 'Baseline-only' "$bag_mode_apply_transition/README.txt"; then
+    echo "Bag Mode primitive harness left stale baseline README after apply transition" >&2
+    exit 1
+fi
+
 bag_mode_matrix_case="$bag_mode_smoke_dir/matrix/validate-smoke"
 mkdir -p \
     "$bag_mode_matrix_case/before" \
@@ -90,6 +193,7 @@ cat >"$bag_mode_matrix_case/validation-config.txt" <<'EOF'
 caseId=validate-smoke
 capturedAtUTC=2026-05-12T00:00:00Z
 mode=apply
+testOnly=false
 rebootHeld=0
 holdSeconds=1
 candidateCommand=/usr/bin/pmset disablesleep 1
@@ -140,6 +244,42 @@ macos-13-intel-deferred	deferred		Intel support not in current local hardware sc
 external-display-na	n/a		No external display physically available in this smoke
 EOF
 scripts/bag-mode-primitive-matrix-verify.sh --manifest "$bag_mode_smoke_dir/matrix/matrix-manifest.tsv" >/dev/null
+bag_mode_matrix_test_only="$bag_mode_smoke_dir/matrix-test-only"
+cp -R "$bag_mode_matrix_case" "$bag_mode_matrix_test_only"
+sed -i '' 's/^testOnly=false$/testOnly=true/' "$bag_mode_matrix_test_only/validation-config.txt"
+if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_test_only" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Bag Mode primitive matrix verifier accepted test-only pmset evidence" >&2
+    exit 1
+fi
+if ! grep -q "testOnly must be false" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+bag_mode_matrix_bad_rollback="$bag_mode_smoke_dir/matrix-bad-rollback"
+cp -R "$bag_mode_matrix_case" "$bag_mode_matrix_bad_rollback"
+sed -i '' 's/^previousDisablesleep=0$/previousDisablesleep=1/' "$bag_mode_matrix_bad_rollback/validation-config.txt"
+if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_bad_rollback" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Bag Mode primitive matrix verifier accepted rollback command that does not restore previousDisablesleep" >&2
+    exit 1
+fi
+if ! grep -q "rollbackCommand must restore previousDisablesleep" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+bag_mode_matrix_bad_manual_rollback="$bag_mode_smoke_dir/matrix-bad-manual-rollback"
+cp -R "$bag_mode_matrix_case" "$bag_mode_matrix_bad_manual_rollback"
+sed -i '' 's/^previousDisablesleep=0$/previousDisablesleep=1/' "$bag_mode_matrix_bad_manual_rollback/validation-config.txt"
+sed -i '' 's#^rollbackCommand=/usr/bin/pmset disablesleep 0$#rollbackCommand=/usr/bin/pmset disablesleep 1#' "$bag_mode_matrix_bad_manual_rollback/validation-config.txt"
+sed -i '' 's/- Prior disablesleep value: 0/- Prior disablesleep value: 1/' "$bag_mode_matrix_bad_manual_rollback/manual-result.md"
+sed -i '' 's#- Rollback command: `/usr/bin/pmset disablesleep 0`#- Rollback command: `/usr/bin/pmset disablesleep 10`#' "$bag_mode_matrix_bad_manual_rollback/manual-result.md"
+if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_bad_manual_rollback" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Bag Mode primitive matrix verifier accepted manual rollback command with numeric-prefix mismatch" >&2
+    exit 1
+fi
+if ! grep -q "Rollback command must restore the prior disablesleep value" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
 sed -i '' 's/- Result: inconclusive/- Result: pass | fail | inconclusive/' "$bag_mode_matrix_case/manual-result.md"
 if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_case" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Bag Mode primitive matrix verifier accepted a placeholder result" >&2
