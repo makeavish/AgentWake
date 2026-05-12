@@ -1062,6 +1062,316 @@ if ! grep -q '^providerProofReady=false$' "$temperature_helper_available_dir/val
     exit 1
 fi
 
+echo "==> temperature provider powermetrics proof attempt smoke"
+temperature_powermetrics_attempt_dir="$bag_mode_smoke_dir/temperature-powermetrics-attempt"
+scripts/temperature-provider-powermetrics-proof.sh --output-dir "$temperature_powermetrics_attempt_dir" >/dev/null
+for required_file in \
+    validation-config.txt \
+    manual-result.md \
+    provider-manifest.tsv \
+    README.md \
+    evidence/provider-command-or-api.txt \
+    evidence/helper-ownership-context.txt \
+    evidence/numeric-temperature-output.txt \
+    evidence/numeric-temperature-output.status \
+    evidence/permission-behavior.txt \
+    evidence/no-user-visible-prompts.txt \
+    evidence/timeout-enforcement.txt \
+    evidence/processinfo-supplemental-signal.txt \
+    evidence/logs.txt
+do
+    if [[ ! -f "$temperature_powermetrics_attempt_dir/$required_file" ]]; then
+        echo "Temperature powermetrics proof attempt did not write expected file: $required_file" >&2
+        exit 1
+    fi
+done
+if ! grep -q '^providerProofReady=false$' "$temperature_powermetrics_attempt_dir/validation-config.txt"; then
+    echo "Temperature powermetrics proof attempt overclaimed provider proof readiness" >&2
+    cat "$temperature_powermetrics_attempt_dir/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^noUserVisiblePrompts=true$' "$temperature_powermetrics_attempt_dir/validation-config.txt"; then
+    echo "Temperature powermetrics proof attempt did not record prompt-free mode" >&2
+    cat "$temperature_powermetrics_attempt_dir/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q 'sudo -n' "$temperature_powermetrics_attempt_dir/evidence/no-user-visible-prompts.txt"; then
+    echo "Temperature powermetrics proof attempt did not explain non-prompting sudo mode" >&2
+    cat "$temperature_powermetrics_attempt_dir/evidence/no-user-visible-prompts.txt" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "permission-behavior" && $2 == "evidence" { found = 1 } END { exit !found }' "$temperature_powermetrics_attempt_dir/provider-manifest.tsv"; then
+    echo "Temperature powermetrics proof attempt did not attach permission behavior evidence" >&2
+    cat "$temperature_powermetrics_attempt_dir/provider-manifest.tsv" >&2
+    exit 1
+fi
+for todo_row in \
+    numeric-temperature-output \
+    freshness-samples \
+    active-cadence-samples \
+    idle-cadence-samples \
+    timeout-fail-closed \
+    closed-bag-coverage-analysis \
+    safety-contract-tests \
+    unavailable-fail-closed \
+    stale-fail-closed \
+    permission-denied-fail-closed \
+    parse-failed-fail-closed \
+    helper-crashed-fail-closed \
+    unsupported-hardware-fail-closed
+do
+    if ! awk -F '\t' -v check_id="$todo_row" '$1 == check_id && $2 == "TODO" { found = 1 } END { exit !found }' "$temperature_powermetrics_attempt_dir/provider-manifest.tsv"; then
+        echo "Temperature powermetrics proof attempt should leave incomplete row as TODO: $todo_row" >&2
+        cat "$temperature_powermetrics_attempt_dir/provider-manifest.tsv" >&2
+        exit 1
+    fi
+done
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_powermetrics_attempt_dir/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted incomplete powermetrics proof attempt" >&2
+    exit 1
+fi
+if ! grep -q "failClosedContract" "$bag_mode_smoke_error" && ! grep -q "required check must use status evidence" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_powermetrics_file_output="$bag_mode_smoke_dir/temperature-powermetrics-output-file"
+touch "$temperature_powermetrics_file_output"
+if scripts/temperature-provider-powermetrics-proof.sh --output-dir "$temperature_powermetrics_file_output" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature powermetrics proof attempt accepted an output path that is not a directory" >&2
+    exit 1
+fi
+if ! grep -q 'not a directory' "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_powermetrics_non_empty="$bag_mode_smoke_dir/temperature-powermetrics-non-empty"
+mkdir -p "$temperature_powermetrics_non_empty"
+touch "$temperature_powermetrics_non_empty/existing"
+if scripts/temperature-provider-powermetrics-proof.sh --output-dir "$temperature_powermetrics_non_empty" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature powermetrics proof attempt overwrote a non-empty output directory" >&2
+    exit 1
+fi
+if ! grep -q 'Output directory is not empty' "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+temperature_powermetrics_bad_env="$bag_mode_smoke_dir/temperature-powermetrics-bad-env"
+if CLAWSHELL_TEMPERATURE_PROOF_TIMEOUT_SECONDS=abc \
+    scripts/temperature-provider-powermetrics-proof.sh --output-dir "$temperature_powermetrics_bad_env" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature powermetrics proof attempt accepted an invalid timeout value" >&2
+    exit 1
+fi
+if [[ -e "$temperature_powermetrics_bad_env" ]]; then
+    echo "Temperature powermetrics proof attempt created evidence for an invalid timeout value" >&2
+    exit 1
+fi
+if zsh scripts/temperature-provider-powermetrics-proof.sh --output-dir "$bag_mode_smoke_dir/temperature-powermetrics-zsh" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature powermetrics proof attempt unexpectedly ran under explicit zsh" >&2
+    exit 1
+fi
+if ! grep -q "requires bash" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_powermetrics_password_bin="$bag_mode_smoke_dir/temperature-powermetrics-password-fakes"
+mkdir -p "$temperature_powermetrics_password_bin"
+cat >"$temperature_powermetrics_password_bin/pmset" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == "-g batt" ]]; then
+    echo "Now drawing from 'Battery Power'"
+    exit 0
+fi
+exit 1
+EOF
+cat >"$temperature_powermetrics_password_bin/powermetrics" <<'EOF'
+#!/usr/bin/env bash
+echo "CPU die temperature: 42 C"
+EOF
+cat >"$temperature_powermetrics_password_bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" != "-n" ]]; then
+    echo "sudo: refusing promptable invocation" >&2
+    exit 99
+fi
+shift
+echo "sudo: a password is required" >&2
+exit 1
+EOF
+cat >"$temperature_powermetrics_password_bin/swift" <<'EOF'
+#!/usr/bin/env bash
+echo "thermalState=nominal"
+EOF
+chmod +x \
+    "$temperature_powermetrics_password_bin/pmset" \
+    "$temperature_powermetrics_password_bin/powermetrics" \
+    "$temperature_powermetrics_password_bin/sudo" \
+    "$temperature_powermetrics_password_bin/swift"
+temperature_powermetrics_password="$bag_mode_smoke_dir/temperature-powermetrics-password-required"
+PATH="$temperature_powermetrics_password_bin:$PATH" \
+    scripts/temperature-provider-powermetrics-proof.sh --output-dir "$temperature_powermetrics_password" >/dev/null
+if ! grep -q '^powermetricsPermissionState=sudoPasswordRequired$' "$temperature_powermetrics_password/validation-config.txt"; then
+    echo "Temperature powermetrics proof attempt did not classify fake sudo password requirement" >&2
+    cat "$temperature_powermetrics_password/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^helperOwned=false$' "$temperature_powermetrics_password/validation-config.txt"; then
+    echo "Temperature powermetrics proof attempt overclaimed helper ownership for password-gated sudo" >&2
+    cat "$temperature_powermetrics_password/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^numericCutoffSource=false$' "$temperature_powermetrics_password/validation-config.txt"; then
+    echo "Temperature powermetrics proof attempt promoted password-gated output to cutoff source" >&2
+    cat "$temperature_powermetrics_password/validation-config.txt" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "numeric-temperature-output" && $2 == "TODO" { found = 1 } END { exit !found }' "$temperature_powermetrics_password/provider-manifest.tsv"; then
+    echo "Temperature powermetrics proof attempt attached numeric evidence for password-gated sudo" >&2
+    cat "$temperature_powermetrics_password/provider-manifest.tsv" >&2
+    exit 1
+fi
+
+temperature_powermetrics_timeout_bin="$bag_mode_smoke_dir/temperature-powermetrics-timeout-fakes"
+mkdir -p "$temperature_powermetrics_timeout_bin"
+cat >"$temperature_powermetrics_timeout_bin/pmset" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == "-g batt" ]]; then
+    echo "Now drawing from 'Battery Power'"
+    exit 0
+fi
+exit 1
+EOF
+cat >"$temperature_powermetrics_timeout_bin/powermetrics" <<'EOF'
+#!/usr/bin/env bash
+sleep 10
+echo "CPU die temperature: 42 C"
+EOF
+cat >"$temperature_powermetrics_timeout_bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" != "-n" ]]; then
+    echo "sudo: refusing promptable invocation" >&2
+    exit 99
+fi
+shift
+if [[ "${1:-}" == "true" ]]; then
+    exit 0
+fi
+exec "$@"
+EOF
+cat >"$temperature_powermetrics_timeout_bin/swift" <<'EOF'
+#!/usr/bin/env bash
+echo "thermalState=nominal"
+EOF
+chmod +x \
+    "$temperature_powermetrics_timeout_bin/pmset" \
+    "$temperature_powermetrics_timeout_bin/powermetrics" \
+    "$temperature_powermetrics_timeout_bin/sudo" \
+    "$temperature_powermetrics_timeout_bin/swift"
+temperature_powermetrics_timeout="$bag_mode_smoke_dir/temperature-powermetrics-timeout"
+CLAWSHELL_TEMPERATURE_PROOF_TIMEOUT_SECONDS=1 \
+PATH="$temperature_powermetrics_timeout_bin:$PATH" \
+    scripts/temperature-provider-powermetrics-proof.sh --output-dir "$temperature_powermetrics_timeout" >/dev/null
+if ! grep -q '^timedOut=true$' "$temperature_powermetrics_timeout/evidence/numeric-temperature-output.status"; then
+    echo "Temperature powermetrics proof attempt did not record timed-out powermetrics" >&2
+    cat "$temperature_powermetrics_timeout/evidence/numeric-temperature-output.status" >&2
+    exit 1
+fi
+if ! grep -q '^powermetricsPermissionState=timedOut$' "$temperature_powermetrics_timeout/validation-config.txt"; then
+    echo "Temperature powermetrics proof attempt did not classify timed-out powermetrics" >&2
+    cat "$temperature_powermetrics_timeout/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^helperOwned=false$' "$temperature_powermetrics_timeout/validation-config.txt"; then
+    echo "Temperature powermetrics proof attempt overclaimed helper ownership for timed-out sampling" >&2
+    cat "$temperature_powermetrics_timeout/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^numericCutoffSource=false$' "$temperature_powermetrics_timeout/validation-config.txt"; then
+    echo "Temperature powermetrics proof attempt promoted timed-out output to cutoff source" >&2
+    cat "$temperature_powermetrics_timeout/validation-config.txt" >&2
+    exit 1
+fi
+if pgrep -f "$temperature_powermetrics_timeout_bin/powermetrics" >/dev/null 2>&1; then
+    echo "Temperature powermetrics proof attempt left fake powermetrics running after timeout" >&2
+    pkill -f "$temperature_powermetrics_timeout_bin/powermetrics" >/dev/null 2>&1 || true
+    exit 1
+fi
+
+temperature_powermetrics_fake_bin="$bag_mode_smoke_dir/temperature-powermetrics-fakes"
+mkdir -p "$temperature_powermetrics_fake_bin"
+cat >"$temperature_powermetrics_fake_bin/pmset" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == "-g batt" ]]; then
+    echo "Now drawing from 'Battery Power'"
+    echo " -InternalBattery-0 (id=1234567)"
+    exit 0
+fi
+exit 1
+EOF
+cat >"$temperature_powermetrics_fake_bin/powermetrics" <<'EOF'
+#!/usr/bin/env bash
+echo "CPU die temperature: 42 C"
+EOF
+cat >"$temperature_powermetrics_fake_bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" != "-n" ]]; then
+    echo "sudo: refusing promptable invocation" >&2
+    exit 99
+fi
+shift
+if [[ "${1:-}" == "true" ]]; then
+    exit 0
+fi
+exec "$@"
+EOF
+cat >"$temperature_powermetrics_fake_bin/swift" <<'EOF'
+#!/usr/bin/env bash
+echo "thermalState=nominal"
+EOF
+chmod +x \
+    "$temperature_powermetrics_fake_bin/pmset" \
+    "$temperature_powermetrics_fake_bin/powermetrics" \
+    "$temperature_powermetrics_fake_bin/sudo" \
+    "$temperature_powermetrics_fake_bin/swift"
+temperature_powermetrics_available="$bag_mode_smoke_dir/temperature-powermetrics-available"
+CLAWSHELL_TEMPERATURE_PROOF_TIMEOUT_SECONDS=5 \
+PATH="$temperature_powermetrics_fake_bin:$PATH" \
+    scripts/temperature-provider-powermetrics-proof.sh --output-dir "$temperature_powermetrics_available" >/dev/null
+if ! grep -q '^helperOwned=false$' "$temperature_powermetrics_available/validation-config.txt"; then
+    echo "Temperature powermetrics proof attempt overclaimed helper ownership for non-interactive sudo" >&2
+    cat "$temperature_powermetrics_available/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^numericTemperatureObserved=true$' "$temperature_powermetrics_available/validation-config.txt"; then
+    echo "Temperature powermetrics proof attempt did not record fake numeric diagnostic output" >&2
+    cat "$temperature_powermetrics_available/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^numericCutoffSource=false$' "$temperature_powermetrics_available/validation-config.txt"; then
+    echo "Temperature powermetrics proof attempt promoted diagnostic output to cutoff source" >&2
+    cat "$temperature_powermetrics_available/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^powermetricsPermissionState=nonInteractiveSudoSucceeded$' "$temperature_powermetrics_available/validation-config.txt"; then
+    echo "Temperature powermetrics proof attempt did not classify fake non-interactive sudo sampling" >&2
+    cat "$temperature_powermetrics_available/validation-config.txt" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "numeric-temperature-output" && $2 == "evidence" { found = 1 } END { exit !found }' "$temperature_powermetrics_available/provider-manifest.tsv"; then
+    echo "Temperature powermetrics proof attempt did not attach fake numeric output evidence" >&2
+    cat "$temperature_powermetrics_available/provider-manifest.tsv" >&2
+    exit 1
+fi
+if scripts/temperature-provider-proof-verify.sh --manifest "$temperature_powermetrics_available/provider-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature provider proof verifier accepted incomplete fake powermetrics proof attempt" >&2
+    exit 1
+fi
+if ! grep -q "active-cadence-samples" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
 echo "==> temperature provider proof verifier smoke"
 temperature_proof_dir="$bag_mode_smoke_dir/temperature-proof"
 temperature_proof_manifest="$temperature_proof_dir/provider-manifest.tsv"
