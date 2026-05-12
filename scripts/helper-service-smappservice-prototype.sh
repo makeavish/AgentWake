@@ -10,6 +10,7 @@ usage() {
 Usage: scripts/helper-service-smappservice-prototype.sh --output-dir DIR [--case-id ID]
        scripts/helper-service-smappservice-prototype.sh --output-dir DIR --register --i-understand-this-registers-helper
        scripts/helper-service-smappservice-prototype.sh --output-dir DIR --unregister --i-understand-this-registers-helper
+       scripts/helper-service-smappservice-prototype.sh --output-dir DIR --capture-post-approval
 
 Builds a no-membership SMAppService helper prototype evidence package for #27.
 The default mode is non-mutating: it builds an ad-hoc signed app/helper bundle,
@@ -17,6 +18,10 @@ captures layout/signing/status evidence, and leaves lifecycle rows as TODO.
 
 --register and --unregister call SMAppService and can change local helper state.
 Use them only during an intentional #27 prototype run.
+
+--capture-post-approval is non-mutating. Run it against the same existing
+artifact directory after any required System Settings approval to append status,
+launchctl, and log evidence.
 USAGE
 }
 
@@ -24,6 +29,7 @@ OUTPUT_DIR=""
 CASE_ID="apple-silicon-smappservice-local"
 REGISTER=false
 UNREGISTER=false
+CAPTURE_POST_APPROVAL=false
 ALLOW_MUTATION=false
 
 while [[ "$#" -gt 0 ]]; do
@@ -44,6 +50,10 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         --unregister)
             UNREGISTER=true
+            shift
+            ;;
+        --capture-post-approval)
+            CAPTURE_POST_APPROVAL=true
             shift
             ;;
         --i-understand-this-registers-helper)
@@ -70,6 +80,10 @@ if [[ "$REGISTER" == true && "$UNREGISTER" == true ]]; then
     echo "Use only one of --register or --unregister per run." >&2
     exit 64
 fi
+if [[ "$CAPTURE_POST_APPROVAL" == true && ( "$REGISTER" == true || "$UNREGISTER" == true ) ]]; then
+    echo "--capture-post-approval cannot be combined with --register or --unregister." >&2
+    exit 64
+fi
 if [[ ( "$REGISTER" == true || "$UNREGISTER" == true ) && "$ALLOW_MUTATION" != true ]]; then
     echo "--register/--unregister require --i-understand-this-registers-helper" >&2
     exit 64
@@ -78,12 +92,26 @@ if [[ -e "$OUTPUT_DIR" && ! -d "$OUTPUT_DIR" ]]; then
     echo "Output path exists but is not a directory: $OUTPUT_DIR" >&2
     exit 73
 fi
-if [[ -e "$OUTPUT_DIR" && -n "$(find "$OUTPUT_DIR" -mindepth 1 -maxdepth 1 2>/dev/null)" ]]; then
+if [[ "$CAPTURE_POST_APPROVAL" == true && ! -d "$OUTPUT_DIR" ]]; then
+    echo "Post-approval capture requires an existing artifact directory: $OUTPUT_DIR" >&2
+    exit 73
+fi
+if [[ "$CAPTURE_POST_APPROVAL" == true && -L "$OUTPUT_DIR" ]]; then
+    echo "Post-approval capture requires a real artifact directory, not a symlink: $OUTPUT_DIR" >&2
+    exit 73
+fi
+if [[ "$CAPTURE_POST_APPROVAL" == false && -e "$OUTPUT_DIR" && -n "$(find "$OUTPUT_DIR" -mindepth 1 -maxdepth 1 2>/dev/null)" ]]; then
     echo "Output directory is not empty: $OUTPUT_DIR" >&2
     exit 73
 fi
+if [[ "$CAPTURE_POST_APPROVAL" == true && -z "$(find "$OUTPUT_DIR" -mindepth 1 -maxdepth 1 2>/dev/null)" ]]; then
+    echo "Post-approval capture requires a non-empty artifact directory: $OUTPUT_DIR" >&2
+    exit 73
+fi
 
-mkdir -p "$OUTPUT_DIR"
+if [[ "$CAPTURE_POST_APPROVAL" == false ]]; then
+    mkdir -p "$OUTPUT_DIR"
+fi
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 
 BUNDLE_ID="com.makeavish.ClawShell.HelperPrototype"
@@ -99,13 +127,18 @@ RUNTIME_DIR="$OUTPUT_DIR/runtime"
 SOURCE_DIR="$OUTPUT_DIR/source-package"
 EVIDENCE_DIR="$OUTPUT_DIR/evidence"
 
-mkdir -p "$MACOS_DIR" "$LAUNCHD_DIR" "$RUNTIME_DIR" "$SOURCE_DIR" "$EVIDENCE_DIR"
+if [[ "$CAPTURE_POST_APPROVAL" == false ]]; then
+    mkdir -p "$MACOS_DIR" "$LAUNCHD_DIR" "$RUNTIME_DIR" "$SOURCE_DIR" "$EVIDENCE_DIR"
+fi
 
 if [[ -x /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild ]]; then
     export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 fi
 
 CODESIGN="$(xcrun --find codesign)"
+
+CONFIG_FILE="$OUTPUT_DIR/validation-config.txt"
+MANIFEST_FILE="$OUTPUT_DIR/prototype-manifest.tsv"
 
 capture() {
     local name="$1"
@@ -241,6 +274,162 @@ capture_fixed_command_api_required() {
         cat "$EVIDENCE_DIR/fixed-command-api.txt" >&2
         exit 1
     fi
+}
+
+config_set_key() {
+    local key="$1"
+    local value="$2"
+    local tmp
+    tmp="$(mktemp "$OUTPUT_DIR/validation-config.XXXXXX")"
+
+    awk -F= -v key="$key" -v value="$value" '
+        $1 == key {
+            print key "=" value
+            found = 1
+            next
+        }
+        { print }
+        END {
+            if (!found) {
+                print key "=" value
+            }
+        }
+    ' "$CONFIG_FILE" >"$tmp"
+    mv "$tmp" "$CONFIG_FILE"
+}
+
+capture_file_snapshot() {
+    local name="$1"
+    local source_file="$2"
+    local out="$EVIDENCE_DIR/$name.txt"
+    local status_file="$EVIDENCE_DIR/$name.status"
+    local start finish status block_status
+    start="$(date +%s)"
+    status=0
+    set +e
+    {
+        printf '$ test -s %q && sed -n 1,200p %q\n' "$source_file" "$source_file"
+        if [[ -s "$source_file" ]]; then
+            sed -n '1,200p' "$source_file"
+            status=$?
+        else
+            echo "missingOrEmpty=$source_file"
+            status=1
+        fi
+    } >"$out" 2>&1
+    block_status=$?
+    set -e
+    if [[ "$block_status" -ne 0 ]]; then
+        status=1
+    fi
+    finish="$(date +%s)"
+    {
+        echo "command=file-snapshot $source_file"
+        echo "exitCode=$status"
+        echo "durationSeconds=$(( finish - start ))"
+    } >"$status_file"
+    return "$status"
+}
+
+require_writable_capture_targets() {
+    local name target
+    for name in "$@"; do
+        for target in "$EVIDENCE_DIR/$name.txt" "$EVIDENCE_DIR/$name.status"; do
+            if [[ -L "$target" || ( -e "$target" && ! -f "$target" ) ]]; then
+                echo "Post-approval capture requires regular capture path: $target" >&2
+                exit 73
+            fi
+            if [[ -e "$target" && ! -w "$target" ]]; then
+                echo "Post-approval capture requires writable capture path: $target" >&2
+                exit 73
+            fi
+        done
+    done
+    target="$OUTPUT_DIR/post-approval-capture.md"
+    if [[ -L "$target" || ( -e "$target" && ! -f "$target" ) ]]; then
+        echo "Post-approval capture requires regular capture path: $target" >&2
+        exit 73
+    fi
+    if [[ -e "$target" && ! -w "$target" ]]; then
+        echo "Post-approval capture requires writable capture path: $target" >&2
+        exit 73
+    fi
+}
+
+capture_post_approval_status() {
+    for required_path in \
+        "$MACOS_DIR/$APP_NAME" \
+        "$MACOS_DIR/$HELPER_NAME"
+    do
+        if [[ ! -x "$required_path" ]]; then
+            echo "Post-approval capture missing required executable artifact path: $required_path" >&2
+            exit 73
+        fi
+    done
+    for required_path in \
+        "$OUTPUT_DIR" \
+        "$EVIDENCE_DIR" \
+        "$RUNTIME_DIR"
+    do
+        if [[ -L "$required_path" ]]; then
+            echo "Post-approval capture requires a real artifact directory path, not a symlink: $required_path" >&2
+            exit 73
+        fi
+        if [[ ! -d "$required_path" ]]; then
+            echo "Post-approval capture missing required artifact directory path: $required_path" >&2
+            exit 73
+        fi
+        if [[ ! -w "$required_path" ]]; then
+            echo "Post-approval capture requires writable artifact directory path: $required_path" >&2
+            exit 73
+        fi
+    done
+    for required_path in \
+        "$CONFIG_FILE" \
+        "$MANIFEST_FILE"
+    do
+        if [[ ! -f "$required_path" ]]; then
+            echo "Post-approval capture missing required artifact file path: $required_path" >&2
+            exit 73
+        fi
+    done
+    if [[ ! -w "$CONFIG_FILE" ]]; then
+        echo "Post-approval capture requires writable validation config: $CONFIG_FILE" >&2
+        exit 73
+    fi
+    require_writable_capture_targets \
+        helper-status-after-approval \
+        launchctl-status \
+        log-evidence \
+        helper-bootstrap-after-approval
+
+    capture "helper-status-after-approval" "$MACOS_DIR/$APP_NAME" status || true
+    capture "launchctl-status" launchctl print "system/$HELPER_LABEL" || true
+    capture "log-evidence" log show --style syslog --last "${CLAWSHELL_SMAPP_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
+    capture_file_snapshot "helper-bootstrap-after-approval" "$RUNTIME_DIR/helper.log" || true
+
+    config_set_key "postApprovalCaptureAttempted" "true"
+
+    cat >"$OUTPUT_DIR/post-approval-capture.md" <<EOF
+# Post-Approval Capture
+
+This non-mutating capture appended status evidence to the existing helper
+prototype artifact.
+
+Captured files:
+
+- \`evidence/helper-status-after-approval.txt\`
+- \`evidence/launchctl-status.txt\`
+- \`evidence/helper-bootstrap-after-approval.txt\`
+- \`evidence/log-evidence.txt\`
+
+This command does not promote manifest rows automatically. Review the captured
+output, update the manifest and manual result deliberately, then run the
+verifier before attaching the artifact to #27.
+EOF
+
+    echo "Post-approval evidence appended to $OUTPUT_DIR"
+    echo "Run scripts/helper-service-prototype-verify.sh --manifest $MANIFEST_FILE to inspect remaining TODO rows."
 }
 
 xml_escape() {
@@ -473,6 +662,11 @@ write_launchdaemon_plist() {
 </plist>
 EOF
 }
+
+if [[ "$CAPTURE_POST_APPROVAL" == true ]]; then
+    capture_post_approval_status
+    exit 0
+fi
 
 write_package_manifest
 write_controller_source

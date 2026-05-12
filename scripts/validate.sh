@@ -2275,6 +2275,180 @@ if ! grep -q -- "--i-understand-this-registers-helper" "$bag_mode_smoke_error"; 
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
+helper_smappservice_capture_missing="$bag_mode_smoke_dir/helper-smappservice-capture-missing"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_missing" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness allowed post-approval capture without an existing artifact" >&2
+    exit 1
+fi
+if ! grep -q "existing artifact directory" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_capture_malformed="$bag_mode_smoke_dir/helper-smappservice-capture-malformed"
+mkdir -p "$helper_smappservice_capture_malformed"
+printf 'not a helper artifact\n' >"$helper_smappservice_capture_malformed/junk.txt"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_malformed" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness allowed post-approval capture on malformed artifact" >&2
+    exit 1
+fi
+if ! grep -q "missing required executable artifact path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+for unexpected_path in \
+    "$helper_smappservice_capture_malformed/ClawShellHelperPrototype.app" \
+    "$helper_smappservice_capture_malformed/evidence" \
+    "$helper_smappservice_capture_malformed/runtime" \
+    "$helper_smappservice_capture_malformed/source-package"
+do
+    if [[ -e "$unexpected_path" ]]; then
+        echo "SMAppService helper prototype post-approval capture mutated malformed artifact: $unexpected_path" >&2
+        exit 1
+    fi
+done
+helper_smappservice_capture_bad_evidence="$bag_mode_smoke_dir/helper-smappservice-capture-bad-evidence"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_bad_evidence"
+rm -rf "$helper_smappservice_capture_bad_evidence/evidence"
+printf 'not an evidence directory\n' >"$helper_smappservice_capture_bad_evidence/evidence"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_bad_evidence" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness allowed post-approval capture with evidence path as a file" >&2
+    exit 1
+fi
+if ! grep -q "required artifact directory path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if grep -q '^postApprovalCaptureAttempted=true$' "$helper_smappservice_capture_bad_evidence/validation-config.txt"; then
+    echo "SMAppService helper prototype post-approval capture mutated config after malformed evidence path" >&2
+    cat "$helper_smappservice_capture_bad_evidence/validation-config.txt" >&2
+    exit 1
+fi
+helper_smappservice_capture_symlink_evidence="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-evidence"
+helper_smappservice_capture_symlink_target="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-target"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_evidence"
+mkdir -p "$helper_smappservice_capture_symlink_target"
+rm -rf "$helper_smappservice_capture_symlink_evidence/evidence"
+ln -s "$helper_smappservice_capture_symlink_target" "$helper_smappservice_capture_symlink_evidence/evidence"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_evidence" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness allowed post-approval capture with symlinked evidence directory" >&2
+    exit 1
+fi
+if ! grep -q "not a symlink" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if find "$helper_smappservice_capture_symlink_target" -mindepth 1 -print -quit | grep -q .; then
+    echo "SMAppService helper prototype post-approval capture wrote through symlinked evidence directory" >&2
+    find "$helper_smappservice_capture_symlink_target" -mindepth 1 -maxdepth 2 -print >&2
+    exit 1
+fi
+if grep -q '^postApprovalCaptureAttempted=true$' "$helper_smappservice_capture_symlink_evidence/validation-config.txt"; then
+    echo "SMAppService helper prototype post-approval capture mutated config after symlinked evidence path" >&2
+    cat "$helper_smappservice_capture_symlink_evidence/validation-config.txt" >&2
+    exit 1
+fi
+helper_smappservice_capture_unwritable="$bag_mode_smoke_dir/helper-smappservice-capture-unwritable"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_unwritable"
+chmod a-w "$helper_smappservice_capture_unwritable/evidence"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_unwritable" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    chmod u+w "$helper_smappservice_capture_unwritable/evidence"
+    echo "SMAppService helper prototype harness allowed post-approval capture with unwritable evidence directory" >&2
+    exit 1
+fi
+chmod u+w "$helper_smappservice_capture_unwritable/evidence"
+if ! grep -q "requires writable artifact directory path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if grep -q '^postApprovalCaptureAttempted=true$' "$helper_smappservice_capture_unwritable/validation-config.txt"; then
+    echo "SMAppService helper prototype post-approval capture mutated config after unwritable evidence path" >&2
+    cat "$helper_smappservice_capture_unwritable/validation-config.txt" >&2
+    exit 1
+fi
+helper_smappservice_capture_readonly_file="$bag_mode_smoke_dir/helper-smappservice-capture-readonly-file"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_readonly_file"
+touch "$helper_smappservice_capture_readonly_file/evidence/helper-status-after-approval.txt"
+touch "$helper_smappservice_capture_readonly_file/evidence/helper-status-after-approval.status"
+chmod a-w "$helper_smappservice_capture_readonly_file/evidence/helper-status-after-approval.txt" \
+    "$helper_smappservice_capture_readonly_file/evidence/helper-status-after-approval.status"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_readonly_file" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    chmod u+w "$helper_smappservice_capture_readonly_file/evidence/helper-status-after-approval.txt" \
+        "$helper_smappservice_capture_readonly_file/evidence/helper-status-after-approval.status"
+    echo "SMAppService helper prototype harness allowed post-approval capture with read-only capture files" >&2
+    exit 1
+fi
+chmod u+w "$helper_smappservice_capture_readonly_file/evidence/helper-status-after-approval.txt" \
+    "$helper_smappservice_capture_readonly_file/evidence/helper-status-after-approval.status"
+if ! grep -q "requires writable capture path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if grep -q '^postApprovalCaptureAttempted=true$' "$helper_smappservice_capture_readonly_file/validation-config.txt"; then
+    echo "SMAppService helper prototype post-approval capture mutated config after read-only capture files" >&2
+    cat "$helper_smappservice_capture_readonly_file/validation-config.txt" >&2
+    exit 1
+fi
+helper_smappservice_capture_temp_symlink="$bag_mode_smoke_dir/helper-smappservice-capture-temp-symlink"
+helper_smappservice_capture_temp_victim="$bag_mode_smoke_dir/helper-smappservice-capture-temp-victim"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_temp_symlink"
+printf 'victim-before\n' >"$helper_smappservice_capture_temp_victim"
+ln -s "$helper_smappservice_capture_temp_victim" "$helper_smappservice_capture_temp_symlink/validation-config.txt.tmp"
+CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_temp_symlink" --capture-post-approval >/dev/null
+if [[ "$(cat "$helper_smappservice_capture_temp_victim")" != "victim-before" ]]; then
+    echo "SMAppService helper prototype post-approval capture followed validation-config temp symlink" >&2
+    cat "$helper_smappservice_capture_temp_victim" >&2
+    exit 1
+fi
+if [[ -L "$helper_smappservice_capture_temp_symlink/validation-config.txt" ]]; then
+    echo "SMAppService helper prototype post-approval capture replaced validation-config with a symlink" >&2
+    exit 1
+fi
+if ! grep -q '^postApprovalCaptureAttempted=true$' "$helper_smappservice_capture_temp_symlink/validation-config.txt"; then
+    echo "SMAppService helper prototype post-approval capture did not update config with temp symlink present" >&2
+    cat "$helper_smappservice_capture_temp_symlink/validation-config.txt" >&2
+    exit 1
+fi
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" --capture-post-approval --register --i-understand-this-registers-helper >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness allowed post-approval capture combined with register" >&2
+    exit 1
+fi
+if ! grep -q "cannot be combined" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" --capture-post-approval >/dev/null
+if ! grep -q '^postApprovalCaptureAttempted=true$' "$helper_smappservice_prepare/validation-config.txt"; then
+    echo "SMAppService helper prototype post-approval capture did not update validation config" >&2
+    cat "$helper_smappservice_prepare/validation-config.txt" >&2
+    exit 1
+fi
+for post_approval_capture in \
+    helper-status-after-approval \
+    launchctl-status \
+    helper-bootstrap-after-approval \
+    log-evidence
+do
+    if [[ ! -s "$helper_smappservice_prepare/evidence/$post_approval_capture.txt" ]]; then
+        echo "SMAppService helper prototype post-approval capture missing evidence: $post_approval_capture" >&2
+        exit 1
+    fi
+    if [[ ! -s "$helper_smappservice_prepare/evidence/$post_approval_capture.status" ]]; then
+        echo "SMAppService helper prototype post-approval capture missing status: $post_approval_capture" >&2
+        exit 1
+    fi
+done
+for unpromoted_capture_row in \
+    helper-status-after-approval \
+    helper-bootstrap-after-approval \
+    launchctl-status \
+    log-evidence
+do
+    if ! awk -F '\t' -v check_id="$unpromoted_capture_row" '$1 == check_id && $2 == "TODO" { found = 1 } END { exit !found }' "$helper_smappservice_prepare/prototype-manifest.tsv"; then
+        echo "SMAppService helper prototype post-approval capture should not auto-promote row: $unpromoted_capture_row" >&2
+        cat "$helper_smappservice_prepare/prototype-manifest.tsv" >&2
+        exit 1
+    fi
+done
 helper_smappservice_unregister_without_ack="$bag_mode_smoke_dir/helper-smappservice-unregister-without-ack"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_unregister_without_ack" --unregister >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype harness allowed unregister without acknowledgement" >&2

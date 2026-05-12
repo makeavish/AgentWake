@@ -136,6 +136,21 @@ row; registration, approved helper command API, and lifecycle rows remain
 `--register --i-understand-this-registers-helper`; that may require System
 Settings approval before the helper bootstraps.
 
+After macOS approval, append non-mutating status evidence to the same artifact
+directory rather than starting a fresh app bundle:
+
+```bash
+scripts/helper-service-smappservice-prototype.sh \
+  --output-dir .build/helper-service-prototype/<same-smappservice-register-artifact> \
+  --capture-post-approval
+```
+
+The append mode captures `SMAppService` status, `launchctl` state, helper
+runtime logs, and unified log output. It does not promote manifest rows
+automatically; review the captured output, update the manifest and manual
+result deliberately, then run the verifier before attaching the artifact to
+#27.
+
 The verifier expects three files at the manifest root:
 
 - `validation-config.txt`

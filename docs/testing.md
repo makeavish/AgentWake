@@ -252,6 +252,20 @@ dry-run command parser smoke output for `status`, `enableBagMode`,
 failure-case rows as `TODO`. Registration requires an explicit acknowledgement flag:
 `--register --i-understand-this-registers-helper`.
 
+After any required System Settings approval, append non-mutating status evidence
+to the same artifact directory:
+
+```sh
+scripts/helper-service-smappservice-prototype.sh \
+  --output-dir .build/helper-service-prototype/<same-smappservice-register-artifact> \
+  --capture-post-approval
+```
+
+The append mode captures controller status, `launchctl` state, helper runtime
+logs, and unified logs. It does not call `register()` or `unregister()`, and it
+does not promote manifest rows automatically; review the captured output before
+turning any `TODO` row into evidence.
+
 Use the non-mutating prototype scaffold when starting a new #27 evidence
 package:
 
