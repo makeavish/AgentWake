@@ -126,13 +126,27 @@ macos-13-intel	deferred		No Intel test host in scope for this run
 external-display	n/a		No external display physically available
 ```
 
+Use the matrix scaffold when starting a new local matrix package:
+
+```sh
+scripts/bag-mode-primitive-matrix-scaffold.sh \
+  --output-dir .build/power-validation/bag-mode-matrix-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+The scaffold intentionally contains `TODO` manifest rows and should fail the
+verifier until the rows are replaced with evidence, concrete N/A reasons, or
+concrete deferrals.
+
 Before attaching a matrix evidence root, run:
 
 ```sh
 scripts/bag-mode-primitive-matrix-verify.sh --manifest .build/power-validation/bag-mode-matrix/matrix-manifest.tsv
 ```
 
-This checks manifest and evidence completeness only. It does not prove the primitive is reliable. After the matrix is attached to #29, update the readiness docs with the pass/fail/inconclusive result before production Bag Mode implementation begins.
+This checks manifest and evidence completeness only. The verifier also rejects
+manifests with no evidence rows. It does not prove the primitive is reliable.
+After the matrix is attached to #29, update the readiness docs with the
+pass/fail/inconclusive result before production Bag Mode implementation begins.
 
 ## Temperature Provider Harness
 

@@ -321,6 +321,39 @@ macos-13-intel-deferred	deferred		Intel support not in current local hardware sc
 external-display-na	n/a		No external display physically available in this smoke
 EOF
 scripts/bag-mode-primitive-matrix-verify.sh --manifest "$bag_mode_smoke_dir/matrix/matrix-manifest.tsv" >/dev/null
+cat >"$bag_mode_smoke_dir/matrix/all-deferred-manifest.tsv" <<'EOF'
+caseId	status	evidenceDir	naReason
+macos-13-intel	deferred		No Intel host available for this smoke
+external-display	n/a		No external display physically available in this smoke
+EOF
+if scripts/bag-mode-primitive-matrix-verify.sh --manifest "$bag_mode_smoke_dir/matrix/all-deferred-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Bag Mode primitive matrix verifier accepted a manifest with no evidence rows" >&2
+    exit 1
+fi
+if ! grep -q "at least one evidence row" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+bag_mode_matrix_scaffold="$bag_mode_smoke_dir/matrix-scaffold"
+scripts/bag-mode-primitive-matrix-scaffold.sh --output-dir "$bag_mode_matrix_scaffold" >/dev/null
+for required_file in matrix-manifest.tsv README.md scaffold-config.txt; do
+    if [[ ! -f "$bag_mode_matrix_scaffold/$required_file" ]]; then
+        echo "Bag Mode primitive matrix scaffold did not write expected file: $required_file" >&2
+        exit 1
+    fi
+done
+if ! grep -q '^scaffoldFormat=bag-mode-primitive-matrix-scaffold-v1$' "$bag_mode_matrix_scaffold/scaffold-config.txt"; then
+    echo "Bag Mode primitive matrix scaffold did not record expected scaffold format" >&2
+    exit 1
+fi
+if scripts/bag-mode-primitive-matrix-verify.sh --manifest "$bag_mode_matrix_scaffold/matrix-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Bag Mode primitive matrix verifier accepted the TODO scaffold manifest" >&2
+    exit 1
+fi
+if ! grep -q "status must be evidence, n/a, or deferred" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
 bag_mode_matrix_test_only="$bag_mode_smoke_dir/matrix-test-only"
 cp -R "$bag_mode_matrix_case" "$bag_mode_matrix_test_only"
 sed -i '' 's/^testOnly=false$/testOnly=true/' "$bag_mode_matrix_test_only/validation-config.txt"

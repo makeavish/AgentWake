@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+if [[ -z "${BASH_VERSION:-}" ]]; then
+    echo "This script requires bash. Run it as: bash scripts/bag-mode-primitive-matrix-verify.sh ..." >&2
+    exit 2
+fi
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -383,8 +387,9 @@ verify_manifest() {
     fi
 
     local row_count=0
+    local evidence_count=0
     local line_number=1
-    local line field_count case_id status evidence_dir na_reason
+    local line field_count case_id row_status evidence_dir na_reason
     while IFS= read -r line || [[ -n "${line:-}" ]]; do
         line_number=$((line_number + 1))
         [[ -z "${line:-}" ]] && continue
@@ -396,7 +401,7 @@ verify_manifest() {
             continue
         fi
         case_id="$(awk -F '\t' '{ print $1 }' <<<"$line")"
-        status="$(awk -F '\t' '{ print $2 }' <<<"$line")"
+        row_status="$(awk -F '\t' '{ print $2 }' <<<"$line")"
         evidence_dir="$(awk -F '\t' '{ print $3 }' <<<"$line")"
         na_reason="$(awk -F '\t' '{ print $4 }' <<<"$line")"
 
@@ -405,8 +410,9 @@ verify_manifest() {
             continue
         fi
 
-        case "$status" in
+        case "$row_status" in
             evidence)
+                evidence_count=$((evidence_count + 1))
                 if is_unfilled_value "${evidence_dir:-}"; then
                     record_error "$case_id" "evidence row requires evidenceDir"
                     continue
@@ -419,7 +425,7 @@ verify_manifest() {
                 ;;
             n/a|deferred)
                 if is_unfilled_value "${na_reason:-}"; then
-                    record_error "$case_id" "$status row requires an explicit naReason"
+                    record_error "$case_id" "$row_status row requires an explicit naReason"
                 fi
                 ;;
             *)
@@ -430,6 +436,9 @@ verify_manifest() {
 
     if [[ "$row_count" -eq 0 ]]; then
         record_error "manifest" "manifest has no matrix rows"
+    fi
+    if [[ "$evidence_count" -eq 0 ]]; then
+        record_error "manifest" "manifest must include at least one evidence row"
     fi
 }
 
