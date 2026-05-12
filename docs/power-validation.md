@@ -24,7 +24,7 @@ Run the timed idle harness when the machine is on the target power source and th
 bash scripts/timed-idle-validation.sh
 ```
 
-By default, this holds the normal assertion for 90 seconds and captures `before`, `during-early`, `during-late`, and `after` snapshots. The harness does not change `pmset` settings. It records the active power source, the active profile's `sleep` threshold, whether the late snapshot exceeded that threshold, and any non-ClawShell sleep-preventing assertions in `validation-config.txt` and `non-clawshell-late-sleep-blockers.txt`. Treat a run as conclusive only when `validation-config.txt` contains `conclusive=true`.
+By default, this holds the normal assertion for 90 seconds and captures `before`, `during-early`, `during-late`, and `after` snapshots. The harness does not change `pmset` settings. It records the active power source, the active profile's `sleep` threshold, whether the late snapshot exceeded that threshold, any non-ClawShell sleep-preventing assertions in `validation-config.txt` and `non-clawshell-late-sleep-blockers.txt`, and cleanup hints in `non-clawshell-late-sleep-blocker-guidance.txt`. Treat a run as conclusive only when `validation-config.txt` contains `conclusive=true`.
 
 Before attempting a clean timed-idle run, use the preflight helper from a normal terminal to check whether the active power profile can exceed the sleep threshold and whether unrelated sleep blockers are already present:
 
@@ -32,7 +32,7 @@ Before attempting a clean timed-idle run, use the preflight helper from a normal
 scripts/timed-idle-preflight.sh
 ```
 
-Preflight is advisory and does not hold assertions or create validation evidence. It exits successfully only when the active `sleep` threshold is lower than the configured late snapshot offset and no non-ClawShell sleep blockers are visible in `pmset -g assertions`.
+Preflight is advisory and does not hold assertions or create validation evidence. It exits successfully only when the active `sleep` threshold is lower than the configured late snapshot offset and no non-ClawShell sleep blockers are visible in `pmset -g assertions`. When blockers are present, it prints suggested cleanup for common cases such as WindowServer `UserIsActive`, powerd display-on, sharingd Handoff, Slack/WebRTC, coreaudiod audio activity, Codex/Electron, and generic app assertions. Treat system daemons as symptoms: clear the owning activity instead of killing WindowServer, powerd, sharingd, or coreaudiod.
 
 ## Manual Result Matrix
 
