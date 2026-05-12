@@ -126,7 +126,18 @@ The provider proof must choose a fresh, permission-compatible temperature source
 
 Current artifact: [Temperature Provider Check](temperature-provider-check.md).
 
-The May 12, 2026 non-root source check did not select a production provider. `ProcessInfo.thermalState` remains a supplemental coarse signal, `powermetrics` requires elevated privileges, and AppleSmartBattery temperature did not prove closed-bag coverage or freshness. Helper-side provider validation is tracked in [#25](https://github.com/makeavish/ClawShell/issues/25).
+The May 12, 2026 non-root source check did not select a production provider. `ProcessInfo.thermalState` remains a supplemental coarse signal, `powermetrics` requires elevated privileges, and AppleSmartBattery temperature did not prove closed-bag coverage or freshness. The helper-equivalent preflight confirms `powermetrics` is installed on this Apple Silicon MacBook, but non-interactive sampling from this shell is blocked by sudo authorization. Helper-side provider validation is tracked in [#25](https://github.com/makeavish/ClawShell/issues/25).
+
+Before attempting helper/root sampling, run the non-mutating preflight:
+
+```sh
+scripts/temperature-provider-helper-readiness.sh \
+  --output-dir .build/temperature-provider-helper-readiness/<case-id>
+```
+
+The preflight records whether helper-equivalent `powermetrics` sampling can run
+without a user-visible prompt. It does not prove provider freshness, cadence,
+closed-bag coverage, fail-closed behavior, or reliability.
 
 The mocked fail-closed safety contract is covered in `BagModeSafetyPolicy` and `ClawShellCoreChecks`: warning, cutoff, stale, unavailable, permission-denied, parse-failed, helper-crashed, unsupported-hardware, timeout, insufficient closed-bag coverage, missing/invalid battery, battery floor, and hysteresis transitions are executable checks. This does not select or validate the signed-helper temperature provider.
 

@@ -6,7 +6,9 @@ Issue: [#7](https://github.com/makeavish/ClawShell/issues/7)
 
 Follow-up: [#25](https://github.com/makeavish/ClawShell/issues/25)
 
-Local artifact: `.build/temperature-provider-validation/local-20260512T023358Z`
+App-side artifact: `.build/temperature-provider-validation/local-20260512T023358Z`
+
+Helper-equivalent preflight artifact: `.build/temperature-provider-helper-readiness/current-20260512T062706Z`
 
 ## Question
 
@@ -76,11 +78,46 @@ The harness records these as evidence fields but does not enable production beha
 
 The mocked fail-closed contract is now executable in `BagModeSafetyPolicy` and covered by the portable `ClawShellCoreChecks` gate. Those checks cover warning, cutoff, stale, unavailable, permission-denied, parse-failed, helper-crashed, unsupported-hardware, timeout, coverage-insufficient, missing/invalid battery, battery floor, and hysteresis behavior. They do not select a production provider or prove helper-side sampling.
 
+## Helper-Equivalent Readiness
+
+Added `scripts/temperature-provider-helper-readiness.sh`, a non-mutating
+preflight for the helper/root sampling path. It never prompts for sudo. When
+the current user is not root, it uses `sudo -n` only so missing authorization is
+recorded as evidence instead of blocking the run.
+
+Command used:
+
+```bash
+scripts/temperature-provider-helper-readiness.sh --output-dir .build/temperature-provider-helper-readiness/current-20260512T062706Z
+```
+
+Captured values from `validation-config.txt`:
+
+```text
+hardwareArch=arm64
+runningAsRoot=false
+effectiveUserIdRedacted=true
+batteryPresent=true
+powermetricsAvailable=true
+sudoNonInteractiveAvailable=false
+powermetricsHelperPermissionState=sudoPasswordRequired
+powermetricsHelperTimedOut=false
+powermetricsHelperExitCode=1
+numericTemperatureOutput=false
+helperSamplingCandidateAvailable=false
+providerProofReady=false
+```
+
+This narrows the current local blocker: `powermetrics` exists on this Apple
+Silicon MacBook, but this shell cannot run helper-equivalent sampling without a
+user-visible authorization path. The preflight does not prove freshness,
+cadence, closed-bag coverage, fail-closed behavior, or provider reliability.
+
 ## Conclusion
 
 No production Bag Mode temperature provider is selected from the non-root app-side sources tested.
 
-`ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. `powermetrics` was not validated as a provider in this artifact; [#25](https://github.com/makeavish/ClawShell/issues/25) must prove helper/root output, freshness, cadence, timeout, and coverage.
+`ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. `powermetrics` is installed, but this shell cannot run it through a non-interactive helper-equivalent path; [#25](https://github.com/makeavish/ClawShell/issues/25) must still prove helper/root output, freshness, cadence, timeout, and coverage.
 
 Production Bag Mode remains blocked until [#25](https://github.com/makeavish/ClawShell/issues/25) validates a signed-helper or equivalent provider that can supply fresh, permission-compatible thermal evidence with the required fail-closed behavior.
 

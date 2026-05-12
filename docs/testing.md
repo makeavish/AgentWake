@@ -139,6 +139,19 @@ scripts/temperature-provider-validation.sh --output-dir .build/temperature-provi
 
 The harness writes `validation-config.txt`, command outputs, command status files, and `summary.md`. It never uses sudo and must not mark `bagModeTemperatureProviderReady=true`; production provider readiness requires the signed-helper follow-up.
 
+Use the helper-equivalent preflight before attempting root/helper
+`powermetrics` sampling:
+
+```sh
+scripts/temperature-provider-helper-readiness.sh --output-dir .build/temperature-provider-helper-readiness/local-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+This preflight is non-mutating and never prompts for sudo; it uses `sudo -n`
+only to classify whether helper-equivalent sampling is available without a
+user-visible authorization path. It must always record
+`providerProofReady=false` because it does not prove freshness, cadence,
+closed-bag coverage, fail-closed behavior, or provider reliability.
+
 Thermal cutoff and fail-closed behavior are tested with mocked provider inputs through `BagModeSafetyPolicy`. These tests cover warning, cutoff, stale, unavailable, permission-denied, parse-failed, helper-crashed, unsupported-hardware, timeout, coverage-insufficient, missing/invalid battery, battery floor, and hysteresis transitions without intentionally heating hardware.
 
 Use the helper provider proof verifier before attaching #25 evidence:

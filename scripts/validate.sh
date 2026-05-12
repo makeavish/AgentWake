@@ -490,6 +490,204 @@ if ! grep -q '^batteryFreshWithin10Seconds=true$' "$temperature_fake_dir/validat
     exit 1
 fi
 
+echo "==> temperature helper readiness harness smoke"
+temperature_helper_readiness_dir="$bag_mode_smoke_dir/temperature-helper-readiness"
+scripts/temperature-provider-helper-readiness.sh --output-dir "$temperature_helper_readiness_dir" >/dev/null
+for required_file in \
+    sudo-noninteractive.txt \
+    sudo-noninteractive.status \
+    pmset-battery.txt \
+    pmset-battery.status \
+    powermetrics-helper-sample.txt \
+    powermetrics-helper-sample.status \
+    validation-config.txt \
+    summary.md
+do
+    if [[ ! -f "$temperature_helper_readiness_dir/$required_file" ]]; then
+        echo "Temperature helper readiness harness did not write expected file: $required_file" >&2
+        exit 1
+    fi
+done
+if ! grep -q '^metadataRedacted=true$' "$temperature_helper_readiness_dir/validation-config.txt"; then
+    echo "Temperature helper readiness harness did not record redacted metadata mode" >&2
+    exit 1
+fi
+if ! grep -q '^providerProofReady=false$' "$temperature_helper_readiness_dir/validation-config.txt"; then
+    echo "Temperature helper readiness harness overclaimed provider proof readiness" >&2
+    exit 1
+fi
+
+temperature_helper_file_output="$bag_mode_smoke_dir/temperature-helper-output-file"
+touch "$temperature_helper_file_output"
+if scripts/temperature-provider-helper-readiness.sh --output-dir "$temperature_helper_file_output" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature helper readiness harness accepted an output path that is not a directory" >&2
+    exit 1
+fi
+if ! grep -q 'not a directory' "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_helper_non_empty_dir="$bag_mode_smoke_dir/temperature-helper-non-empty"
+mkdir -p "$temperature_helper_non_empty_dir"
+touch "$temperature_helper_non_empty_dir/existing"
+if scripts/temperature-provider-helper-readiness.sh --output-dir "$temperature_helper_non_empty_dir" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature helper readiness harness overwrote a non-empty evidence directory" >&2
+    exit 1
+fi
+if ! grep -q 'Output directory is not empty' "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
+temperature_helper_bad_env_dir="$bag_mode_smoke_dir/temperature-helper-bad-env"
+if CLAWSHELL_TEMPERATURE_HELPER_READINESS_TIMEOUT_SECONDS=abc \
+    scripts/temperature-provider-helper-readiness.sh --output-dir "$temperature_helper_bad_env_dir" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Temperature helper readiness harness accepted an invalid timeout value" >&2
+    exit 1
+fi
+if [[ -e "$temperature_helper_bad_env_dir" ]]; then
+    echo "Temperature helper readiness harness created evidence for an invalid timeout value" >&2
+    exit 1
+fi
+
+temperature_helper_timeout_bin="$bag_mode_smoke_dir/temperature-helper-timeout-fakes"
+mkdir -p "$temperature_helper_timeout_bin"
+cat >"$temperature_helper_timeout_bin/pmset" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == "-g batt" ]]; then
+    echo "Now drawing from 'Battery Power'"
+    exit 0
+fi
+exit 1
+EOF
+cat >"$temperature_helper_timeout_bin/powermetrics" <<'EOF'
+#!/usr/bin/env bash
+sleep 10
+EOF
+cat >"$temperature_helper_timeout_bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" != "-n" ]]; then
+    echo "sudo: refusing promptable invocation" >&2
+    exit 99
+fi
+shift
+if [[ "${1:-}" == "true" ]]; then
+    exit 0
+fi
+"$@"
+EOF
+chmod +x "$temperature_helper_timeout_bin/pmset" "$temperature_helper_timeout_bin/powermetrics" "$temperature_helper_timeout_bin/sudo"
+temperature_helper_timeout_dir="$bag_mode_smoke_dir/temperature-helper-timeout"
+CLAWSHELL_TEMPERATURE_HELPER_READINESS_TIMEOUT_SECONDS=1 \
+PATH="$temperature_helper_timeout_bin:$PATH" \
+    scripts/temperature-provider-helper-readiness.sh --output-dir "$temperature_helper_timeout_dir" >/dev/null
+if ! grep -q '^timedOut=true$' "$temperature_helper_timeout_dir/powermetrics-helper-sample.status"; then
+    echo "Temperature helper readiness harness did not record timeout for hanging powermetrics command" >&2
+    cat "$temperature_helper_timeout_dir/powermetrics-helper-sample.status" >&2
+    exit 1
+fi
+if ! grep -q '^powermetricsHelperPermissionState=timedOut$' "$temperature_helper_timeout_dir/validation-config.txt"; then
+    echo "Temperature helper readiness harness did not classify timed-out powermetrics sampling" >&2
+    cat "$temperature_helper_timeout_dir/validation-config.txt" >&2
+    exit 1
+fi
+
+temperature_helper_fake_bin="$bag_mode_smoke_dir/temperature-helper-fakes"
+mkdir -p "$temperature_helper_fake_bin"
+cat >"$temperature_helper_fake_bin/pmset" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == "-g batt" ]]; then
+    echo "Now drawing from 'Battery Power'"
+    echo " -InternalBattery-0 (id=1234567)"
+    exit 0
+fi
+exit 1
+EOF
+cat >"$temperature_helper_fake_bin/powermetrics" <<'EOF'
+#!/usr/bin/env bash
+echo "CPU die temperature: 42 C"
+EOF
+cat >"$temperature_helper_fake_bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" != "-n" ]]; then
+    echo "sudo: refusing promptable invocation" >&2
+    exit 99
+fi
+shift
+echo "sudo: a password is required" >&2
+exit 1
+EOF
+chmod +x "$temperature_helper_fake_bin/pmset" "$temperature_helper_fake_bin/powermetrics" "$temperature_helper_fake_bin/sudo"
+
+temperature_helper_password_dir="$bag_mode_smoke_dir/temperature-helper-password-required"
+CLAWSHELL_TEMPERATURE_HELPER_READINESS_TIMEOUT_SECONDS=5 \
+PATH="$temperature_helper_fake_bin:$PATH" \
+    scripts/temperature-provider-helper-readiness.sh --output-dir "$temperature_helper_password_dir" >/dev/null
+if ! grep -q '^sudoNonInteractiveAvailable=false$' "$temperature_helper_password_dir/validation-config.txt"; then
+    echo "Temperature helper readiness harness did not record unavailable non-interactive sudo" >&2
+    exit 1
+fi
+if ! grep -q '^powermetricsHelperPermissionState=sudoPasswordRequired$' "$temperature_helper_password_dir/validation-config.txt"; then
+    echo "Temperature helper readiness harness did not classify sudo password requirement" >&2
+    cat "$temperature_helper_password_dir/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^helperSamplingCandidateAvailable=false$' "$temperature_helper_password_dir/validation-config.txt"; then
+    echo "Temperature helper readiness harness accepted password-gated sampling as candidate-ready" >&2
+    exit 1
+fi
+if grep -Eq 'id=[0-9]' "$temperature_helper_password_dir/pmset-battery.txt"; then
+    echo "Temperature helper readiness harness left raw battery identifier in pmset output" >&2
+    cat "$temperature_helper_password_dir/pmset-battery.txt" >&2
+    exit 1
+fi
+if ! grep -q 'id=<redacted>' "$temperature_helper_password_dir/pmset-battery.txt"; then
+    echo "Temperature helper readiness harness did not preserve redacted battery identifier marker" >&2
+    cat "$temperature_helper_password_dir/pmset-battery.txt" >&2
+    exit 1
+fi
+
+cat >"$temperature_helper_fake_bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" != "-n" ]]; then
+    echo "sudo: refusing promptable invocation" >&2
+    exit 99
+fi
+shift
+if [[ "${1:-}" == "true" ]]; then
+    exit 0
+fi
+"$@"
+EOF
+chmod +x "$temperature_helper_fake_bin/sudo"
+
+temperature_helper_available_dir="$bag_mode_smoke_dir/temperature-helper-available"
+CLAWSHELL_TEMPERATURE_HELPER_READINESS_TIMEOUT_SECONDS=5 \
+PATH="$temperature_helper_fake_bin:$PATH" \
+    scripts/temperature-provider-helper-readiness.sh --output-dir "$temperature_helper_available_dir" >/dev/null
+if ! grep -q '^sudoNonInteractiveAvailable=true$' "$temperature_helper_available_dir/validation-config.txt"; then
+    echo "Temperature helper readiness harness did not record available non-interactive sudo" >&2
+    exit 1
+fi
+if ! grep -q '^powermetricsHelperPermissionState=availableWithPasswordlessSudo$' "$temperature_helper_available_dir/validation-config.txt"; then
+    echo "Temperature helper readiness harness did not classify passwordless helper-equivalent sampling" >&2
+    cat "$temperature_helper_available_dir/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^numericTemperatureOutput=true$' "$temperature_helper_available_dir/validation-config.txt"; then
+    echo "Temperature helper readiness harness did not detect fake numeric output" >&2
+    exit 1
+fi
+if ! grep -q '^helperSamplingCandidateAvailable=true$' "$temperature_helper_available_dir/validation-config.txt"; then
+    echo "Temperature helper readiness harness did not mark fake helper sampling as candidate-ready" >&2
+    exit 1
+fi
+if ! grep -q '^providerProofReady=false$' "$temperature_helper_available_dir/validation-config.txt"; then
+    echo "Temperature helper readiness harness overclaimed full provider proof for fake sampling" >&2
+    exit 1
+fi
+
 echo "==> temperature provider proof verifier smoke"
 temperature_proof_dir="$bag_mode_smoke_dir/temperature-proof"
 temperature_proof_manifest="$temperature_proof_dir/provider-manifest.tsv"
