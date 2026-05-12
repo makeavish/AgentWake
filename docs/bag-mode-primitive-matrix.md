@@ -68,7 +68,7 @@ caseId	status	evidenceDir	naReason
 
 Use `status=evidence` for rows with a completed evidence directory, `status=n/a` for physically unavailable rows, and `status=deferred` for helper-dependent rows blocked on #27. `n/a` and `deferred` rows must include a concrete reason in `naReason`.
 
-The verifier fails missing files, baseline-only captures, test-only fake-`pmset` captures, placeholder manual fields, placeholder snapshot output, missing reboot state, missing IORegistry snapshots, incomplete snapshot directories, placeholder N/A/deferred reasons, and manifests with no evidence rows. Passing the verifier only means the manifest and evidence package are structurally complete; it does not mean the primitive passed the hardware matrix.
+The verifier fails missing files, baseline-only captures, test-only fake-`pmset` captures, placeholder manual fields, placeholder snapshot output, unredacted snapshot metadata, missing reboot state, missing IORegistry snapshots, incomplete snapshot directories, placeholder N/A/deferred reasons, and manifests with no evidence rows. Passing the verifier only means the manifest and evidence package are structurally complete; it does not mean the primitive passed the hardware matrix.
 
 ## Conclusion
 

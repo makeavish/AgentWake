@@ -191,6 +191,23 @@ require_command_output_file() {
     fi
 }
 
+require_redacted_metadata_file() {
+    local case_name="$1"
+    local file="$2"
+    require_file "$case_name" "$file"
+    [[ -f "$file" ]] || return
+
+    local host_count user_count
+    host_count="$(grep -c '^host=' "$file" || true)"
+    user_count="$(grep -c '^user=' "$file" || true)"
+
+    if [[ "$host_count" != "1" || "$user_count" != "1" ]] ||
+       ! grep -qx 'host=<redacted>' "$file" ||
+       ! grep -qx 'user=<redacted>' "$file"; then
+        record_error "$case_name" "snapshot metadata must include redacted host/user markers: ${file}"
+    fi
+}
+
 require_snapshot() {
     local case_name="$1"
     local dir="$2"
@@ -199,7 +216,7 @@ require_snapshot() {
         return
     fi
 
-    require_file "$case_name" "$dir/metadata.txt"
+    require_redacted_metadata_file "$case_name" "$dir/metadata.txt"
     for file in pmset-custom.txt pmset-assertions.txt ioreg-power.txt; do
         require_command_output_file "$case_name" "$dir/$file"
     done

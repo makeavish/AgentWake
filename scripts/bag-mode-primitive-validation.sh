@@ -266,7 +266,7 @@ if [[ ! -f "$OUTPUT_DIR/manual-result.md" || "$CONTINUE_OUTPUT" != "1" ]]; then
 - \`during-applied/\`: captured while the candidate primitive is applied
 - \`after-lid-window/\`: captured after the manual lid-close/reopen window
 - \`after-rollback/\`: captured after rollback
-- Optional \`post-reboot/\`: capture with \`scripts/pmset-snapshot.sh <this-dir>/post-reboot\`
+- Optional \`post-reboot/\`: capture with \`CLAWSHELL_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh <this-dir>/post-reboot\`
 
 ## Manual Observations
 - Lid-close sleep blocked: yes | no | inconclusive

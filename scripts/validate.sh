@@ -599,6 +599,38 @@ if ! grep -q "rollbackCommand must restore previousDisablesleep" "$bag_mode_smok
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
+bag_mode_matrix_unredacted_metadata="$bag_mode_smoke_dir/matrix-unredacted-metadata"
+cp -R "$bag_mode_matrix_case" "$bag_mode_matrix_unredacted_metadata"
+cat >"$bag_mode_matrix_unredacted_metadata/before/metadata.txt" <<'EOF'
+capturedAtUTC=2026-05-12T00:00:00Z
+host=local-hostname
+user=local-user
+EOF
+if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_unredacted_metadata" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Bag Mode primitive matrix verifier accepted unredacted snapshot metadata" >&2
+    exit 1
+fi
+if ! grep -q "redacted host/user" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+bag_mode_matrix_mixed_metadata="$bag_mode_smoke_dir/matrix-mixed-metadata"
+cp -R "$bag_mode_matrix_case" "$bag_mode_matrix_mixed_metadata"
+cat >"$bag_mode_matrix_mixed_metadata/before/metadata.txt" <<'EOF'
+capturedAtUTC=2026-05-12T00:00:00Z
+host=local-hostname
+host=<redacted>
+user=<redacted>
+user=local-user
+EOF
+if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_mixed_metadata" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Bag Mode primitive matrix verifier accepted mixed redacted and unredacted snapshot metadata" >&2
+    exit 1
+fi
+if ! grep -q "redacted host/user" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
 bag_mode_matrix_bad_manual_rollback="$bag_mode_smoke_dir/matrix-bad-manual-rollback"
 cp -R "$bag_mode_matrix_case" "$bag_mode_matrix_bad_manual_rollback"
 sed -i '' 's/^previousDisablesleep=0$/previousDisablesleep=1/' "$bag_mode_matrix_bad_manual_rollback/validation-config.txt"
