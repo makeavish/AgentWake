@@ -1,6 +1,6 @@
 # Bag Mode Primitive Matrix
 
-Check date: May 12, 2026
+Check date: May 13, 2026
 
 Issue: [#7](https://github.com/makeavish/ClawShell/issues/7)
 
@@ -8,7 +8,7 @@ Follow-up: [#29](https://github.com/makeavish/ClawShell/issues/29)
 
 Harness artifact: [PR #22](https://github.com/makeavish/ClawShell/pull/22)
 
-Latest local baseline-only artifact: `.build/power-validation/bag-mode-baseline-20260512T104304Z`
+Latest local apply artifact: `.build/power-validation/bag-mode-matrix/apple-silicon-ac-internal-20260513T115058Z`
 
 ## Question
 
@@ -29,20 +29,37 @@ PR #22 added `scripts/bag-mode-primitive-validation.sh`, a dedicated harness for
 
 This proves the evidence workflow exists. It does not prove the primitive is reliable.
 
-The latest local baseline-only artifact records `mode=baseline-only`,
-`testOnly=false`, `candidateCommand=/usr/bin/pmset disablesleep 1`, and
-redacted metadata. It is a starting point for a later mutating run with
-`--apply --continue`; it is not pass/fail matrix evidence for #29.
+The latest local apply artifact records an Apple Silicon, AC, internal-display,
+normal lifecycle run on macOS 26.5:
+
+```text
+artifact=.build/power-validation/bag-mode-matrix/apple-silicon-ac-internal-20260513T115058Z
+mode=apply
+testOnly=false
+rebootHeld=0
+candidateCommand=/usr/bin/pmset disablesleep 1
+previousDisablesleep=0
+rollbackCommand=/usr/bin/pmset disablesleep 0
+```
+
+The artifact contains `before/`, `during-applied/`, `after-lid-window/`, and
+`after-rollback/` snapshots. The `during-applied` and `after-lid-window`
+`pmset -g live` snapshots both showed `SleepDisabled 1`, and rollback restored
+the prior value `0`. The operator reported the physical lid-close sleep-block
+result as `inconclusive` and reopen recovery as `yes`; the verifier passed for
+this single case. Treat this as verified inconclusive matrix evidence for the
+AC/internal/reopen-recovery case, not as a primitive pass.
 
 ## Missing Evidence
 
-No pass/fail matrix is recorded yet for the primitive-only cases available before the validated helper prototype:
+Only one primitive-only case has verified evidence so far, and that case is
+inconclusive. Missing matrix coverage still includes:
 
 - macOS 13, 14, and 15+ where available
 - Apple Silicon, and Intel if Intel support remains in scope
-- AC and battery
-- internal-only, external display, and no-external-display cases where physically available
-- open, closed, and reopen recovery behavior
+- battery
+- external display and no-external-display cases where physically available
+- open and closed lid paths beyond the current inconclusive reopen-recovery run
 - app quit, app crash, and reboot while held lifecycle cases
 
 Helper-dependent cases, such as helper restart and helper upgrade mid-hold, are deferred until #27 produces a validated no-membership helper prototype. Until then, each helper-only lifecycle row must be marked `N/A` or `deferred until #27` in `manual-result.md`.
@@ -79,4 +96,7 @@ The verifier fails missing files, baseline-only captures, test-only fake-`pmset`
 
 ## Conclusion
 
-The primitive remains unproven. Production Bag Mode must stay blocked until [#29](https://github.com/makeavish/ClawShell/issues/29) records the real hardware matrix or the TDD switches to a different proven primitive.
+The primitive remains unproven. The first real Apple Silicon AC/internal apply
+case is structurally verified but inconclusive. Production Bag Mode must stay
+blocked until [#29](https://github.com/makeavish/ClawShell/issues/29) records a
+reliable hardware matrix or the TDD switches to a different proven primitive.
