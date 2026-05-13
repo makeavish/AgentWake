@@ -89,7 +89,7 @@ dry-run dispatch evidence for `status`, `enableBagMode`, `disableBagMode`,
 `repair`, and `uninstall`; each recorded root execution and unregistered cleanly
 after a post-approval wait of at least 15 seconds where applicable. #7 still cannot
 claim the helper path is complete: #27 still needs admin-approval/password-flow
-evidence, root-ledger schema/ownership promotion, reboot, update, production
+evidence, reboot, update, production restore conflict behavior, production
 repair/uninstall behavior, CLI, failure-case, and helper-owned Bag Mode state
 cleanup evidence before production Bag Mode can depend on it.
 
@@ -118,7 +118,7 @@ Follow-up [#27](https://github.com/makeavish/ClawShell/issues/27) must produce n
 - update behavior from helper generation N to N+1
 - uninstall behavior via `unregister()` or fallback `launchctl bootout` plus helper-owned Bag Mode cleanup
 - fixed command API evidence for `status`, `enableBagMode`, `disableBagMode`, `repair`, and `uninstall`
-- root-owned ledger schema, file ownership/mode, sample owner token/generation/boot state, restore conflict behavior, and repair output
+- reviewed dry-run ledger schema, file ownership/mode, and sample owner token/generation/boot state; production restore conflict behavior and repair output remain open
 - CLI evidence for `clawshell helper status`, `clawshell helper repair`, and `clawshell uninstall --remove-helper --remove-integrations`
 - failure cases for unpaired caller, wrong bundle id, wrong label/plist path, wrong user, stale app version, denied approval, and revoked approval
 - Homebrew cask behavior if the prototype is exercised through `brew install --cask`, `brew upgrade --cask`, or `brew uninstall --cask`; otherwise track cask semantics separately from the helper prototype
@@ -236,10 +236,12 @@ the observed `requiresApproval`/`enabled`/`notRegistered` state transitions,
 root runtime behavior, and ServiceManagement cleanup. Treat this as successful
 local bootstrap and unregister evidence, not a complete #27 proof: the status,
 launchctl, stdout-log, and unified-log captures cover the local post-approval
-bootstrap boundary, while the verifier still fails until the remaining
-admin-approval/password-flow, root-ledger schema/ownership, reboot, update,
-production repair/uninstall behavior, CLI helper command, failure case, and
-helper-owned Bag Mode state cleanup rows are completed and reviewed.
+bootstrap boundary, and the mirrored ledger sample plus root-owned `0600` file
+evidence cover the dry-run root-ledger schema/ownership boundary. The verifier
+still fails until the remaining admin-approval/password-flow, reboot, update,
+production restore conflict behavior, production repair/uninstall behavior, CLI
+helper command, failure case, and helper-owned Bag Mode state cleanup rows are
+completed and reviewed.
 
 The first command-specific follow-up artifact exercised an approved
 non-`status` helper command:
@@ -328,8 +330,24 @@ log-evidence: exitCode=0, backgroundtaskmanagementd/ServiceManagement records fo
 ```
 
 `runtime/helper.log` and `runtime/helper-ledger.jsonl` are root-owned and not
-readable to the normal user in this artifact, so root-ledger schema/ownership
-promotion remains a separate #27 row.
+readable to the normal user in this artifact. The reviewable schema sample is
+the helper's stdout mirror, while the ledger file evidence proves ownership and
+mode:
+
+```text
+rootLedgerPath=runtime/helper-ledger.jsonl
+mode=-rw------- owner=root group=staff
+schemaVersion=1
+event=bagModeHelperLedgerSample
+ownerTokenHash=prototype-no-token
+helperGeneration=1
+bootSession=prototype-unverified
+allowed=true
+effect=dry-run
+```
+
+This is a dry-run ledger shape and ownership proof, not production restore
+conflict handling or repair output.
 
 By default, the approved LaunchDaemon runs the fixed `status` command in
 dry-run mode. To prepare one artifact for a different approved-helper dry-run
@@ -531,10 +549,12 @@ bootstrapped as root with readable stdout ledger evidence, dispatched the
 current approved dry-run command set, and unregistered so launchctl no longer
 finds the service. The fixed-command API boundary is reviewed for dry-run
 dispatch, and the post-approval status/bootstrap/launchctl/stdout-log/unified-log
-boundary is reviewed for the local SMAppService bootstrap path. The local ad-hoc
-SMAppService path remains viable before Developer ID funding. Bag Mode still
-remains blocked until #27 records the rest of the verifier-required helper proof:
-admin approval/password flow, root-ledger schema/ownership, reboot, update,
-production repair/uninstall behavior, CLI helper commands, failure cases, and
-helper-owned Bag Mode state cleanup. Developer ID signing remains a later
+boundary is reviewed for the local SMAppService bootstrap path. The root-ledger
+schema/ownership boundary is reviewed for dry-run evidence via the stdout mirror
+and root-owned `0600` ledger file. The local ad-hoc SMAppService path remains
+viable before Developer ID funding. Bag Mode still remains blocked until #27
+records the rest of the verifier-required helper proof: admin approval/password
+flow, reboot, update, production restore conflict behavior, production
+repair/uninstall behavior, CLI helper commands, failure cases, and helper-owned
+Bag Mode state cleanup. Developer ID signing remains a later
 distribution/trust milestone.
