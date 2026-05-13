@@ -309,6 +309,8 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
     public var integrationRemoveHandler: (String, Date) throws -> String
     public var integrationEnableAutoHandler: (String, Date) throws -> String
     public var integrationEventHandler: (HookAdapterEvent, Date) -> String
+    public var helperStatusProvider: () -> String
+    public var helperRepairHandler: (Date) throws -> String
     public var uninstallHandler: (Bool, Bool, Date) throws -> String
 
     public init(
@@ -320,6 +322,8 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         integrationRemoveHandler: @escaping (String, Date) throws -> String = { agentID, _ in "Remove integration requested: \(agentID)" },
         integrationEnableAutoHandler: @escaping (String, Date) throws -> String = { agentID, _ in "Auto-integration enabled: \(agentID)" },
         integrationEventHandler: @escaping (HookAdapterEvent, Date) -> String = { event, _ in "Integration event accepted: \(event.agent.rawValue) \(event.event.rawValue)" },
+        helperStatusProvider: @escaping () -> String = { "Helper status unavailable: no helper is installed" },
+        helperRepairHandler: @escaping (Date) throws -> String = { _ in "Helper repair unavailable: no helper is installed" },
         uninstallHandler: @escaping (Bool, Bool, Date) throws -> String = { removeHelper, removeIntegrations, _ in
             "Uninstall requested removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations)"
         }
@@ -332,6 +336,8 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         self.integrationRemoveHandler = integrationRemoveHandler
         self.integrationEnableAutoHandler = integrationEnableAutoHandler
         self.integrationEventHandler = integrationEventHandler
+        self.helperStatusProvider = helperStatusProvider
+        self.helperRepairHandler = helperRepairHandler
         self.uninstallHandler = uninstallHandler
     }
 
@@ -360,9 +366,9 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         case .integrationEvent(let event):
             return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: integrationEventHandler(event, receivedAt))
         case .helperStatus:
-            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Helper not installed")
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: helperStatusProvider())
         case .helperRepair:
-            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Helper repair is unavailable in this build")
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: try helperRepairHandler(receivedAt))
         case .uninstall(let removeHelper, let removeIntegrations):
             return ControlResponse(
                 accepted: true,

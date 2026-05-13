@@ -37,6 +37,10 @@ struct ControlServerTests {
         try runCLIRejectsExtraArgumentsAndUnknownFlags()
     }
 
+    @Test func controlRouterSurfacesHelperCommandOutcomes() throws {
+        try runControlRouterSurfacesHelperCommandOutcomes()
+    }
+
     @Test func localControlClientSendsThroughUnixSocket() throws {
         try runLocalControlClientSendsThroughUnixSocket()
     }
@@ -85,6 +89,10 @@ final class ControlServerTests: XCTestCase {
 
     func testCLIRejectsExtraArgumentsAndUnknownFlags() throws {
         try runCLIRejectsExtraArgumentsAndUnknownFlags()
+    }
+
+    func testControlRouterSurfacesHelperCommandOutcomes() throws {
+        try runControlRouterSurfacesHelperCommandOutcomes()
     }
 
     func testLocalControlClientSendsThroughUnixSocket() throws {
@@ -279,6 +287,40 @@ private func runCLIRejectsExtraArgumentsAndUnknownFlags() throws {
     try expectThrows(ControlServerError.invalidRequest("unknown uninstall flag: --everything")) {
         _ = try cli.parse(arguments: ["uninstall", "--everything"])
     }
+}
+
+private func runControlRouterSurfacesHelperCommandOutcomes() throws {
+    let receivedAt = Date(timeIntervalSince1970: 9_000)
+    let defaultRouter = DefaultControlCommandRouter()
+    let defaultStatus = try defaultRouter.route(.helperStatus, receivedAt: receivedAt)
+    let defaultRepair = try defaultRouter.route(.helperRepair, receivedAt: receivedAt)
+
+    try check(defaultStatus.message == "Helper status unavailable: no helper is installed", "Expected default helper status outcome")
+    try check(defaultRepair.message == "Helper repair unavailable: no helper is installed", "Expected default helper repair outcome")
+
+    let router = DefaultControlCommandRouter(
+        helperStatusProvider: {
+            "Helper installed generation=7 state=ready"
+        },
+        helperRepairHandler: { receivedAt in
+            "Helper repair checked at \(Int(receivedAt.timeIntervalSince1970))"
+        },
+        uninstallHandler: { removeHelper, removeIntegrations, receivedAt in
+            "Uninstall removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations) at \(Int(receivedAt.timeIntervalSince1970))"
+        }
+    )
+
+    let status = try router.route(.helperStatus, receivedAt: receivedAt)
+    let repair = try router.route(.helperRepair, receivedAt: receivedAt)
+    let uninstall = try router.route(.uninstall(removeHelper: true, removeIntegrations: true), receivedAt: receivedAt)
+
+    try check(status.accepted, "Expected helper status to be accepted")
+    try check(status.message == "Helper installed generation=7 state=ready", "Expected helper status provider output")
+    try check(repair.message == "Helper repair checked at 9000", "Expected helper repair handler output")
+    try check(
+        uninstall.message == "Uninstall removeHelper=true removeIntegrations=true at 9000",
+        "Expected uninstall handler output"
+    )
 }
 
 private func runLocalControlClientSendsThroughUnixSocket() throws {

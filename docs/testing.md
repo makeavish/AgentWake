@@ -346,8 +346,8 @@ and a mirrored `bagModeHelperLedgerSample` JSON event. A later
 and unregister evidence, not complete #27 evidence. The manifest still needs
 deliberate promotion only after reviewing admin-approval/password-flow,
 reboot, update, production restore conflict behavior, production
-repair/uninstall behavior, CLI command, failure-case, and helper-owned Bag Mode
-state cleanup captures. The local post-approval
+repair/uninstall behavior, failure-case, and helper-owned Bag Mode state cleanup
+captures. The local post-approval
 status/bootstrap/launchctl/stdout-log/unified-log boundary and dry-run
 root-ledger schema/ownership boundary are reviewed through the current
 SMAppService artifacts.
@@ -367,6 +367,14 @@ mirrored `bagModeHelperLedgerSample`, and then unregistered cleanly back to raw
 and dry-run ledger schema evidence only, not as proof of production Bag Mode
 state mutation, production repair/uninstall behavior, or restore conflict
 handling.
+`ClawShellCoreChecks` and
+`ControlServerTests.controlRouterSurfacesHelperCommandOutcomes` cover the CLI
+helper-command outcome boundary: `clawshell helper status`, `clawshell helper
+repair`, and `clawshell uninstall --remove-helper --remove-integrations` parse
+and route through `ControlServer` with explicit status/repair/uninstall
+messages. The current app-level helper status and repair responses remain
+unavailable because no production helper is installed yet, so this is CLI and
+control-routing evidence only.
 New artifacts derive a unique SMAppService bundle/helper identity from the
 output path, and write it to `appBundleIdentifier`, `helperLabel`, and
 `identitySuffix` in `validation-config.txt`. Set

@@ -197,11 +197,26 @@ public final class ClawShellServices {
                 resolvedAgentMonitor.applyIntegrationEvent(event, at: receivedAt)
                 resolvedAssertionManager.reconcile()
                 return "Integration event accepted: \(event.agent.rawValue) \(event.event.rawValue)"
+            }, helperStatusProvider: {
+                "Helper status unavailable: no helper is installed"
+            }, helperRepairHandler: { _ in
+                "Helper repair unavailable: no helper is installed"
             }, uninstallHandler: { removeHelper, removeIntegrations, receivedAt in
+                var outcomes = ["Uninstall requested"]
                 if removeIntegrations {
                     try resolvedIntegrationManager.removeAllIntegrations(at: receivedAt)
+                    outcomes.append("integrations removed")
+                } else {
+                    outcomes.append("integrations unchanged")
                 }
-                return "Uninstall requested removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations)"
+
+                if removeHelper {
+                    outcomes.append("helper removal unavailable: no helper is installed")
+                } else {
+                    outcomes.append("helper unchanged")
+                }
+
+                return outcomes.joined(separator: "; ")
             })
         )
     }

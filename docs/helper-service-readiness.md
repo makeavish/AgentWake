@@ -90,8 +90,10 @@ dry-run dispatch evidence for `status`, `enableBagMode`, `disableBagMode`,
 after a post-approval wait of at least 15 seconds where applicable. #7 still cannot
 claim the helper path is complete: #27 still needs admin-approval/password-flow
 evidence, reboot, update, production restore conflict behavior, production
-repair/uninstall behavior, CLI, failure-case, and helper-owned Bag Mode state
-cleanup evidence before production Bag Mode can depend on it.
+repair/uninstall behavior, failure-case, and helper-owned Bag Mode state
+cleanup evidence before production Bag Mode can depend on it. The CLI
+helper-command contract is now covered as a control-socket outcome boundary,
+not as production helper mutation evidence.
 
 The design should keep these constraints:
 
@@ -190,7 +192,8 @@ the command returned `Operation not permitted`, but the service status moved to
 `--capture-post-approval` against this same artifact before deciding whether
 fallback evidence is required. The verifier is still expected to fail because
 lifecycle rows such as approved bootstrap, reboot, update, uninstall cleanup,
-CLI helper commands, and failure cases are not yet complete.
+and failure cases are not yet complete. The later CLI control-routing boundary
+is automated separately.
 
 A later fresh artifact from the PR #75-era harness reached the enabled state
 in post-approval capture:
@@ -239,8 +242,8 @@ launchctl, stdout-log, and unified-log captures cover the local post-approval
 bootstrap boundary, and the mirrored ledger sample plus root-owned `0600` file
 evidence cover the dry-run root-ledger schema/ownership boundary. The verifier
 still fails until the remaining admin-approval/password-flow, reboot, update,
-production restore conflict behavior, production repair/uninstall behavior, CLI
-helper command, failure case, and helper-owned Bag Mode state cleanup rows are
+production restore conflict behavior, production repair/uninstall behavior,
+failure case, and helper-owned Bag Mode state cleanup rows are
 completed and reviewed.
 
 The first command-specific follow-up artifact exercised an approved
@@ -405,6 +408,18 @@ captured output before mapping it to `helper-uninstall`; keep
 `helper-uninstall-state-cleanup` incomplete until helper-owned Bag Mode state
 cleanup is exercised, then run the verifier.
 
+The CLI helper-command outcome boundary is automated in
+`ClawShellCoreChecks` and
+`ControlServerTests.controlRouterSurfacesHelperCommandOutcomes`. The CLI parses
+`clawshell helper status`, `clawshell helper repair`, and
+`clawshell uninstall --remove-helper --remove-integrations`, sends them through
+`ControlServer`, and the router surfaces explicit helper status, repair, and
+uninstall messages. The current app reports helper status and repair as
+unavailable because no production helper is installed yet; this proves CLI and
+control-routing behavior only. Production helper-backed repair, uninstall,
+restore conflict handling, and helper-owned Bag Mode cleanup remain separate
+#27 evidence rows.
+
 The verifier expects three files at the manifest root:
 
 - `validation-config.txt`
@@ -555,6 +570,6 @@ and root-owned `0600` ledger file. The local ad-hoc SMAppService path remains
 viable before Developer ID funding. Bag Mode still remains blocked until #27
 records the rest of the verifier-required helper proof: admin approval/password
 flow, reboot, update, production restore conflict behavior, production
-repair/uninstall behavior, CLI helper commands, failure cases, and helper-owned
-Bag Mode state cleanup. Developer ID signing remains a later
+repair/uninstall behavior, failure cases, and helper-owned Bag Mode state
+cleanup. Developer ID signing remains a later
 distribution/trust milestone.
