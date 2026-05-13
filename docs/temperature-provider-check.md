@@ -16,6 +16,7 @@ SMAppService provider artifacts:
 - `.build/temperature-provider-proof/smappservice-unique-20260512T175157Z`
 - `.build/temperature-provider-proof/smappservice-all-20260512T181830Z`
 - `.build/temperature-provider-proof/smappservice-all-timeout5-20260512T182146Z`
+- `.build/temperature-provider-proof/powermetrics-thermal-cpu-power-20260513T172057Z`
 - `.build/temperature-provider-proof/ioreg-smc-prepare-20260513T061711Z`
 - `.build/temperature-provider-proof/bounded-ioreg-smc-local`
 - `.build/temperature-provider-proof/ioreg-smc-bounded-smappservice-20260513T071633Z`
@@ -66,6 +67,7 @@ Reference:
 | AppleSmartBattery I/O Registry fields | Works without root when battery service exists | Returned within the 1s command timeout; update age was 12s in this run, above the 10s freshness target | Battery pack/virtual values were present | Battery temperature does not prove CPU/package or closed-bag thermal coverage | Context only |
 | SMAppService helper `powermetrics --samplers thermal` | Ad-hoc/no-membership helper launched as root | Timed out after partial output; captured thermal pressure only | No numeric temperature observed | Not validated; no cutoff signal captured | Helper path viable, command not proven |
 | SMAppService helper `powermetrics --samplers all` | Same no-membership helper launched as root | 1s run produced only the command header; 5s diagnostic emitted broad task/power output but still timed out | No trustworthy numeric temperature observed after detector correction | Not validated; no cutoff signal captured | Diagnostic only; command not viable as provider |
+| SMAppService helper `powermetrics --samplers thermal,cpu_power` | Same no-membership helper launched as root | 5s diagnostic completed in 2s and produced CPU power/frequency plus thermal pressure output | No numeric temperature candidates observed | Thermal pressure only; no scalar CPU/package cutoff signal captured | Diagnostic only; no cutoff provider selected |
 | SMAppService helper `ioreg -r -c AppleSMCKeysEndpoint -l` | Same no-membership helper launched as root | Early 1s run timed out after partial I/O Registry output; later bounded run completed before its timeout | Numeric-looking values were visible, but the accepted-provider detector rejects them as AppleSmartBattery context | Not validated; no freshness/cadence/coverage proof | Diagnostic only; no cutoff provider selected |
 | SMAppService helper `ioreg -r -c AppleARMPMUTempSensor -l` | Same no-membership helper launched as root after approval | Helper-owned run completed within the 1s timeout and captured the PMU inventory without truncation | No numeric temperature candidates observed | PMU node names such as `PMU tdev*` are metadata, not readings | Candidate rejected until a real PMU reading API is found |
 | Native IOHID service property probe | Works without root in the non-mutating alternate-source harness | Completed inside the 2s probe timeout | No common current-value or numeric value properties observed | HID PMU/NVMe service names only; no scalar reading or coverage proof | Discovery only; no cutoff provider selected |
@@ -199,6 +201,36 @@ not contain a trustworthy numeric temperature reading. Its original
 output. The artifact still stores that old field value, so the corrected result
 is an interpretation from the hardened detector and captured output, not a
 promoted artifact row.
+
+The follow-up diagnostic artifact
+`.build/temperature-provider-proof/powermetrics-thermal-cpu-power-20260513T172057Z`
+kept the same no-membership helper path but narrowed `powermetrics` to
+`--samplers thermal,cpu_power` and raised the diagnostic timeout to 5 seconds.
+After approval and the required wait, the helper ran as root and the command
+completed without timing out:
+
+```text
+command=/usr/bin/powermetrics --show-initial-usage -n 1 -i 1000 --samplers thermal,cpu_power
+providerSource=powermetrics
+timeoutSeconds=5
+durationSeconds=2
+timedOut=false
+exitCode=0
+helperOwned=true
+stdoutBytes=11295
+stdoutTruncated=false
+numericTemperatureObserved=false
+numericTemperatureCandidateCount=0
+powermetricsSamplers=thermal,cpu_power
+```
+
+The output contains CPU frequency, CPU/GPU/ANE power, combined power, and
+thermal pressure, but no scalar temperature candidate. Cleanup succeeded:
+`unregister()` moved status back to raw `0`, and `launchctl` could not find the
+service after unregister. Treat this as negative `powermetrics` source evidence,
+not provider proof: it uses a diagnostic 5 second timeout rather than the 1
+second provider deadline, and it still does not provide a numeric cutoff source,
+freshness, cadence, closed-bag coverage, or fail-closed proof.
 
 The later `.build/temperature-provider-proof/ioreg-smc-prepare-20260513T061711Z`
 artifact used the same no-membership `SMAppService` path with

@@ -236,7 +236,10 @@ approval. New artifacts default to `powermetrics --show-initial-usage -n 1 -i
 runs against the earlier command shape. Set
 `CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=<samplers>` before
 creating the artifact to compare root-owned sampler variants such as `all`,
-`default`, `cpu_power`, or `thermal,cpu_power`. Set
+`default`, `cpu_power`, or `thermal,cpu_power`. The local
+`thermal,cpu_power` diagnostic completed from the approved helper under a 5
+second diagnostic timeout, but still emitted no numeric temperature candidates,
+so treat it as comparison evidence only. Set
 `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc` to run the diagnostic
 `/usr/sbin/ioreg -r -c AppleSMCKeysEndpoint -l` source from the approved helper.
 Set `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu` to run the PMU inventory
