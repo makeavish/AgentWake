@@ -11,6 +11,9 @@ Local readiness artifact: `.build/helper-service-readiness/recheck-20260512T1055
 Latest SMAppService register artifact:
 `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z`
 
+Reviewed SMAppService post-reboot append-capture artifact:
+`.build/helper-service-prototype/smappservice-reboot-20260513T134512Z`
+
 Reviewed fixed-command API artifacts:
 
 - `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z`
@@ -87,9 +90,14 @@ evidence that the local SMAppService root bootstrap and unregister path is
 viable on this machine. The reviewed fixed-command API artifacts record approved
 dry-run dispatch evidence for `status`, `enableBagMode`, `disableBagMode`,
 `repair`, and `uninstall`; each recorded root execution and unregistered cleanly
-after a post-approval wait of at least 15 seconds where applicable. #7 still cannot
-claim the helper path is complete: #27 still needs admin-approval/password-flow
-evidence, reboot, update, production restore conflict behavior, production
+after a post-approval wait of at least 15 seconds where applicable. The reviewed
+post-reboot append capture records the same approved helper remaining enabled
+after reboot, with launchd still managing the ServiceManagement daemon and root
+stdout showing the dry-run `status` command plus mirrored ledger JSON. That
+capture has not been promoted into a verifier-accepted package by itself. #7
+still cannot claim the helper path is complete: #27 still needs
+admin-approval/password-flow evidence, final manifest/manual promotion of
+remaining rows, update, production restore conflict behavior, production
 repair/uninstall behavior, installed-helper/fallback failure behavior, and
 helper-owned Bag Mode state cleanup evidence before production Bag Mode can
 depend on it. New prepare artifacts also record local dry-run failure-case
@@ -244,10 +252,10 @@ local bootstrap and unregister evidence, not a complete #27 proof: the status,
 launchctl, stdout-log, and unified-log captures cover the local post-approval
 bootstrap boundary, and the mirrored ledger sample plus root-owned `0600` file
 evidence cover the dry-run root-ledger schema/ownership boundary. The verifier
-still fails until the remaining admin-approval/password-flow, reboot, update,
-production restore conflict behavior, production repair/uninstall behavior,
-failure case, and helper-owned Bag Mode state cleanup rows are
-completed and reviewed.
+still fails until the remaining admin-approval/password-flow, post-reboot
+manifest/manual promotion, update, production restore conflict behavior,
+production repair/uninstall behavior, failure case, and helper-owned Bag Mode
+state cleanup rows are completed and reviewed.
 
 The first command-specific follow-up artifact exercised an approved
 non-`status` helper command:
@@ -415,6 +423,26 @@ post-reboot evidence filenames. It does not promote the
 output, update the manifest and manual result deliberately, then run the
 verifier.
 
+The current reviewed post-reboot append-capture artifact is
+`.build/helper-service-prototype/smappservice-reboot-20260513T134512Z`.
+It captures an ad-hoc signed local SMAppService helper that stayed approved
+across reboot:
+
+```text
+helper-status-post-reboot: exitCode=0, statusBeforeRaw=1, statusAfterRaw=1
+post-reboot-helper-bootstrap: exitCode=0, managed_by=com.apple.xpc.ServiceManagement, runs=1, last exit code=0
+launchctl-status-post-reboot: exitCode=0, state=not running, job state=exited
+helper-stdout-post-reboot: exitCode=0, uid=0, euid=0, commandJson="status", approvalState="approved", bagModeHelperLedgerSample
+log-evidence-post-reboot: exitCode=0, backgroundtaskmanagementd records for the helper label
+```
+
+`runtime/helper.log` remained root-owned and unreadable to the normal user, as
+in the post-approval evidence. The readable stdout mirror showed
+`schemaVersion=1`, `helperGeneration=1`, `allowed=true`, and `effect="dry-run"`.
+This is reviewed post-reboot append-capture evidence for the local dry-run
+helper boundary, not a verifier-complete artifact, production Bag Mode mutation,
+or update evidence.
+
 After cleanup approval, append mutating unregister evidence to the same
 artifact directory:
 
@@ -427,9 +455,10 @@ scripts/helper-service-smappservice-prototype.sh \
 
 This cleanup mode calls `unregister()` from the existing app bundle and records
 follow-up `status`, `launchctl`, and unified log output without auto-promoting
-manifest rows. The current artifact captured `unregisterResult=success`, status
-`1 -> 0`, follow-up status `0`, and `launchctl` service-not-found. Review the
-captured output before mapping it to `helper-uninstall`; keep
+manifest rows. The reviewed post-reboot artifact captured
+`unregisterResult=success`, status `1 -> 0`, follow-up status `0`, `launchctl`
+service-not-found, and unified-log removal records for the helper label. Treat
+this as SMAppService unregister cleanup append-capture evidence only; keep
 `helper-uninstall-state-cleanup` incomplete until helper-owned Bag Mode state
 cleanup is exercised, then run the verifier.
 
@@ -609,7 +638,7 @@ schema/ownership boundary is reviewed for dry-run evidence via the stdout mirror
 and root-owned `0600` ledger file. The local ad-hoc SMAppService path remains
 viable before Developer ID funding. Bag Mode still remains blocked until #27
 records the rest of the verifier-required helper proof: admin approval/password
-flow, reboot, update, production restore conflict behavior, production
-repair/uninstall behavior, installed-helper/fallback failure cases, and helper-owned Bag
-Mode state cleanup. Developer ID signing remains a later
+flow, final post-reboot manifest/manual promotion, update, production restore
+conflict behavior, production repair/uninstall behavior, installed-helper/fallback
+failure cases, and helper-owned Bag Mode state cleanup. Developer ID signing remains a later
 distribution/trust milestone.
