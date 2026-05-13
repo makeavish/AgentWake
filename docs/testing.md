@@ -231,8 +231,10 @@ creating the artifact to compare root-owned sampler variants such as `all`,
 `default`, `cpu_power`, or `thermal,cpu_power`. Set
 `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc` to run the diagnostic
 `/usr/sbin/ioreg -r -c AppleSMCKeysEndpoint -l` source from the approved helper.
-That mode is candidate-source evidence only until it has bounded parsing,
-freshness, cadence, timeout, coverage, and fail-closed proof. New artifacts derive a unique
+The helper writes provider stdout/stderr to temporary files and reads back at
+most 2,000,000 bytes per stream so large I/O Registry output cannot block the
+child process on a full pipe. That mode is candidate-source evidence only until it has bounded
+parsing, freshness, cadence, timeout, coverage, and fail-closed proof. New artifacts derive a unique
 SMAppService bundle/helper identity from the output path to avoid stale
 approval/code-signing state; set
 `CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX=<lettersAndDigits>` only when a

@@ -178,6 +178,41 @@ for fixture in negativeFixtures where detectsTemperature(fixture) {
     fatalError("Temperature detector accepted negative fixture: \(fixture)")
 }
 SWIFT
+swift - <<'SWIFT'
+import Foundation
+
+let raw = Data("abc🙂".utf8).prefix(5)
+let text = String(decoding: raw, as: UTF8.self)
+precondition(raw.count == 5, "bounded capture must retain raw byte count")
+precondition(!text.isEmpty, "bounded capture must decode partial UTF-8 with replacement semantics")
+precondition(String(data: raw, encoding: .utf8) == nil, "fixture should prove strict UTF-8 decoding would drop the snapshot")
+SWIFT
+swift - <<'SWIFT'
+import Foundation
+
+func readBoundedData(from url: URL, limit: Int) -> (Data, Bool) {
+    guard let handle = try? FileHandle(forReadingFrom: url) else {
+        return (Data(), false)
+    }
+    defer {
+        try? handle.close()
+    }
+    let data = (try? handle.read(upToCount: limit + 1)) ?? Data()
+    if data.count > limit {
+        return (Data(data.prefix(limit)), true)
+    }
+    return (data, false)
+}
+
+let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("clawshell-bounded-output-\(UUID().uuidString)")
+try Data(repeating: 65, count: 2_000_005).write(to: url)
+defer {
+    try? FileManager.default.removeItem(at: url)
+}
+let output = readBoundedData(from: url, limit: 2_000_000)
+precondition(output.0.count == 2_000_000, "bounded capture must not read past byte limit")
+precondition(output.1 == true, "bounded capture must flag truncation")
+SWIFT
 for positive_fixture in \
     'CPU die temperature: 42 C' \
     'Battery Temperature = 31.5 Celsius' \
@@ -1794,6 +1829,16 @@ fi
 if ! grep -q 'case "ioreg-smc"' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
     ! grep -q 'AppleSMCKeysEndpoint' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
     echo "Temperature SMAppService provider helper source did not include ioreg-smc command path" >&2
+    cat "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
+    exit 1
+fi
+if ! grep -q 'readBoundedData' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'outputByteLimit = 2_000_000' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'read(upToCount: limit + 1)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'FileHandle(forWritingTo: stdoutURL)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'String(decoding: stdoutData.0, as: UTF8.self)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'stdoutBytes=\\(stdoutByteCount)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
+    echo "Temperature SMAppService provider helper source did not include bounded file-backed output capture" >&2
     cat "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
     exit 1
 fi
