@@ -305,6 +305,11 @@ dry-run command parser smoke output for `status`, `enableBagMode`,
 `fixed-command-api`, registration, approval, reboot, update, uninstall, and
 failure-case rows as `TODO`. Registration requires an explicit acknowledgement flag:
 `--register --i-understand-this-registers-helper`.
+New artifacts derive a unique SMAppService bundle/helper identity from the
+output path, and write it to `appBundleIdentifier`, `helperLabel`, and
+`identitySuffix` in `validation-config.txt`. Set
+`CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX=<lettersAndDigits>` only when a
+deterministic comparison identity is needed.
 
 After any required System Settings approval, append non-mutating status evidence
 to the same artifact directory:

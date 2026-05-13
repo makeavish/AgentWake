@@ -2951,6 +2951,33 @@ if ! grep -q '^helperInstallPath=smappservice$' "$helper_smappservice_prepare/va
     echo "SMAppService helper prototype harness did not record smappservice path" >&2
     exit 1
 fi
+helper_smappservice_prepare_identity="$(awk -F= '$1 == "identitySuffix" { print $2; found = 1 } END { exit !found }' "$helper_smappservice_prepare/validation-config.txt")"
+helper_smappservice_prepare_label="$(awk -F= '$1 == "helperLabel" { print $2; found = 1 } END { exit !found }' "$helper_smappservice_prepare/validation-config.txt")"
+if [[ ! "$helper_smappservice_prepare_identity" =~ ^h[A-Fa-f0-9]{10}$ ]]; then
+    echo "SMAppService helper prototype harness did not derive a stable unique identity suffix" >&2
+    cat "$helper_smappservice_prepare/validation-config.txt" >&2
+    exit 1
+fi
+if [[ "$helper_smappservice_prepare_label" != "com.makeavish.ClawShell.HelperPrototype.$helper_smappservice_prepare_identity.daemon" ]]; then
+    echo "SMAppService helper prototype harness did not record derived helper label" >&2
+    cat "$helper_smappservice_prepare/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q "^appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.$helper_smappservice_prepare_identity$" "$helper_smappservice_prepare/validation-config.txt"; then
+    echo "SMAppService helper prototype harness did not record derived app bundle id" >&2
+    cat "$helper_smappservice_prepare/validation-config.txt" >&2
+    exit 1
+fi
+if ! plutil -extract Label raw -o - "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist" | grep -qx "$helper_smappservice_prepare_label"; then
+    echo "SMAppService helper prototype LaunchDaemon label does not match helper label" >&2
+    cat "$helper_smappservice_prepare/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q "plistName=$helper_smappservice_prepare_label.plist" "$helper_smappservice_prepare/evidence/helper-status-before-approval.txt"; then
+    echo "SMAppService helper prototype controller did not use the derived plist name" >&2
+    cat "$helper_smappservice_prepare/evidence/helper-status-before-approval.txt" >&2
+    exit 1
+fi
 if ! grep -q '^registerAttempted=false$' "$helper_smappservice_prepare/validation-config.txt"; then
     echo "SMAppService helper prototype harness unexpectedly attempted registration in default mode" >&2
     exit 1
@@ -3020,6 +3047,34 @@ if ! grep -q "fixed-command-api" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
+helper_smappservice_manual_identity="$bag_mode_smoke_dir/helper-smappservice-manual-identity"
+CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX=manual01 \
+    scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_manual_identity" >/dev/null
+if ! grep -q '^identitySuffix=manual01$' "$helper_smappservice_manual_identity/validation-config.txt"; then
+    echo "SMAppService helper prototype harness did not honor manual identity suffix" >&2
+    cat "$helper_smappservice_manual_identity/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^helperLabel=com.makeavish.ClawShell.HelperPrototype.manual01.daemon$' "$helper_smappservice_manual_identity/validation-config.txt"; then
+    echo "SMAppService helper prototype harness did not use manual helper label" >&2
+    cat "$helper_smappservice_manual_identity/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q 'plistName=com.makeavish.ClawShell.HelperPrototype.manual01.daemon.plist' "$helper_smappservice_manual_identity/evidence/helper-status-before-approval.txt"; then
+    echo "SMAppService helper prototype controller did not use manual plist name" >&2
+    cat "$helper_smappservice_manual_identity/evidence/helper-status-before-approval.txt" >&2
+    exit 1
+fi
+helper_smappservice_bad_identity="$bag_mode_smoke_dir/helper-smappservice-bad-identity"
+if CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX=bad-suffix \
+    scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_bad_identity" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness accepted an invalid identity suffix" >&2
+    exit 1
+fi
+if ! grep -q "CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX must start with a letter" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
 helper_smappservice_register_without_ack="$bag_mode_smoke_dir/helper-smappservice-register-without-ack"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_register_without_ack" --register >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype harness allowed register without acknowledgement" >&2
@@ -3045,7 +3100,7 @@ if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smapps
     echo "SMAppService helper prototype harness allowed post-approval capture on malformed artifact" >&2
     exit 1
 fi
-if ! grep -q "missing required artifact directory path" "$bag_mode_smoke_error"; then
+if ! grep -q "missing required artifact file path" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
@@ -3074,13 +3129,35 @@ if ! grep -q "regular executable artifact path" "$bag_mode_smoke_error"; then
 fi
 helper_smappservice_capture_symlink_plist="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-plist"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_plist"
-rm -f "$helper_smappservice_capture_symlink_plist/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.ClawShell.HelperPrototype.daemon.plist"
-ln -s /etc/hosts "$helper_smappservice_capture_symlink_plist/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.ClawShell.HelperPrototype.daemon.plist"
+rm -f "$helper_smappservice_capture_symlink_plist/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+ln -s /etc/hosts "$helper_smappservice_capture_symlink_plist/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_plist" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype post-approval capture accepted a symlinked LaunchDaemon plist" >&2
     exit 1
 fi
 if ! grep -q "regular bundle metadata path" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_capture_mismatched_label="$bag_mode_smoke_dir/helper-smappservice-capture-mismatched-label"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_mismatched_label"
+sed -i '' 's/^helperLabel=.*/helperLabel=com.makeavish.ClawShell.HelperPrototype.other.daemon/' "$helper_smappservice_capture_mismatched_label/validation-config.txt"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_mismatched_label" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype post-approval capture accepted helperLabel mismatched with identitySuffix" >&2
+    exit 1
+fi
+if ! grep -q "helperLabel to match identitySuffix" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_capture_mismatched_bundle="$bag_mode_smoke_dir/helper-smappservice-capture-mismatched-bundle"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_mismatched_bundle"
+sed -i '' 's/^appBundleIdentifier=.*/appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.other/' "$helper_smappservice_capture_mismatched_bundle/validation-config.txt"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_mismatched_bundle" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype post-approval capture accepted appBundleIdentifier mismatched with identitySuffix" >&2
+    exit 1
+fi
+if ! grep -q "appBundleIdentifier to match identitySuffix" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
@@ -3351,14 +3428,14 @@ mkdir -p "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.
     "$helper_smappservice_capture_unregister_fake/runtime"
 cp "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/Info.plist" \
     "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/Info.plist"
-cp "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.ClawShell.HelperPrototype.daemon.plist" \
-    "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.ClawShell.HelperPrototype.daemon.plist"
+cp "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist" \
+    "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
 {
     printf '%s\n' '#!/usr/bin/env bash'
     printf '%s\n' 'set -euo pipefail'
     printf '%s\n' 'command="${1:-status}"'
     printf '%s\n' 'echo "command=$command"'
-    printf '%s\n' 'echo "plistName=com.makeavish.ClawShell.HelperPrototype.daemon.plist"'
+    printf 'echo "plistName=%s.plist"\n' "$helper_smappservice_prepare_label"
     printf '%s\n' 'case "$command" in'
     printf '%s\n' '  unregister)'
     printf '%s\n' '    echo "statusBeforeRaw=1"'
@@ -3381,6 +3458,9 @@ chmod +x "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.
     "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon"
 {
     printf 'evidenceFormat=helper-prototype-v1\n'
+    printf 'appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.%s\n' "$helper_smappservice_prepare_identity"
+    printf 'helperLabel=%s\n' "$helper_smappservice_prepare_label"
+    printf 'identitySuffix=%s\n' "$helper_smappservice_prepare_identity"
     printf 'unregisterAttempted=false\n'
 } >"$helper_smappservice_capture_unregister_fake/validation-config.txt"
 cp "$helper_smappservice_prepare/prototype-manifest.tsv" "$helper_smappservice_capture_unregister_fake/prototype-manifest.tsv"

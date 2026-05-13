@@ -136,6 +136,14 @@ row; registration, approved helper command API, and lifecycle rows remain
 `--register --i-understand-this-registers-helper`; that may require System
 Settings approval before the helper bootstraps.
 
+Each artifact gets a unique SMAppService bundle/helper identity derived from its
+output path. This avoids reusing stale macOS approval/code-signing state between
+ad-hoc helper prototype attempts. To force a deterministic suffix for
+comparison runs, set `CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX=<lettersAndDigits>`.
+Append modes read the stored `helperLabel` and `identitySuffix` from the same
+artifact and reject mismatched LaunchDaemon plist labels or controller
+`plistName` output.
+
 After macOS approval, append non-mutating status evidence to the same artifact
 directory rather than starting a fresh app bundle:
 
@@ -179,9 +187,10 @@ The verifier expects three files at the manifest root:
 evidenceFormat=helper-prototype-v1
 metadataRedacted=true
 macOSVersion=15.0
-appBundleIdentifier=com.example.ClawShell
-helperLabel=com.example.ClawShell.Helper
-launchDaemonPlist=ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist
+appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.h123abc4567
+helperLabel=com.makeavish.ClawShell.HelperPrototype.h123abc4567.daemon
+identitySuffix=h123abc4567
+launchDaemonPlist=ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.ClawShell.HelperPrototype.h123abc4567.daemon.plist
 helperInstallPath=smappservice
 localAuthModel=ad-hoc app/helper signature plus root-owned pairing token
 developerIDApplicationSigned=false
@@ -189,6 +198,10 @@ packageInstallerUsed=false
 homebrewCaskUsed=false
 result=inconclusive
 ```
+
+For `helperInstallPath=smappservice`, `identitySuffix` must start with a letter
+and contain only letters/digits. The `appBundleIdentifier`, `helperLabel`, and
+LaunchDaemon plist filename must use the same suffix.
 
 `manual-result.md` must use filled checklist fields:
 
