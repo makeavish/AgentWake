@@ -29,6 +29,7 @@ Alternate source probe artifacts:
 - `.build/temperature-provider-proof/alt-source-nvme-20260513T134806Z`
 - `.build/temperature-provider-proof/alt-source-hid-dump-20260513T143454Z`
 - `.build/temperature-provider-proof/alt-source-iohid-20260513T150045Z`
+- `.build/temperature-provider-proof/alt-source-smc-dispatcher-20260513T154345Z`
 
 ## Question
 
@@ -354,12 +355,14 @@ as `NAND CH0 temp`, but not a current scalar reading in the non-mutating local
 inventory. They do not change the provider conclusion.
 
 Newer alternate-source probe artifacts use
-`evidenceFormat=temperature-alt-source-probe-v3` and add bounded HID
-temperature-service NDJSON plus filtered `hidutil dump services` evidence. The
-additional fields (`hidPmuTemperatureServiceCount`,
-`hidNvmeTemperatureInventoryPresent`, and `hidTemperatureServiceDumpPresent`)
-make the PMU/NVMe HID surface easier to audit, but they remain service metadata
-only and do not promote `numericCutoffSource`.
+`evidenceFormat=temperature-alt-source-probe-v4` and add bounded HID
+temperature-service NDJSON, filtered `hidutil dump services` evidence, and the
+local `smctempsensor0` / `AppleSMCSensorDispatcher` surface. The additional
+fields (`hidPmuTemperatureServiceCount`, `hidNvmeTemperatureInventoryPresent`,
+`hidTemperatureServiceDumpPresent`, `smcTempSensorNodePresent`,
+`smcSensorDispatcherPresent`, and `smcSensorDispatcherUserClientPresent`) make
+the PMU/NVMe/HID/SMC-dispatcher surfaces easier to audit, but they remain
+service or user-client metadata only and do not promote `numericCutoffSource`.
 
 The `.build/temperature-provider-proof/alt-source-iohid-20260513T150045Z`
 artifact adds a native `IOHIDEventSystemClient` / `IOHIDServiceClient` property
@@ -369,6 +372,26 @@ NVMe-like services, but recorded `iohidValuePropertyCount=0` and
 `iohidNumericValuePropertyCount=0`. That makes the HID service surface more
 explicitly negative: the services are visible, but common current-value
 properties are not exposed to this non-mutating app-side probe.
+
+The `.build/temperature-provider-proof/alt-source-smc-dispatcher-20260513T154345Z`
+artifact adds the local SMC sensor-dispatcher surface:
+
+```text
+evidenceFormat=temperature-alt-source-probe-v4
+smcTempSensorNodePresent=true
+smcSensorDispatcherPresent=true
+smcSensorDispatcherUserClientPresent=true
+smcSensorDispatcherThermalmonitordClientPresent=true
+numericTemperatureObserved=false
+numericTemperatureCandidateCount=0
+numericCutoffSource=false
+providerProofReady=false
+```
+
+That proves a live `smctempsensor0` node and `AppleSMCSensorDispatcher` user
+client are visible locally, with `thermalmonitord` attached, but the inventory
+does not expose a current scalar temperature reading or a public provider
+contract for Bag Mode.
 
 The follow-up `.build/temperature-provider-proof/ioreg-pmu-local-20260513T105941Z`
 artifact adds `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu`, which runs

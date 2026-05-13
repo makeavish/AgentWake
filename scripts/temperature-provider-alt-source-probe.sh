@@ -11,9 +11,9 @@ Usage: scripts/temperature-provider-alt-source-probe.sh --output-dir DIR [--case
    or: scripts/temperature-provider-alt-source-probe.sh DIR
 
 Captures a non-mutating #25 probe for helper-owned temperature sources beyond
-powermetrics. It inventories local SMC, PMU temperature sensor, NVMe
-temperature sensor, die temperature, HID service/dump, and IOReport-style
-surfaces without sudo and without selecting a production provider.
+powermetrics. It inventories local SMC, SMC sensor dispatcher, PMU temperature
+sensor, NVMe temperature sensor, die temperature, HID service/dump, and
+IOReport-style surfaces without sudo and without selecting a production provider.
 
 The package is evidence only. Provider proof remains false until a helper-owned
 source proves numeric output, freshness, cadence, timeout, closed-bag coverage,
@@ -203,6 +203,8 @@ CLANG_BIN="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_CLANG:-$(command -v clang 2>/dev/n
 IOHID_PROBE_BIN="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOHID_PROBE:-}"
 
 capture "smc-endpoint-inventory" "$TIMEOUT_SECONDS" "$IOREG_BIN" -r -c AppleSMCKeysEndpoint -l
+capture "smc-temp-sensor-node-inventory" "$TIMEOUT_SECONDS" "$IOREG_BIN" -r -n smctempsensor0 -l
+capture "smc-sensor-dispatcher-inventory" "$TIMEOUT_SECONDS" "$IOREG_BIN" -r -c AppleSMCSensorDispatcher -l
 capture "pmu-temperature-sensor-inventory" "$TIMEOUT_SECONDS" "$IOREG_BIN" -r -c AppleARMPMUTempSensor -l
 capture "nvme-temperature-sensor-inventory" "$TIMEOUT_SECONDS" "$IOREG_BIN" -r -c AppleEmbeddedNVMeTemperatureSensor -l
 capture "die-temperature-controller-inventory" "$TIMEOUT_SECONDS" "$IOREG_BIN" -r -c AppleDieTempController -l
@@ -261,6 +263,10 @@ awk -v max_lines="$2" '"'"'
 ' _ "$IOREG_BIN" "$MAX_LINES"
 
 smc_endpoint_present=false
+smc_temp_sensor_node_present=false
+smc_sensor_dispatcher_present=false
+smc_sensor_dispatcher_user_client_present=false
+smc_sensor_dispatcher_thermalmonitord_client_present=false
 pmu_temp_sensor_present=false
 nvme_temp_sensor_present=false
 die_temp_controller_present=false
@@ -284,6 +290,18 @@ numeric_candidate_pattern='(^|[^[:alnum:]_-])([[:alnum:]]*temperature|temp)[^[:a
 
 if grep -Fq 'AppleSMCKeysEndpoint' "$EVIDENCE_DIR/smc-endpoint-inventory.txt"; then
     smc_endpoint_present=true
+fi
+if grep -Fq 'smctempsensor0' "$EVIDENCE_DIR/smc-temp-sensor-node-inventory.txt"; then
+    smc_temp_sensor_node_present=true
+fi
+if grep -Fq 'AppleSMCSensorDispatcher' "$EVIDENCE_DIR/smc-sensor-dispatcher-inventory.txt" "$EVIDENCE_DIR/smc-temp-sensor-node-inventory.txt"; then
+    smc_sensor_dispatcher_present=true
+fi
+if grep -Fq 'AppleSMCSensorDispatcherUserClient' "$EVIDENCE_DIR/smc-sensor-dispatcher-inventory.txt" "$EVIDENCE_DIR/smc-temp-sensor-node-inventory.txt"; then
+    smc_sensor_dispatcher_user_client_present=true
+fi
+if grep -Fq 'thermalmonitord' "$EVIDENCE_DIR/smc-sensor-dispatcher-inventory.txt" "$EVIDENCE_DIR/smc-temp-sensor-node-inventory.txt"; then
+    smc_sensor_dispatcher_thermalmonitord_client_present=true
 fi
 if grep -Fq 'AppleARMPMUTempSensor' "$EVIDENCE_DIR/pmu-temperature-sensor-inventory.txt"; then
     pmu_temp_sensor_present=true
@@ -384,6 +402,8 @@ classify_tree_candidates() {
 }
 
 classify_tree_candidates "$EVIDENCE_DIR/smc-endpoint-inventory.txt"
+classify_tree_candidates "$EVIDENCE_DIR/smc-temp-sensor-node-inventory.txt"
+classify_tree_candidates "$EVIDENCE_DIR/smc-sensor-dispatcher-inventory.txt"
 classify_tree_candidates "$EVIDENCE_DIR/ioreport-temperature-legend-inventory.txt"
 
 for candidate_file in \
@@ -422,12 +442,12 @@ fi
 } >"$EVIDENCE_DIR/numeric-temperature-candidates.status"
 
 candidate_surface_available=false
-if [[ "$smc_endpoint_present" == true || "$pmu_temp_sensor_present" == true || "$nvme_temp_sensor_present" == true || "$die_temp_controller_present" == true || "$hid_pmu_temperature_inventory_present" == true || "$hid_nvme_temperature_inventory_present" == true || "$hid_temperature_service_dump_present" == true || "$iohid_temperature_service_count" -gt 0 || "$ioreport_temperature_legend_present" == true ]]; then
+if [[ "$smc_endpoint_present" == true || "$smc_temp_sensor_node_present" == true || "$smc_sensor_dispatcher_present" == true || "$pmu_temp_sensor_present" == true || "$nvme_temp_sensor_present" == true || "$die_temp_controller_present" == true || "$hid_pmu_temperature_inventory_present" == true || "$hid_nvme_temperature_inventory_present" == true || "$hid_temperature_service_dump_present" == true || "$iohid_temperature_service_count" -gt 0 || "$ioreport_temperature_legend_present" == true ]]; then
     candidate_surface_available=true
 fi
 
 cat >"$OUTPUT_DIR/validation-config.txt" <<EOF
-evidenceFormat=temperature-alt-source-probe-v3
+evidenceFormat=temperature-alt-source-probe-v4
 metadataRedacted=true
 caseId=$CASE_ID
 capturedAtUtc=$(now_utc)
@@ -436,6 +456,10 @@ maxInventoryLines=$MAX_LINES
 ioregPath=$IOREG_BIN
 hidutilPath=${HIDUTIL_BIN:-unavailable}
 smcEndpointPresent=$smc_endpoint_present
+smcTempSensorNodePresent=$smc_temp_sensor_node_present
+smcSensorDispatcherPresent=$smc_sensor_dispatcher_present
+smcSensorDispatcherUserClientPresent=$smc_sensor_dispatcher_user_client_present
+smcSensorDispatcherThermalmonitordClientPresent=$smc_sensor_dispatcher_thermalmonitord_client_present
 pmuTempSensorPresent=$pmu_temp_sensor_present
 nvmeTempSensorPresent=$nvme_temp_sensor_present
 dieTempControllerPresent=$die_temp_controller_present
@@ -467,6 +491,8 @@ EOF
 cat >"$OUTPUT_DIR/source-probe-manifest.tsv" <<EOF
 checkId	status	evidencePath	note
 $(manifest_row "smc-endpoint-inventory" "evidence" "evidence/smc-endpoint-inventory.txt" "SMC endpoint inventory captured without sudo")
+$(manifest_row "smc-temp-sensor-node-inventory" "evidence" "evidence/smc-temp-sensor-node-inventory.txt" "SMC temp-sensor node inventory captured without sudo")
+$(manifest_row "smc-sensor-dispatcher-inventory" "evidence" "evidence/smc-sensor-dispatcher-inventory.txt" "AppleSMCSensorDispatcher inventory captured without sudo; user-client presence is not a scalar reading")
 $(manifest_row "pmu-temperature-sensor-inventory" "evidence" "evidence/pmu-temperature-sensor-inventory.txt" "PMU temperature sensor inventory captured without sudo")
 $(manifest_row "nvme-temperature-sensor-inventory" "evidence" "evidence/nvme-temperature-sensor-inventory.txt" "NVMe temperature sensor inventory captured without sudo; NAND temp names are inventory, not readings")
 $(manifest_row "die-temperature-controller-inventory" "evidence" "evidence/die-temperature-controller-inventory.txt" "Die temperature controller inventory captured without sudo")
@@ -485,9 +511,10 @@ EOF
 cat >"$OUTPUT_DIR/README.md" <<EOF
 # Temperature Provider Alternate Source Probe
 
-This package inventories non-powermetrics SMC, PMU temperature sensor, NVMe
-temperature sensor, die temperature controller, HID service/dump, native IOHID
-service properties, and IOReport-style local surfaces for #25.
+This package inventories non-powermetrics SMC, SMC sensor dispatcher, PMU
+temperature sensor, NVMe temperature sensor, die temperature controller, HID
+service/dump, native IOHID service properties, and IOReport-style local
+surfaces for #25.
 
 It is non-mutating, does not use sudo, and does not select a production Bag Mode
 temperature provider. A usable provider still needs helper-owned numeric output,

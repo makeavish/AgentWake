@@ -213,11 +213,12 @@ labeled numeric temperature-like lines without promoting generic `die-id` or
 battery-context lines that look numeric but are not cutoff candidates. The
 `hidutil` inventory is also discovery-only: PMU `tdev`/`tdie` names are sensor
 leads, not current readings. NVMe `NAND ... temp` product names are likewise
-inventory, not scalar readings. The native IOHID probe checks common current-value
-property keys without promoting them to cutoff proof. It is discovery evidence only:
-`providerProofReady` and `numericCutoffSource` stay `false` until helper-owned
-numeric output, freshness, cadence, timeout behavior, and closed-bag coverage
-are proven.
+inventory, not scalar readings. The native IOHID probe checks common
+current-value property keys, and the SMC sensor-dispatcher capture records
+whether `smctempsensor0`, `AppleSMCSensorDispatcher`, and its user client are
+visible without sudo. These are discovery evidence only: `providerProofReady`
+and `numericCutoffSource` stay `false` until helper-owned numeric output,
+freshness, cadence, timeout behavior, and closed-bag coverage are proven.
 
 To build the no-membership `SMAppService` provider candidate without changing
 helper registration state:

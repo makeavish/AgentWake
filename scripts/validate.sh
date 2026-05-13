@@ -1163,6 +1163,10 @@ for required_file in \
     README.md \
     evidence/smc-endpoint-inventory.txt \
     evidence/smc-endpoint-inventory.status \
+    evidence/smc-temp-sensor-node-inventory.txt \
+    evidence/smc-temp-sensor-node-inventory.status \
+    evidence/smc-sensor-dispatcher-inventory.txt \
+    evidence/smc-sensor-dispatcher-inventory.status \
     evidence/pmu-temperature-sensor-inventory.txt \
     evidence/pmu-temperature-sensor-inventory.status \
     evidence/nvme-temperature-sensor-inventory.txt \
@@ -1195,8 +1199,8 @@ if ! grep -q '^providerProofReady=false$' "$temperature_alt_source_dir/validatio
     cat "$temperature_alt_source_dir/validation-config.txt" >&2
     exit 1
 fi
-if ! grep -q '^evidenceFormat=temperature-alt-source-probe-v3$' "$temperature_alt_source_dir/validation-config.txt"; then
-    echo "Temperature alternate source probe did not record v3 evidence format" >&2
+if ! grep -q '^evidenceFormat=temperature-alt-source-probe-v4$' "$temperature_alt_source_dir/validation-config.txt"; then
+    echo "Temperature alternate source probe did not record v4 evidence format" >&2
     cat "$temperature_alt_source_dir/validation-config.txt" >&2
     exit 1
 fi
@@ -1302,6 +1306,20 @@ case "$*" in
     echo '  | |   "Temperature" = 3044'
     echo '  | |   "VirtualTemperature" = 3119'
     ;;
+  *smctempsensor0*)
+    echo '+-o smctempsensor0  <class AppleARMIODevice>'
+    echo '  "compatible" = <"smc-tempsensor">'
+    echo '  "device_type" = <"smctempsensor">'
+    echo '  +-o AppleSMCSensorDispatcher  <class AppleSMCSensorDispatcher>'
+    echo '    +-o AppleSMCSensorDispatcherUserClient  <class AppleSMCSensorDispatcherUserClient>'
+    echo '      "IOUserClientCreator" = "pid 552, thermalmonitord"'
+    ;;
+  *AppleSMCSensorDispatcher*)
+    echo '+-o AppleSMCSensorDispatcher  <class AppleSMCSensorDispatcher>'
+    echo '  "IOUserClientClass" = "AppleSMCSensorDispatcherUserClient"'
+    echo '  +-o AppleSMCSensorDispatcherUserClient  <class AppleSMCSensorDispatcherUserClient>'
+    echo '    "IOUserClientCreator" = "pid 552, thermalmonitord"'
+    ;;
   *AppleARMPMUTempSensor*)
     echo '+-o AppleARMPMUTempSensor  <class AppleARMPMUTempSensor>'
     ;;
@@ -1392,6 +1410,10 @@ PATH="$temperature_alt_source_fake_bin:$PATH" \
     scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_fake" >/dev/null
 for expected_key in \
     smcEndpointPresent=true \
+    smcTempSensorNodePresent=true \
+    smcSensorDispatcherPresent=true \
+    smcSensorDispatcherUserClientPresent=true \
+    smcSensorDispatcherThermalmonitordClientPresent=true \
     pmuTempSensorPresent=true \
     nvmeTempSensorPresent=true \
     dieTempControllerPresent=true \
@@ -1460,6 +1482,16 @@ if grep -Eq '3044|3119' "$temperature_alt_source_fake/evidence/numeric-temperatu
 fi
 if ! awk -F '\t' '$1 == "numeric-temperature-candidates" && $2 == "evidence" && $3 == "evidence/numeric-temperature-candidates.txt" { found = 1 } END { exit !found }' "$temperature_alt_source_fake/source-probe-manifest.tsv"; then
     echo "Temperature alternate source probe manifest did not attach numeric candidate evidence" >&2
+    cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "smc-temp-sensor-node-inventory" && $2 == "evidence" && $3 == "evidence/smc-temp-sensor-node-inventory.txt" { found = 1 } END { exit !found }' "$temperature_alt_source_fake/source-probe-manifest.tsv"; then
+    echo "Temperature alternate source probe manifest did not attach SMC temp-sensor node inventory evidence" >&2
+    cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "smc-sensor-dispatcher-inventory" && $2 == "evidence" && $3 == "evidence/smc-sensor-dispatcher-inventory.txt" { found = 1 } END { exit !found }' "$temperature_alt_source_fake/source-probe-manifest.tsv"; then
+    echo "Temperature alternate source probe manifest did not attach SMC sensor dispatcher inventory evidence" >&2
     cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
     exit 1
 fi
