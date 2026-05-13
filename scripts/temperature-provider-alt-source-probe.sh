@@ -12,8 +12,8 @@ Usage: scripts/temperature-provider-alt-source-probe.sh --output-dir DIR [--case
 
 Captures a non-mutating #25 probe for helper-owned temperature sources beyond
 powermetrics. It inventories local SMC, PMU temperature sensor, NVMe
-temperature sensor, die temperature, HID service, and IOReport-style surfaces
-without sudo and without selecting a production provider.
+temperature sensor, die temperature, HID service/dump, and IOReport-style
+surfaces without sudo and without selecting a production provider.
 
 The package is evidence only. Provider proof remains false until a helper-owned
 source proves numeric output, freshness, cadence, timeout, closed-bag coverage,
@@ -191,8 +191,27 @@ capture "nvme-temperature-sensor-inventory" "$TIMEOUT_SECONDS" "$IOREG_BIN" -r -
 capture "die-temperature-controller-inventory" "$TIMEOUT_SECONDS" "$IOREG_BIN" -r -c AppleDieTempController -l
 if [[ -n "$HIDUTIL_BIN" ]]; then
     capture "hidutil-service-inventory" "$TIMEOUT_SECONDS" "$HIDUTIL_BIN" list
+    capture "hidutil-temperature-service-ndjson" "$TIMEOUT_SECONDS" "$HIDUTIL_BIN" list --ndjson --matching '{"PrimaryUsagePage":65280,"PrimaryUsage":5}'
+    # shellcheck disable=SC2016
+    capture "hidutil-temperature-service-dump" "$TIMEOUT_SECONDS" bash -c '
+set -euo pipefail
+"$1" dump services -f text 2>/dev/null |
+awk -v max_lines="$2" '"'"'
+    tolower($0) !~ /apple(arm)?pmu|appleembeddednvmetemperaturesensor|applesmckeysendpoint|nand.*temp|pmu t(dev|die)|temperature|thermal|temp|ioclass|product|primaryusage|primaryusagepage|reportinterval/ {
+        next
+    }
+    {
+        if (count < max_lines) {
+            print
+            count++
+        }
+    }
+'"'"'
+' _ "$HIDUTIL_BIN" "$MAX_LINES"
 else
     capture "hidutil-service-inventory" "$TIMEOUT_SECONDS" bash -c 'echo "hidutil unavailable"; exit 127'
+    capture "hidutil-temperature-service-ndjson" "$TIMEOUT_SECONDS" bash -c 'echo "hidutil unavailable"; exit 127'
+    capture "hidutil-temperature-service-dump" "$TIMEOUT_SECONDS" bash -c 'echo "hidutil unavailable"; exit 127'
 fi
 # shellcheck disable=SC2016
 capture "ioreport-temperature-legend-inventory" "$TIMEOUT_SECONDS" bash -c '
@@ -216,6 +235,9 @@ nvme_temp_sensor_present=false
 die_temp_controller_present=false
 hidutil_available=false
 hid_pmu_temperature_inventory_present=false
+hid_pmu_temperature_service_count=0
+hid_nvme_temperature_inventory_present=false
+hid_temperature_service_dump_present=false
 ioreport_temperature_legend_present=false
 numeric_temperature_observed=false
 numeric_candidate_count=0
@@ -242,6 +264,18 @@ if [[ -n "$HIDUTIL_BIN" ]]; then
 fi
 if grep -Eiq 'AppleSMCKeysEndpoint[[:space:]]+PMU t(dev|die)[[:alnum:]]*' "$EVIDENCE_DIR/hidutil-service-inventory.txt"; then
     hid_pmu_temperature_inventory_present=true
+fi
+hid_pmu_temperature_service_count="$(
+    { grep -Ehi '"Product":"PMU t(dev|die)[[:alnum:]]*' \
+        "$EVIDENCE_DIR/hidutil-temperature-service-ndjson.txt" 2>/dev/null || true; } |
+        wc -l |
+        tr -d '[:space:]'
+)"
+if grep -Eiq 'AppleEmbeddedNVMeTemperatureSensor|NAND.*temp' "$EVIDENCE_DIR/hidutil-service-inventory.txt" "$EVIDENCE_DIR/hidutil-temperature-service-ndjson.txt"; then
+    hid_nvme_temperature_inventory_present=true
+fi
+if grep -Eiq 'AppleARMPMUTempSensor|AppleEmbeddedNVMeTemperatureSensor|PMU t(dev|die)|NAND.*temp' "$EVIDENCE_DIR/hidutil-temperature-service-dump.txt"; then
+    hid_temperature_service_dump_present=true
 fi
 if grep -Eiq 'temperature|thermal|temp|die' "$EVIDENCE_DIR/ioreport-temperature-legend-inventory.txt"; then
     ioreport_temperature_legend_present=true
@@ -330,12 +364,12 @@ fi
 } >"$EVIDENCE_DIR/numeric-temperature-candidates.status"
 
 candidate_surface_available=false
-if [[ "$smc_endpoint_present" == true || "$pmu_temp_sensor_present" == true || "$nvme_temp_sensor_present" == true || "$die_temp_controller_present" == true || "$hid_pmu_temperature_inventory_present" == true || "$ioreport_temperature_legend_present" == true ]]; then
+if [[ "$smc_endpoint_present" == true || "$pmu_temp_sensor_present" == true || "$nvme_temp_sensor_present" == true || "$die_temp_controller_present" == true || "$hid_pmu_temperature_inventory_present" == true || "$hid_nvme_temperature_inventory_present" == true || "$hid_temperature_service_dump_present" == true || "$ioreport_temperature_legend_present" == true ]]; then
     candidate_surface_available=true
 fi
 
 cat >"$OUTPUT_DIR/validation-config.txt" <<EOF
-evidenceFormat=temperature-alt-source-probe-v2
+evidenceFormat=temperature-alt-source-probe-v3
 metadataRedacted=true
 caseId=$CASE_ID
 capturedAtUtc=$(now_utc)
@@ -349,6 +383,9 @@ nvmeTempSensorPresent=$nvme_temp_sensor_present
 dieTempControllerPresent=$die_temp_controller_present
 hidutilAvailable=$hidutil_available
 hidPmuTemperatureInventoryPresent=$hid_pmu_temperature_inventory_present
+hidPmuTemperatureServiceCount=$hid_pmu_temperature_service_count
+hidNvmeTemperatureInventoryPresent=$hid_nvme_temperature_inventory_present
+hidTemperatureServiceDumpPresent=$hid_temperature_service_dump_present
 ioreportTemperatureLegendPresent=$ioreport_temperature_legend_present
 candidateSurfaceAvailable=$candidate_surface_available
 helperOwned=false
@@ -372,6 +409,8 @@ $(manifest_row "pmu-temperature-sensor-inventory" "evidence" "evidence/pmu-tempe
 $(manifest_row "nvme-temperature-sensor-inventory" "evidence" "evidence/nvme-temperature-sensor-inventory.txt" "NVMe temperature sensor inventory captured without sudo; NAND temp names are inventory, not readings")
 $(manifest_row "die-temperature-controller-inventory" "evidence" "evidence/die-temperature-controller-inventory.txt" "Die temperature controller inventory captured without sudo")
 $(manifest_row "hidutil-service-inventory" "evidence" "evidence/hidutil-service-inventory.txt" "HID service inventory captured without sudo; PMU tdev/tdie names are inventory, not readings")
+$(manifest_row "hidutil-temperature-service-ndjson" "evidence" "evidence/hidutil-temperature-service-ndjson.txt" "HID primary-usage temperature services captured as NDJSON inventory, not readings")
+$(manifest_row "hidutil-temperature-service-dump" "evidence" "evidence/hidutil-temperature-service-dump.txt" "Bounded HID services dump captured for PMU/NVMe temperature-service metadata only")
 $(manifest_row "ioreport-temperature-legend-inventory" "evidence" "evidence/ioreport-temperature-legend-inventory.txt" "IOReport-style temperature/thermal legend inventory captured without sudo")
 $(manifest_row "numeric-temperature-candidates" "evidence" "evidence/numeric-temperature-candidates.txt" "Bounded candidate lines for later provider review; not promoted to cutoff proof")
 $(manifest_row "rejected-temperature-candidates" "evidence" "evidence/rejected-temperature-candidates.txt" "Battery-context temperature lines rejected for production cutoff review")
@@ -383,8 +422,8 @@ cat >"$OUTPUT_DIR/README.md" <<EOF
 # Temperature Provider Alternate Source Probe
 
 This package inventories non-powermetrics SMC, PMU temperature sensor, NVMe
-temperature sensor, die temperature controller, HID service, and IOReport-style
-local surfaces for #25.
+temperature sensor, die temperature controller, HID service/dump, and
+IOReport-style local surfaces for #25.
 
 It is non-mutating, does not use sudo, and does not select a production Bag Mode
 temperature provider. A usable provider still needs helper-owned numeric output,
