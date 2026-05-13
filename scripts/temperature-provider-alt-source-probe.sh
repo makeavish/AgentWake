@@ -93,6 +93,7 @@ mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 EVIDENCE_DIR="$OUTPUT_DIR/evidence"
 mkdir -p "$EVIDENCE_DIR"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 now_utc() {
     date -u +"%Y-%m-%dT%H:%M:%SZ"
@@ -113,8 +114,22 @@ capture_to() {
     set +m
     (
         child_pid=""
-        trap 'if [[ -n "$child_pid" ]]; then kill "$child_pid" 2>/dev/null || true; sleep 0.1; if kill -0 "$child_pid" 2>/dev/null; then kill -KILL "$child_pid" 2>/dev/null || true; fi; wait "$child_pid" 2>/dev/null || true; fi; exit 124' TERM
-        "${cmd[@]}" &
+        cleanup_child() {
+            if [[ -n "$child_pid" ]]; then
+                kill -TERM -- "-$child_pid" 2>/dev/null || kill "$child_pid" 2>/dev/null || true
+                sleep 0.1
+                if kill -0 "$child_pid" 2>/dev/null; then
+                    kill -KILL -- "-$child_pid" 2>/dev/null || kill -KILL "$child_pid" 2>/dev/null || true
+                fi
+                wait "$child_pid" 2>/dev/null || true
+            fi
+        }
+        trap 'cleanup_child; exit 124' TERM
+        if command -v perl >/dev/null 2>&1; then
+            perl -e 'setpgrp(0, 0) or die "setpgrp failed: $!"; exec @ARGV or die "exec failed: $!"' "${cmd[@]}" &
+        else
+            "${cmd[@]}" &
+        fi
         child_pid=$!
         wait "$child_pid"
     ) >"$out_file" 2>&1 &
@@ -125,7 +140,7 @@ capture_to() {
         if kill -0 "$pid" 2>/dev/null; then
             : >"$timeout_marker"
             kill "$pid" 2>/dev/null || true
-            sleep 0.1
+            sleep 1
             if kill -0 "$pid" 2>/dev/null; then
                 kill -KILL "$pid" 2>/dev/null || true
             fi
@@ -184,6 +199,8 @@ if [[ -z "$IOREG_BIN" ]]; then
     IOREG_BIN="/usr/sbin/ioreg"
 fi
 HIDUTIL_BIN="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_HIDUTIL:-$(command -v hidutil 2>/dev/null || true)}"
+CLANG_BIN="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_CLANG:-$(command -v clang 2>/dev/null || true)}"
+IOHID_PROBE_BIN="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOHID_PROBE:-}"
 
 capture "smc-endpoint-inventory" "$TIMEOUT_SECONDS" "$IOREG_BIN" -r -c AppleSMCKeysEndpoint -l
 capture "pmu-temperature-sensor-inventory" "$TIMEOUT_SECONDS" "$IOREG_BIN" -r -c AppleARMPMUTempSensor -l
@@ -213,6 +230,20 @@ else
     capture "hidutil-temperature-service-ndjson" "$TIMEOUT_SECONDS" bash -c 'echo "hidutil unavailable"; exit 127'
     capture "hidutil-temperature-service-dump" "$TIMEOUT_SECONDS" bash -c 'echo "hidutil unavailable"; exit 127'
 fi
+if [[ -n "$IOHID_PROBE_BIN" ]]; then
+    capture "iohid-service-probe-build" "$TIMEOUT_SECONDS" bash -c 'echo "using configured IOHID probe: $1"' _ "$IOHID_PROBE_BIN"
+    capture "iohid-temperature-service-properties" "$TIMEOUT_SECONDS" "$IOHID_PROBE_BIN" "$MAX_LINES"
+elif [[ -n "$CLANG_BIN" && "$(uname -s)" == "Darwin" && -r "$SCRIPT_DIR/temperature-provider-iohid-service-probe.c" ]]; then
+    capture "iohid-service-probe-build" "$TIMEOUT_SECONDS" "$CLANG_BIN" -x c -framework IOKit -framework CoreFoundation -o "$OUTPUT_DIR/iohid-service-probe" "$SCRIPT_DIR/temperature-provider-iohid-service-probe.c"
+    if grep -q '^exitCode=0$' "$EVIDENCE_DIR/iohid-service-probe-build.status" && [[ -x "$OUTPUT_DIR/iohid-service-probe" ]]; then
+        capture "iohid-temperature-service-properties" "$TIMEOUT_SECONDS" "$OUTPUT_DIR/iohid-service-probe" "$MAX_LINES"
+    else
+        capture "iohid-temperature-service-properties" "$TIMEOUT_SECONDS" bash -c 'echo "IOHID service probe build failed"; exit 127'
+    fi
+else
+    capture "iohid-service-probe-build" "$TIMEOUT_SECONDS" bash -c 'echo "IOHID service probe build unavailable"; exit 127'
+    capture "iohid-temperature-service-properties" "$TIMEOUT_SECONDS" bash -c 'echo "IOHID service probe unavailable"; exit 127'
+fi
 # shellcheck disable=SC2016
 capture "ioreport-temperature-legend-inventory" "$TIMEOUT_SECONDS" bash -c '
 set -euo pipefail
@@ -238,6 +269,10 @@ hid_pmu_temperature_inventory_present=false
 hid_pmu_temperature_service_count=0
 hid_nvme_temperature_inventory_present=false
 hid_temperature_service_dump_present=false
+iohid_probe_available=false
+iohid_temperature_service_count=0
+iohid_value_property_count=0
+iohid_numeric_value_property_count=0
 ioreport_temperature_legend_present=false
 numeric_temperature_observed=false
 numeric_candidate_count=0
@@ -276,6 +311,29 @@ if grep -Eiq 'AppleEmbeddedNVMeTemperatureSensor|NAND.*temp' "$EVIDENCE_DIR/hidu
 fi
 if grep -Eiq 'AppleARMPMUTempSensor|AppleEmbeddedNVMeTemperatureSensor|PMU t(dev|die)|NAND.*temp' "$EVIDENCE_DIR/hidutil-temperature-service-dump.txt"; then
     hid_temperature_service_dump_present=true
+fi
+value_for_key() {
+    local key="$1"
+    local file="$2"
+    grep -E "^${key}=" "$file" 2>/dev/null | tail -n 1 | cut -d= -f2- || true
+}
+if grep -q '^iohidProbeFormat=iohid-service-property-probe-v1$' "$EVIDENCE_DIR/iohid-temperature-service-properties.txt"; then
+    iohid_probe_available=true
+    iohid_temperature_service_count="$(value_for_key matchedTemperatureServices "$EVIDENCE_DIR/iohid-temperature-service-properties.txt")"
+    iohid_value_property_count="$(value_for_key valuePropertyCount "$EVIDENCE_DIR/iohid-temperature-service-properties.txt")"
+    iohid_numeric_value_property_count="$(value_for_key numericValuePropertyCount "$EVIDENCE_DIR/iohid-temperature-service-properties.txt")"
+    iohid_temperature_service_count="${iohid_temperature_service_count:-0}"
+    iohid_value_property_count="${iohid_value_property_count:-0}"
+    iohid_numeric_value_property_count="${iohid_numeric_value_property_count:-0}"
+    if ! [[ "$iohid_temperature_service_count" =~ ^[0-9]+$ ]]; then
+        iohid_temperature_service_count=0
+    fi
+    if ! [[ "$iohid_value_property_count" =~ ^[0-9]+$ ]]; then
+        iohid_value_property_count=0
+    fi
+    if ! [[ "$iohid_numeric_value_property_count" =~ ^[0-9]+$ ]]; then
+        iohid_numeric_value_property_count=0
+    fi
 fi
 if grep -Eiq 'temperature|thermal|temp|die' "$EVIDENCE_DIR/ioreport-temperature-legend-inventory.txt"; then
     ioreport_temperature_legend_present=true
@@ -364,7 +422,7 @@ fi
 } >"$EVIDENCE_DIR/numeric-temperature-candidates.status"
 
 candidate_surface_available=false
-if [[ "$smc_endpoint_present" == true || "$pmu_temp_sensor_present" == true || "$nvme_temp_sensor_present" == true || "$die_temp_controller_present" == true || "$hid_pmu_temperature_inventory_present" == true || "$hid_nvme_temperature_inventory_present" == true || "$hid_temperature_service_dump_present" == true || "$ioreport_temperature_legend_present" == true ]]; then
+if [[ "$smc_endpoint_present" == true || "$pmu_temp_sensor_present" == true || "$nvme_temp_sensor_present" == true || "$die_temp_controller_present" == true || "$hid_pmu_temperature_inventory_present" == true || "$hid_nvme_temperature_inventory_present" == true || "$hid_temperature_service_dump_present" == true || "$iohid_temperature_service_count" -gt 0 || "$ioreport_temperature_legend_present" == true ]]; then
     candidate_surface_available=true
 fi
 
@@ -386,6 +444,10 @@ hidPmuTemperatureInventoryPresent=$hid_pmu_temperature_inventory_present
 hidPmuTemperatureServiceCount=$hid_pmu_temperature_service_count
 hidNvmeTemperatureInventoryPresent=$hid_nvme_temperature_inventory_present
 hidTemperatureServiceDumpPresent=$hid_temperature_service_dump_present
+iohidProbeAvailable=$iohid_probe_available
+iohidTemperatureServiceCount=$iohid_temperature_service_count
+iohidValuePropertyCount=$iohid_value_property_count
+iohidNumericValuePropertyCount=$iohid_numeric_value_property_count
 ioreportTemperatureLegendPresent=$ioreport_temperature_legend_present
 candidateSurfaceAvailable=$candidate_surface_available
 helperOwned=false
@@ -411,6 +473,8 @@ $(manifest_row "die-temperature-controller-inventory" "evidence" "evidence/die-t
 $(manifest_row "hidutil-service-inventory" "evidence" "evidence/hidutil-service-inventory.txt" "HID service inventory captured without sudo; PMU tdev/tdie names are inventory, not readings")
 $(manifest_row "hidutil-temperature-service-ndjson" "evidence" "evidence/hidutil-temperature-service-ndjson.txt" "HID primary-usage temperature services captured as NDJSON inventory, not readings")
 $(manifest_row "hidutil-temperature-service-dump" "evidence" "evidence/hidutil-temperature-service-dump.txt" "Bounded HID services dump captured for PMU/NVMe temperature-service metadata only")
+$(manifest_row "iohid-service-probe-build" "evidence" "evidence/iohid-service-probe-build.txt" "Native IOHID probe compile/configuration evidence")
+$(manifest_row "iohid-temperature-service-properties" "evidence" "evidence/iohid-temperature-service-properties.txt" "Native IOHIDServiceClient property probe for common current-value keys; discovery only")
 $(manifest_row "ioreport-temperature-legend-inventory" "evidence" "evidence/ioreport-temperature-legend-inventory.txt" "IOReport-style temperature/thermal legend inventory captured without sudo")
 $(manifest_row "numeric-temperature-candidates" "evidence" "evidence/numeric-temperature-candidates.txt" "Bounded candidate lines for later provider review; not promoted to cutoff proof")
 $(manifest_row "rejected-temperature-candidates" "evidence" "evidence/rejected-temperature-candidates.txt" "Battery-context temperature lines rejected for production cutoff review")
@@ -422,8 +486,8 @@ cat >"$OUTPUT_DIR/README.md" <<EOF
 # Temperature Provider Alternate Source Probe
 
 This package inventories non-powermetrics SMC, PMU temperature sensor, NVMe
-temperature sensor, die temperature controller, HID service/dump, and
-IOReport-style local surfaces for #25.
+temperature sensor, die temperature controller, HID service/dump, native IOHID
+service properties, and IOReport-style local surfaces for #25.
 
 It is non-mutating, does not use sudo, and does not select a production Bag Mode
 temperature provider. A usable provider still needs helper-owned numeric output,
