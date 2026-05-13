@@ -17,6 +17,7 @@ SMAppService provider artifacts:
 - `.build/temperature-provider-proof/smappservice-all-20260512T181830Z`
 - `.build/temperature-provider-proof/smappservice-all-timeout5-20260512T182146Z`
 - `.build/temperature-provider-proof/ioreg-smc-prepare-20260513T061711Z`
+- `.build/temperature-provider-proof/bounded-ioreg-smc-local`
 
 ## Question
 
@@ -205,10 +206,36 @@ This is source-candidate evidence only. The command still timed out under the
 current 1 second contract, and the artifact does not prove freshness, cadence,
 closed-bag coverage, fail-closed behavior, or a bounded production parser.
 
+The follow-up `.build/temperature-provider-proof/bounded-ioreg-smc-local`
+artifact updates the generated helper to write provider stdout/stderr to
+temporary files instead of pipes, then read back at most 2,000,000 bytes per
+stream. A direct local run of the generated helper binary with
+`providerSource=ioreg-smc` completed inside the 1 second timeout:
+
+```text
+command=/usr/sbin/ioreg -r -c AppleSMCKeysEndpoint -l
+providerSource=ioreg-smc
+timeoutSeconds=1
+durationSeconds=1
+timedOut=false
+exitCode=0
+stdoutBytes=878324
+stdoutTruncated=false
+helperOwned=false
+numericTemperatureObserved=true
+```
+
+This narrows the previous timeout to a pipe-drain bug in the prototype helper,
+but it is still not provider proof: the direct run was not root/helper-owned, the
+numeric candidates are still battery-context values in the I/O Registry output,
+and freshness, cadence, coverage, and fail-closed behavior remain unproven.
+
 These artifacts are useful evidence for the no-membership helper mechanism and
 candidate-source discovery, not proof of a production temperature provider. The
-next #25 work should make the `ioreg-smc` path bounded enough to avoid timeout,
-then capture freshness, cadence, closed-bag coverage, and fail-closed evidence.
+next #25 work should re-run the bounded `ioreg-smc` helper through SMAppService,
+then either reject the battery-context candidates for closed-bag coverage or
+capture freshness, cadence, closed-bag coverage, and fail-closed evidence for a
+better source.
 
 ## Conclusion
 
@@ -216,7 +243,7 @@ No production Bag Mode temperature provider is selected from the non-root
 sources, helper-owned `powermetrics` variants, or the helper-owned `ioreg-smc`
 diagnostic source tested.
 
-`ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. The no-membership `SMAppService` path can launch a helper as root on this machine. The tested `powermetrics` sampler variants did not provide a trustworthy numeric cutoff source, and the `ioreg-smc` diagnostic path found numeric-looking candidates but still timed out under the provider contract; [#25](https://github.com/makeavish/ClawShell/issues/25) must still prove helper/root numeric output, freshness, cadence, timeout, and coverage.
+`ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. The no-membership `SMAppService` path can launch a helper as root on this machine. The tested `powermetrics` sampler variants did not provide a trustworthy numeric cutoff source. The bounded `ioreg-smc` diagnostic path now avoids the local pipe-drain timeout in a direct helper run, but it still needs a root-owned SMAppService rerun and the observed battery-context candidates do not prove CPU/package or closed-bag thermal coverage; [#25](https://github.com/makeavish/ClawShell/issues/25) must still prove helper/root numeric output, freshness, cadence, timeout, and coverage.
 
 Production Bag Mode remains blocked until [#25](https://github.com/makeavish/ClawShell/issues/25) validates a no-membership helper or helper-equivalent provider that can supply fresh, permission-compatible thermal evidence with the required fail-closed behavior.
 
@@ -291,9 +318,11 @@ CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc \
 ```
 
 That source runs `/usr/sbin/ioreg -r -c AppleSMCKeysEndpoint -l` from the
-approved helper. It is currently candidate-source evidence, not provider proof,
-because the local run timed out and still needs bounded parsing, freshness,
-cadence, timeout, coverage, and fail-closed evidence.
+approved helper. The generated helper writes provider stdout/stderr to temporary
+files and reads back at most 2,000,000 bytes per stream so large I/O Registry
+output does not block on a full pipe. It is currently candidate-source evidence,
+not provider proof, because it still needs a fresh SMAppService/root rerun plus
+bounded parsing, freshness, cadence, timeout, coverage, and fail-closed evidence.
 
 Each new artifact also gets a unique SMAppService bundle/helper identity derived
 from its output path. This avoids reusing stale macOS approval/code-signing state

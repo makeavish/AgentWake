@@ -807,6 +807,7 @@ let powermetricsSamplers = argumentValue(after: "--powermetrics-samplers") ?? "t
 let showInitialUsage = CommandLine.arguments.contains("--show-initial-usage")
 let powermetricsPath = "/usr/bin/powermetrics"
 let ioregPath = "/usr/sbin/ioreg"
+let outputByteLimit = 2_000_000
 let commandPath: String
 let commandArguments: [String]
 switch providerSource {
@@ -827,17 +828,47 @@ var exitCode = 127
 var runError = ""
 var stdoutText = ""
 var stderrText = ""
+var stdoutTruncated = false
+var stderrTruncated = false
+var stdoutByteCount = 0
+var stderrByteCount = 0
+
+func readBoundedData(from url: URL, limit: Int) -> (Data, Bool) {
+    guard let handle = try? FileHandle(forReadingFrom: url) else {
+        return (Data(), false)
+    }
+    defer {
+        try? handle.close()
+    }
+    let data = (try? handle.read(upToCount: limit + 1)) ?? Data()
+    if data.count > limit {
+        return (Data(data.prefix(limit)), true)
+    }
+    return (data, false)
+}
 
 if FileManager.default.isExecutableFile(atPath: commandPath) {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: commandPath)
     process.arguments = commandArguments
-    let stdoutPipe = Pipe()
-    let stderrPipe = Pipe()
-    process.standardOutput = stdoutPipe
-    process.standardError = stderrPipe
 
     do {
+        let tempDirectory = FileManager.default.temporaryDirectory
+        let stdoutURL = tempDirectory.appendingPathComponent("ClawShellTemperatureProvider-\(UUID().uuidString)-stdout")
+        let stderrURL = tempDirectory.appendingPathComponent("ClawShellTemperatureProvider-\(UUID().uuidString)-stderr")
+        FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
+        FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
+        let stdoutHandle = try FileHandle(forWritingTo: stdoutURL)
+        let stderrHandle = try FileHandle(forWritingTo: stderrURL)
+        defer {
+            try? stdoutHandle.close()
+            try? stderrHandle.close()
+            try? FileManager.default.removeItem(at: stdoutURL)
+            try? FileManager.default.removeItem(at: stderrURL)
+        }
+        process.standardOutput = stdoutHandle
+        process.standardError = stderrHandle
+
         try process.run()
         let group = DispatchGroup()
         group.enter()
@@ -854,14 +885,21 @@ if FileManager.default.isExecutableFile(atPath: commandPath) {
             }
             group.wait()
         }
+        try? stdoutHandle.close()
+        try? stderrHandle.close()
+        let stdoutData = readBoundedData(from: stdoutURL, limit: outputByteLimit)
+        let stderrData = readBoundedData(from: stderrURL, limit: outputByteLimit)
         exitCode = Int(process.terminationStatus)
+        stdoutByteCount = stdoutData.0.count
+        stderrByteCount = stderrData.0.count
+        stdoutTruncated = stdoutData.1
+        stderrTruncated = stderrData.1
+        stdoutText = String(decoding: stdoutData.0, as: UTF8.self)
+        stderrText = String(decoding: stderrData.0, as: UTF8.self)
     } catch {
         runError = String(describing: error)
         exitCode = 126
     }
-
-    stdoutText = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-    stderrText = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
 } else {
     runError = "\(providerSource) command missing at \(commandPath)"
 }
@@ -899,6 +937,11 @@ durationSeconds=\(durationSeconds)
 timeoutSeconds=\(timeoutSeconds)
 showInitialUsage=\(showInitialUsage)
 powermetricsSamplers=\(powermetricsSamplers)
+outputByteLimit=\(outputByteLimit)
+stdoutBytes=\(stdoutByteCount)
+stderrBytes=\(stderrByteCount)
+stdoutTruncated=\(stdoutTruncated)
+stderrTruncated=\(stderrTruncated)
 timedOut=\(timedOut)
 exitCode=\(exitCode)
 helperOwned=\(helperOwned)
@@ -924,6 +967,11 @@ sampleRateMs=\(sampleRateMs)
 timeoutSeconds=\(timeoutSeconds)
 showInitialUsage=\(showInitialUsage)
 powermetricsSamplers=\(powermetricsSamplers)
+outputByteLimit=\(outputByteLimit)
+stdoutBytes=\(stdoutByteCount)
+stderrBytes=\(stderrByteCount)
+stdoutTruncated=\(stdoutTruncated)
+stderrTruncated=\(stderrTruncated)
 timedOut=\(timedOut)
 exitCode=\(exitCode)
 helperOwned=\(helperOwned)
