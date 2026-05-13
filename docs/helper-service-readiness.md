@@ -11,6 +11,9 @@ Local readiness artifact: `.build/helper-service-readiness/recheck-20260512T1055
 Latest SMAppService register artifact:
 `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z`
 
+Latest fixed-command dispatch artifact:
+`.build/helper-service-prototype/smappservice-command-enableBagMode-pending-20260513T051953Z`
+
 ## Question
 
 Is `SMAppService` a source-backed helper path worth trying before ClawShell proves a no-membership Bag Mode helper install/update/uninstall path?
@@ -74,14 +77,16 @@ The product plan now treats Apple Developer Program membership as deferred until
 latest no-membership helper artifact moved past the earlier approval-pending
 state. The fresh ad-hoc helper reached `enabled`, launchd submitted the
 ServiceManagement daemon, readable stdout captured a root-owned dry-run ledger
-sample, and a later unregister capture removed the service. That proves the
-local SMAppService root bootstrap and unregister path is viable on this machine,
-but #7 still cannot claim the helper path is complete: #27 still needs the
-approved fixed-command API row, admin-approval/password-flow evidence,
-post-approval status/bootstrap/log/launchctl row promotion, root-ledger
-schema/ownership promotion, reboot, update, repair, CLI, failure-case, and
-helper-owned Bag Mode state cleanup evidence before production Bag Mode can
-depend on it.
+sample, and a later unregister capture removed the service. That records
+evidence that the local SMAppService root bootstrap and unregister path is
+viable on this machine, and the command-specific follow-up artifact records
+unpromoted dispatch evidence for one approved non-`status` fixed command:
+`enableBagMode` ran once as root in dry-run mode and unregistered cleanly. #7
+still cannot claim the helper path is complete: #27 still needs broader
+fixed-command coverage, admin-approval/password-flow evidence, post-approval
+status/bootstrap/log/launchctl row promotion, root-ledger schema/ownership
+promotion, reboot, update, repair, CLI, failure-case, and helper-owned Bag Mode
+state cleanup evidence before production Bag Mode can depend on it.
 
 The design should keep these constraints:
 
@@ -228,6 +233,53 @@ still fails until the remaining fixed-command API, admin-approval/password-flow,
 post-approval status/bootstrap/log/launchctl, root-ledger schema/ownership,
 reboot, update, repair, CLI command, failure case, and helper-owned Bag Mode
 state cleanup rows are completed and reviewed.
+
+A command-specific follow-up artifact exercised one approved non-`status`
+helper command:
+
+```bash
+CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND=enableBagMode \
+scripts/helper-service-smappservice-prototype.sh \
+  --output-dir .build/helper-service-prototype/smappservice-command-enableBagMode-pending-20260513T051953Z \
+  --register \
+  --i-understand-this-registers-helper
+scripts/helper-service-smappservice-prototype.sh \
+  --output-dir .build/helper-service-prototype/smappservice-command-enableBagMode-pending-20260513T051953Z \
+  --capture-post-approval
+scripts/helper-service-smappservice-prototype.sh \
+  --output-dir .build/helper-service-prototype/smappservice-command-enableBagMode-pending-20260513T051953Z \
+  --capture-unregister \
+  --i-understand-this-registers-helper
+```
+
+Captured result:
+
+```text
+appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.he7799dae30
+helperLabel=com.makeavish.ClawShell.HelperPrototype.he7799dae30.daemon
+identitySuffix=he7799dae30
+daemonCommand=enableBagMode
+statusAfterApprovalRaw=1 (enabled)
+launchctlManagedBy=com.apple.xpc.ServiceManagement
+launchctlRuns=1
+launchctlLastExitCode=0
+helperRuntimeUid=0
+helperRuntimeEuid=0
+helperCommandJson=enableBagMode
+helperStdoutLedgerEvent=bagModeHelperLedgerSample
+unregisterStatusBeforeRaw=1 (enabled)
+unregisterResult=success
+unregisterStatusAfterRaw=0 (notRegistered)
+statusAfterUnregisterRaw=0 (notRegistered)
+launchctlAfterUnregister=service-not-found
+```
+
+This artifact records unpromoted evidence that the ad-hoc SMAppService helper
+can dispatch at least one approved non-`status` fixed command as root and then
+cleanly unregister. The artifact still has `result=fail` and unpromoted `TODO`
+manifest rows, so it is not verifier-accepted #27 proof. It does not prove the
+full fixed-command matrix, production Bag Mode state mutation, or the admin
+approval/password UI flow.
 
 By default, the approved LaunchDaemon runs the fixed `status` command in
 dry-run mode. To prepare one artifact for a different approved-helper dry-run
@@ -425,11 +477,12 @@ Optional manifest `checkId` rows:
 ## Conclusion
 
 The current no-membership `SMAppService` helper shape reached enabled status,
-bootstrapped as root with readable stdout ledger evidence, and unregistered so
-launchctl no longer finds the service. The local ad-hoc SMAppService path
-remains viable before Developer ID funding. Bag Mode still remains blocked until
-#27 records the rest of the verifier-required helper proof: fixed command API,
-admin approval/password flow, post-approval status/bootstrap/log/launchctl,
+bootstrapped as root with readable stdout ledger evidence, dispatched one
+approved non-`status` fixed command, and unregistered so launchctl no longer
+finds the service. The local ad-hoc SMAppService path remains viable before
+Developer ID funding. Bag Mode still remains blocked until #27 records the rest
+of the verifier-required helper proof: broader fixed command API, admin
+approval/password flow, post-approval status/bootstrap/log/launchctl,
 root-ledger schema/ownership, reboot, update, repair, CLI helper commands,
 failure cases, and helper-owned Bag Mode state cleanup. Developer ID signing
 remains a later distribution/trust milestone.

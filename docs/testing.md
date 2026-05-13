@@ -335,10 +335,18 @@ and a mirrored `bagModeHelperLedgerSample` JSON event. A later
 `unregisterResult=success`, status raw `1 -> 0`, follow-up status raw `0`, and
 `launchctl` service-not-found. Treat this as local SMAppService root-bootstrap
 and unregister evidence, not complete #27 evidence. The manifest still needs
-deliberate promotion only after reviewing fixed-command API,
+deliberate promotion only after reviewing the broader fixed-command API,
 admin-approval/password-flow, post-approval status/bootstrap/log/launchctl,
 root-ledger schema/ownership, reboot, update, repair, CLI command,
 failure-case, and helper-owned Bag Mode state cleanup captures.
+The latest fixed-command dispatch artifact is
+`.build/helper-service-prototype/smappservice-command-enableBagMode-pending-20260513T051953Z`.
+It records `daemonCommand=enableBagMode`, status raw `1`, launchd `runs = 1`,
+exit code `0`, helper stdout with `uid=0`, `euid=0`, `commandJson="enableBagMode"`,
+a mirrored `bagModeHelperLedgerSample`, and cleanup unregister to status raw
+`0` / launchctl service-not-found. Treat this as one approved non-`status`
+fixed-command dry-run dispatch, not as proof of the full command matrix or
+production Bag Mode state mutation.
 New artifacts derive a unique SMAppService bundle/helper identity from the
 output path, and write it to `appBundleIdentifier`, `helperLabel`, and
 `identitySuffix` in `validation-config.txt`. Set

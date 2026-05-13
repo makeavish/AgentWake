@@ -10,7 +10,7 @@ three evidence issues:
 | Issue | Current local state | Next operator action |
 |---|---|---|
 | [#29](https://github.com/makeavish/ClawShell/issues/29) primitive matrix | Real hardware `pmset disablesleep` matrix evidence is still missing. | Run the primitive matrix on target hardware, fill `manual-result.md`, verify the manifest, and attach pass/fail/inconclusive evidence. |
-| [#27](https://github.com/makeavish/ClawShell/issues/27) no-membership helper prototype | `.build/helper-service-readiness/recheck-20260512T105510Z` records full Xcode/tooling available, Developer ID Application identities = 0, Developer ID Installer identities = 0, and `signedPrototypeReady=false`. `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z` records a fresh ad-hoc `SMAppService` helper reaching enabled status, launchd `runs = 1`, root helper stdout with `uid=0`/`euid=0`, mirrored `bagModeHelperLedgerSample` JSON, root ledger `0600`, and unregister cleanup to status raw `0` / launchctl service-not-found. Developer ID membership is intentionally deferred. | Complete the remaining #27 verifier proof: fixed command API, admin approval/password flow, post-approval status/bootstrap/log/launchctl promotion, root-ledger schema/ownership promotion, reboot, update, repair, CLI helper commands, failure cases, and helper-owned Bag Mode state cleanup before deciding whether fallback LaunchDaemon evidence is needed. |
+| [#27](https://github.com/makeavish/ClawShell/issues/27) no-membership helper prototype | `.build/helper-service-readiness/recheck-20260512T105510Z` records full Xcode/tooling available, Developer ID Application identities = 0, Developer ID Installer identities = 0, and `signedPrototypeReady=false`. `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z` records a fresh ad-hoc `SMAppService` helper reaching enabled status, launchd `runs = 1`, root helper stdout with `uid=0`/`euid=0`, mirrored `bagModeHelperLedgerSample` JSON, root ledger `0600`, and unregister cleanup to status raw `0` / launchctl service-not-found. `.build/helper-service-prototype/smappservice-command-enableBagMode-pending-20260513T051953Z` records an approved non-`status` fixed command: `enableBagMode` ran once as root, exited `0`, mirrored ledger JSON, and unregistered cleanly. Developer ID membership is intentionally deferred. | Complete the remaining #27 verifier proof: broader fixed command matrix, admin approval/password flow, post-approval row promotion, root-ledger schema/ownership promotion, reboot, update, repair, CLI helper commands, failure cases, and helper-owned Bag Mode state cleanup before deciding whether fallback LaunchDaemon evidence is needed. |
 | [#25](https://github.com/makeavish/ClawShell/issues/25) thermal provider proof | The unique no-membership `SMAppService` helper artifacts provide root-runtime evidence after approval, but are not verifier-accepted provider proof. `powermetrics --samplers thermal` captured only thermal pressure before timing out, `--samplers all` timed out at 1s, and the 5s `all` diagnostic has no trustworthy numeric temperature when interpreted with the hardened detector. | Test a different helper-owned source, then capture provider freshness, cadence, timeout, coverage, and fail-closed evidence. |
 
 Readiness harnesses, scaffolds, and verifier success are support gates only.
@@ -120,10 +120,15 @@ traction or donations justify it. The May 13, 2026 no-membership
 reached enabled status, was submitted by ServiceManagement, ran once as root,
 and wrote a readable stdout mirror containing `bagModeHelperLedgerSample`. A
 later cleanup capture called `unregister()` successfully, moved status from raw
-`1` to raw `0`, and left `launchctl` unable to find the daemon. The required
-#27 prototype now needs the rest of the lifecycle evidence rather than another
-bootstrap-only or unregister-only capture, including admin approval/password
-flow evidence because this artifact does not prove which System Settings UI was
+`1` to raw `0`, and left `launchctl` unable to find the daemon. A follow-up
+command-specific artifact,
+`.build/helper-service-prototype/smappservice-command-enableBagMode-pending-20260513T051953Z`,
+also reached enabled status and ran `enableBagMode` once as root in dry-run
+mode with `uid=0`, `euid=0`, launchd `runs = 1`, exit code `0`, mirrored
+ledger JSON, and clean unregister evidence. The required #27 prototype now
+needs the rest of the lifecycle evidence rather than another bootstrap-only,
+single-command, or unregister-only capture, including admin approval/password
+flow evidence because these artifacts do not prove which System Settings UI was
 shown before enablement.
 
 Before attaching a helper prototype package, run:
