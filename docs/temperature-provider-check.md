@@ -28,6 +28,7 @@ Alternate source probe artifacts:
 - `.build/temperature-provider-proof/alt-source-hidutil-20260513T131843Z`
 - `.build/temperature-provider-proof/alt-source-nvme-20260513T134806Z`
 - `.build/temperature-provider-proof/alt-source-hid-dump-20260513T143454Z`
+- `.build/temperature-provider-proof/alt-source-iohid-20260513T150045Z`
 
 ## Question
 
@@ -66,6 +67,7 @@ Reference:
 | SMAppService helper `powermetrics --samplers all` | Same no-membership helper launched as root | 1s run produced only the command header; 5s diagnostic emitted broad task/power output but still timed out | No trustworthy numeric temperature observed after detector correction | Not validated; no cutoff signal captured | Diagnostic only; command not viable as provider |
 | SMAppService helper `ioreg -r -c AppleSMCKeysEndpoint -l` | Same no-membership helper launched as root | Early 1s run timed out after partial I/O Registry output; later bounded run completed before its timeout | Numeric-looking values were visible, but the accepted-provider detector rejects them as AppleSmartBattery context | Not validated; no freshness/cadence/coverage proof | Diagnostic only; no cutoff provider selected |
 | SMAppService helper `ioreg -r -c AppleARMPMUTempSensor -l` | Same no-membership helper launched as root after approval | Helper-owned run completed within the 1s timeout and captured the PMU inventory without truncation | No numeric temperature candidates observed | PMU node names such as `PMU tdev*` are metadata, not readings | Candidate rejected until a real PMU reading API is found |
+| Native IOHID service property probe | Works without root in the non-mutating alternate-source harness | Completed inside the 2s probe timeout | No common current-value or numeric value properties observed | HID PMU/NVMe service names only; no scalar reading or coverage proof | Discovery only; no cutoff provider selected |
 
 Captured values from `validation-config.txt`:
 
@@ -359,6 +361,15 @@ additional fields (`hidPmuTemperatureServiceCount`,
 make the PMU/NVMe HID surface easier to audit, but they remain service metadata
 only and do not promote `numericCutoffSource`.
 
+The `.build/temperature-provider-proof/alt-source-iohid-20260513T150045Z`
+artifact adds a native `IOHIDEventSystemClient` / `IOHIDServiceClient` property
+probe over the same vendor-defined temperature usage. It completed inside the
+2 second timeout and saw `iohidTemperatureServiceCount=77`, including PMU and
+NVMe-like services, but recorded `iohidValuePropertyCount=0` and
+`iohidNumericValuePropertyCount=0`. That makes the HID service surface more
+explicitly negative: the services are visible, but common current-value
+properties are not exposed to this non-mutating app-side probe.
+
 The follow-up `.build/temperature-provider-proof/ioreg-pmu-local-20260513T105941Z`
 artifact adds `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu`, which runs
 `/usr/sbin/ioreg -r -c AppleARMPMUTempSensor -l`. A direct generated-helper run
@@ -410,7 +421,7 @@ sources, helper-owned `powermetrics` variants, the helper-owned `ioreg-smc`
 diagnostic source, the visible PMU/NVMe `ioreg` sensor inventories, or the HID
 service inventory tested.
 
-`ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. The no-membership `SMAppService` path can launch a helper as root on this machine. The tested `powermetrics` sampler variants did not provide a trustworthy numeric cutoff source. The bounded `ioreg-smc` diagnostic path now runs as root through SMAppService without timing out, but its observed `AppleSmartBattery` values are rejected as production cutoff candidates and do not prove CPU/package or closed-bag thermal coverage. The `ioreg-pmu` path now also runs as root through SMAppService without timing out, but the visible `AppleARMPMUTempSensor` inventory exposes PMU sensor names without numeric readings. The refreshed alternate-source probe now also captures `hidutil list` and NVMe temperature sensor inventory; on this machine those expose `PMU tdev*`, `PMU tdie*`, and `NAND CH0 temp` names, but still have no accepted non-battery numeric candidates. [#25](https://github.com/makeavish/ClawShell/issues/25) must still prove helper/root non-battery numeric output, freshness, cadence, timeout, and coverage.
+`ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. The no-membership `SMAppService` path can launch a helper as root on this machine. The tested `powermetrics` sampler variants did not provide a trustworthy numeric cutoff source. The bounded `ioreg-smc` diagnostic path now runs as root through SMAppService without timing out, but its observed `AppleSmartBattery` values are rejected as production cutoff candidates and do not prove CPU/package or closed-bag thermal coverage. The `ioreg-pmu` path now also runs as root through SMAppService without timing out, but the visible `AppleARMPMUTempSensor` inventory exposes PMU sensor names without numeric readings. The refreshed alternate-source probe now captures `hidutil list`, HID temperature-service NDJSON/dump metadata, native IOHID service properties, and NVMe temperature sensor inventory; on this machine those expose `PMU tdev*`, `PMU tdie*`, and `NAND CH0 temp` names, but no common IOHID current-value properties and no accepted non-battery numeric candidates. [#25](https://github.com/makeavish/ClawShell/issues/25) must still prove helper/root non-battery numeric output, freshness, cadence, timeout, and coverage.
 
 Production Bag Mode remains blocked until [#25](https://github.com/makeavish/ClawShell/issues/25) validates a no-membership helper or helper-equivalent provider that can supply fresh, permission-compatible thermal evidence with the required fail-closed behavior.
 
@@ -446,8 +457,8 @@ scripts/temperature-provider-alt-source-probe.sh \
 ```
 
 This captures local SMC, PMU temperature sensor, NVMe temperature sensor, die
-temperature controller, HID service/dump, and IOReport-style surfaces as
-discovery evidence. It also writes
+temperature controller, HID service/dump, native IOHID service properties, and
+IOReport-style surfaces as discovery evidence. It also writes
 `evidence/numeric-temperature-candidates.txt`, a bounded list of captured lines
 that look like labeled numeric temperature values and should be reviewed before
 the next helper-owned provider attempt, plus
@@ -456,8 +467,9 @@ look numeric but are not production cutoff candidates. Generic `die-id`,
 `die-count`, and `*-temp` table/interface identifiers are intentionally
 excluded from the accepted candidate list. PMU `tdev`/`tdie` rows from
 `hidutil list`, HID temperature-service NDJSON/dump output, and NVMe
-`NAND ... temp` product names are captured as inventory leads only. The probe
-does not select a provider or promote numeric cutoff proof;
+`NAND ... temp` product names are captured as inventory leads only. The native
+IOHID probe checks common current-value property keys, but its local run found
+zero value properties. The probe does not select a provider or promote numeric cutoff proof;
 `providerProofReady=false` remains expected until helper-owned numeric output,
 freshness, cadence, timeout behavior, and closed-bag coverage are proven.
 

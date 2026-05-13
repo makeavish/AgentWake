@@ -1175,6 +1175,10 @@ for required_file in \
     evidence/hidutil-temperature-service-ndjson.status \
     evidence/hidutil-temperature-service-dump.txt \
     evidence/hidutil-temperature-service-dump.status \
+    evidence/iohid-service-probe-build.txt \
+    evidence/iohid-service-probe-build.status \
+    evidence/iohid-temperature-service-properties.txt \
+    evidence/iohid-temperature-service-properties.status \
     evidence/ioreport-temperature-legend-inventory.txt \
     evidence/ioreport-temperature-legend-inventory.status \
     evidence/numeric-temperature-candidates.txt \
@@ -1200,6 +1204,20 @@ if ! grep -q '^numericCutoffSource=false$' "$temperature_alt_source_dir/validati
     echo "Temperature alternate source probe promoted discovery output to cutoff source" >&2
     cat "$temperature_alt_source_dir/validation-config.txt" >&2
     exit 1
+fi
+if [[ "$(uname -s)" == "Darwin" && -n "$(command -v clang 2>/dev/null || true)" ]]; then
+    if ! grep -q '^exitCode=0$' "$temperature_alt_source_dir/evidence/iohid-service-probe-build.status"; then
+        echo "Temperature alternate source native IOHID probe did not compile in default smoke" >&2
+        cat "$temperature_alt_source_dir/evidence/iohid-service-probe-build.status" >&2
+        cat "$temperature_alt_source_dir/evidence/iohid-service-probe-build.txt" >&2
+        exit 1
+    fi
+    if ! grep -q '^iohidProbeFormat=iohid-service-property-probe-v1$' "$temperature_alt_source_dir/evidence/iohid-temperature-service-properties.txt"; then
+        echo "Temperature alternate source native IOHID probe did not run in default smoke" >&2
+        cat "$temperature_alt_source_dir/evidence/iohid-temperature-service-properties.status" >&2
+        cat "$temperature_alt_source_dir/evidence/iohid-temperature-service-properties.txt" >&2
+        exit 1
+    fi
 fi
 if ! awk -F '\t' '$1 == "numeric-cutoff-source" && $2 == "TODO" { found = 1 } END { exit !found }' "$temperature_alt_source_dir/source-probe-manifest.tsv"; then
     echo "Temperature alternate source probe should leave numeric cutoff source as TODO" >&2
@@ -1351,8 +1369,25 @@ else
 fi
 EOF
 chmod +x "$temperature_alt_source_fake_bin/hidutil"
+cat >"$temperature_alt_source_fake_bin/iohid-probe" <<'EOF'
+#!/usr/bin/env bash
+cat <<'PROBE'
+iohidProbeFormat=iohid-service-property-probe-v1
+serviceCount=4
+service index=0 registryID=4294969528 product="PMU tdev1" ioClass="AppleSMCKeysEndpoint"
+service index=1 registryID=4294969950 product="PMU tdie7" ioClass="AppleSMCKeysEndpoint"
+service index=2 registryID=4294970263 product="NAND CH0 temp" ioClass="AppleEmbeddedNVMeTemperatureSensor"
+matchedTemperatureServices=3
+matchedPmuProductCount=2
+matchedNvmeProductCount=1
+valuePropertyCount=0
+numericValuePropertyCount=0
+PROBE
+EOF
+chmod +x "$temperature_alt_source_fake_bin/iohid-probe"
 temperature_alt_source_fake="$bag_mode_smoke_dir/temperature-alt-source-fake"
 CLAWSHELL_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS=5 \
+CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOHID_PROBE="$temperature_alt_source_fake_bin/iohid-probe" \
 PATH="$temperature_alt_source_fake_bin:$PATH" \
     scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_fake" >/dev/null
 for expected_key in \
@@ -1365,6 +1400,10 @@ for expected_key in \
     hidPmuTemperatureServiceCount=2 \
     hidNvmeTemperatureInventoryPresent=true \
     hidTemperatureServiceDumpPresent=true \
+    iohidProbeAvailable=true \
+    iohidTemperatureServiceCount=3 \
+    iohidValuePropertyCount=0 \
+    iohidNumericValuePropertyCount=0 \
     ioreportTemperatureLegendPresent=true \
     candidateSurfaceAvailable=true \
     numericTemperatureObserved=true \
@@ -1439,6 +1478,16 @@ if ! awk -F '\t' '$1 == "hidutil-temperature-service-dump" && $2 == "evidence" &
     cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
     exit 1
 fi
+if ! awk -F '\t' '$1 == "iohid-service-probe-build" && $2 == "evidence" && $3 == "evidence/iohid-service-probe-build.txt" { found = 1 } END { exit !found }' "$temperature_alt_source_fake/source-probe-manifest.tsv"; then
+    echo "Temperature alternate source probe manifest did not attach IOHID probe build evidence" >&2
+    cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "iohid-temperature-service-properties" && $2 == "evidence" && $3 == "evidence/iohid-temperature-service-properties.txt" { found = 1 } END { exit !found }' "$temperature_alt_source_fake/source-probe-manifest.tsv"; then
+    echo "Temperature alternate source probe manifest did not attach IOHID service property evidence" >&2
+    cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
+    exit 1
+fi
 if ! awk -F '\t' '$1 == "nvme-temperature-sensor-inventory" && $2 == "evidence" && $3 == "evidence/nvme-temperature-sensor-inventory.txt" { found = 1 } END { exit !found }' "$temperature_alt_source_fake/source-probe-manifest.tsv"; then
     echo "Temperature alternate source probe manifest did not attach NVMe temperature sensor inventory evidence" >&2
     cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
@@ -1447,6 +1496,85 @@ fi
 if ! awk -F '\t' '$1 == "rejected-temperature-candidates" && $2 == "evidence" && $3 == "evidence/rejected-temperature-candidates.txt" { found = 1 } END { exit !found }' "$temperature_alt_source_fake/source-probe-manifest.tsv"; then
     echo "Temperature alternate source probe manifest did not attach rejected candidate evidence" >&2
     cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
+    exit 1
+fi
+temperature_alt_source_zero_bin="$bag_mode_smoke_dir/temperature-alt-source-zero-fakes"
+mkdir -p "$temperature_alt_source_zero_bin"
+cat >"$temperature_alt_source_zero_bin/iohid-probe-zero" <<'EOF'
+#!/usr/bin/env bash
+cat <<'PROBE'
+iohidProbeFormat=iohid-service-property-probe-v1
+serviceCount=1
+matchedTemperatureServices=0
+matchedPmuProductCount=0
+matchedNvmeProductCount=0
+valuePropertyCount=0
+numericValuePropertyCount=0
+PROBE
+EOF
+cat >"$temperature_alt_source_zero_bin/ioreg" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat >"$temperature_alt_source_zero_bin/hidutil" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$temperature_alt_source_zero_bin/iohid-probe-zero" "$temperature_alt_source_zero_bin/ioreg" "$temperature_alt_source_zero_bin/hidutil"
+temperature_alt_source_fake_zero="$bag_mode_smoke_dir/temperature-alt-source-fake-zero-iohid"
+CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOHID_PROBE="$temperature_alt_source_zero_bin/iohid-probe-zero" \
+CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREG="$temperature_alt_source_zero_bin/ioreg" \
+CLAWSHELL_TEMPERATURE_ALT_SOURCE_HIDUTIL="$temperature_alt_source_zero_bin/hidutil" \
+    scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_fake_zero" >/dev/null
+if ! grep -q '^iohidProbeAvailable=true$' "$temperature_alt_source_fake_zero/validation-config.txt"; then
+    echo "Temperature alternate source probe did not record zero-service IOHID probe availability" >&2
+    cat "$temperature_alt_source_fake_zero/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^iohidTemperatureServiceCount=0$' "$temperature_alt_source_fake_zero/validation-config.txt"; then
+    echo "Temperature alternate source probe did not record zero IOHID temperature services" >&2
+    cat "$temperature_alt_source_fake_zero/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^candidateSurfaceAvailable=false$' "$temperature_alt_source_fake_zero/validation-config.txt"; then
+    echo "Temperature alternate source probe treated zero-match IOHID availability as candidate-surface evidence" >&2
+    cat "$temperature_alt_source_fake_zero/validation-config.txt" >&2
+    exit 1
+fi
+temperature_alt_source_hanging_clang_bin="$bag_mode_smoke_dir/temperature-alt-source-hanging-clang-fakes"
+mkdir -p "$temperature_alt_source_hanging_clang_bin"
+temperature_alt_source_hanging_marker="$bag_mode_smoke_dir/temperature-alt-source-hanging-clang-marker"
+: >"$temperature_alt_source_hanging_marker"
+cat >"$temperature_alt_source_hanging_clang_bin/hanging-clang" <<'EOF'
+#!/usr/bin/env bash
+trap '' TERM
+sh -c 'trap "" TERM; tail -f "$1" >/dev/null' sh "$CLAWSHELL_FAKE_CLANG_MARKER" &
+wait
+EOF
+cat >"$temperature_alt_source_hanging_clang_bin/ioreg" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat >"$temperature_alt_source_hanging_clang_bin/hidutil" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$temperature_alt_source_hanging_clang_bin/hanging-clang" "$temperature_alt_source_hanging_clang_bin/ioreg" "$temperature_alt_source_hanging_clang_bin/hidutil"
+temperature_alt_source_hanging_clang="$bag_mode_smoke_dir/temperature-alt-source-hanging-clang"
+CLAWSHELL_FAKE_CLANG_MARKER="$temperature_alt_source_hanging_marker" \
+CLAWSHELL_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS=1 \
+CLAWSHELL_TEMPERATURE_ALT_SOURCE_CLANG="$temperature_alt_source_hanging_clang_bin/hanging-clang" \
+CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREG="$temperature_alt_source_hanging_clang_bin/ioreg" \
+CLAWSHELL_TEMPERATURE_ALT_SOURCE_HIDUTIL="$temperature_alt_source_hanging_clang_bin/hidutil" \
+    scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_hanging_clang" >/dev/null
+if ! grep -q '^timedOut=true$' "$temperature_alt_source_hanging_clang/evidence/iohid-service-probe-build.status"; then
+    echo "Temperature alternate source probe did not time out hanging IOHID compiler" >&2
+    cat "$temperature_alt_source_hanging_clang/evidence/iohid-service-probe-build.status" >&2
+    exit 1
+fi
+if pgrep -f "$temperature_alt_source_hanging_marker" >/dev/null 2>&1; then
+    echo "Temperature alternate source probe left fake compiler child running after timeout" >&2
+    pkill -f "$temperature_alt_source_hanging_marker" >/dev/null 2>&1 || true
     exit 1
 fi
 
