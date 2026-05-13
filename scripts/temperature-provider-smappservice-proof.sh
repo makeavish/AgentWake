@@ -910,9 +910,69 @@ let numericTemperaturePatterns = [
     #"-?\d+(\.\d+)?([ \t]*°C|[ \t]+(celsius|degrees?[ \t]*C|C\b))"#,
     #"(^|[^A-Za-z0-9_-])([A-Za-z0-9]*temperature|temp)[^A-Za-z0-9_:=.-]*(=|:)[ \t]*-?\d+(\.\d+)?([ \t]*(°C|celsius|degrees?[ \t]*C|C\b))?"#,
 ]
-let numericObserved = numericTemperaturePatterns.contains { pattern in
-    combinedOutput.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+
+func matchesNumericTemperature(_ text: String) -> Bool {
+    numericTemperaturePatterns.contains { pattern in
+        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
 }
+
+func groups(for regex: NSRegularExpression, in text: String) -> [String]? {
+    let range = NSRange(text.startIndex..<text.endIndex, in: text)
+    guard let match = regex.firstMatch(in: text, range: range) else {
+        return nil
+    }
+
+    var values: [String] = []
+    for index in 1..<match.numberOfRanges {
+        guard let groupRange = Range(match.range(at: index), in: text) else {
+            return nil
+        }
+        values.append(String(text[groupRange]))
+    }
+    return values
+}
+
+func ioregSMCNumericTemperatureAnalysis(_ text: String) -> (candidateCount: Int, acceptedCount: Int, rejectedBatteryContextCount: Int) {
+    let nodeRegex = try! NSRegularExpression(pattern: #"^([ \t|]*)\+-o[ \t]+([^ \t<]+)"#)
+    var stack: [(indent: Int, name: String)] = []
+    var candidateCount = 0
+    var acceptedCount = 0
+    var rejectedBatteryContextCount = 0
+
+    for line in text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+        if let nodeGroups = groups(for: nodeRegex, in: line), nodeGroups.count == 2 {
+            let indent = nodeGroups[0].count
+            while let last = stack.last, last.indent >= indent {
+                stack.removeLast()
+            }
+            stack.append((indent: indent, name: nodeGroups[1]))
+        }
+
+        guard matchesNumericTemperature(line) else {
+            continue
+        }
+
+        candidateCount += 1
+        let inBatteryContext = stack.contains { node in
+            node.name == "AppleSmartBattery" || node.name == "AppleSmartBatteryManager"
+        }
+        if inBatteryContext {
+            rejectedBatteryContextCount += 1
+        } else {
+            acceptedCount += 1
+        }
+    }
+
+    return (candidateCount, acceptedCount, rejectedBatteryContextCount)
+}
+let ioregSMCAnalysis = ioregSMCNumericTemperatureAnalysis(combinedOutput)
+let legacyNumericObserved = matchesNumericTemperature(combinedOutput)
+let numericTemperatureCandidateCount = providerSource == "ioreg-smc" ? ioregSMCAnalysis.candidateCount : (legacyNumericObserved ? 1 : 0)
+let numericTemperatureAcceptedCount = providerSource == "ioreg-smc" ? ioregSMCAnalysis.acceptedCount : (legacyNumericObserved ? 1 : 0)
+let numericTemperatureRejectedBatteryContextCount = providerSource == "ioreg-smc" ? ioregSMCAnalysis.rejectedBatteryContextCount : 0
+let numericObserved = numericTemperatureAcceptedCount > 0
+let numericTemperatureRejectionReason = providerSource == "ioreg-smc" && numericTemperatureCandidateCount > 0 && numericTemperatureAcceptedCount == 0 ? "ioreg-smc-battery-context-only" : "none"
 let helperOwned = geteuid() == 0
 let durationSeconds = Int(finished.timeIntervalSince(started).rounded(.up))
 
@@ -946,6 +1006,10 @@ timedOut=\(timedOut)
 exitCode=\(exitCode)
 helperOwned=\(helperOwned)
 numericTemperatureObserved=\(numericObserved)
+numericTemperatureCandidateCount=\(numericTemperatureCandidateCount)
+numericTemperatureAcceptedCount=\(numericTemperatureAcceptedCount)
+numericTemperatureRejectedBatteryContextCount=\(numericTemperatureRejectedBatteryContextCount)
+numericTemperatureRejectionReason=\(numericTemperatureRejectionReason)
 runError=\(runError.isEmpty ? "none" : runError)
 """
 
@@ -976,6 +1040,10 @@ timedOut=\(timedOut)
 exitCode=\(exitCode)
 helperOwned=\(helperOwned)
 numericTemperatureObserved=\(numericObserved)
+numericTemperatureCandidateCount=\(numericTemperatureCandidateCount)
+numericTemperatureAcceptedCount=\(numericTemperatureAcceptedCount)
+numericTemperatureRejectedBatteryContextCount=\(numericTemperatureRejectedBatteryContextCount)
+numericTemperatureRejectionReason=\(numericTemperatureRejectionReason)
 effect=single-sample-proof-attempt
 
 """

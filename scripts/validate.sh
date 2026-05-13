@@ -181,6 +181,113 @@ SWIFT
 swift - <<'SWIFT'
 import Foundation
 
+let numericTemperaturePatterns = [
+    #"-?\d+(\.\d+)?([ \t]*°C|[ \t]+(celsius|degrees?[ \t]*C|C\b))"#,
+    #"(^|[^A-Za-z0-9_-])([A-Za-z0-9]*temperature|temp)[^A-Za-z0-9_:=.-]*(=|:)[ \t]*-?\d+(\.\d+)?([ \t]*(°C|celsius|degrees?[ \t]*C|C\b))?"#,
+]
+
+func matchesNumericTemperature(_ text: String) -> Bool {
+    numericTemperaturePatterns.contains { pattern in
+        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+}
+
+func groups(for regex: NSRegularExpression, in text: String) -> [String]? {
+    let range = NSRange(text.startIndex..<text.endIndex, in: text)
+    guard let match = regex.firstMatch(in: text, range: range) else {
+        return nil
+    }
+
+    var values: [String] = []
+    for index in 1..<match.numberOfRanges {
+        guard let groupRange = Range(match.range(at: index), in: text) else {
+            return nil
+        }
+        values.append(String(text[groupRange]))
+    }
+    return values
+}
+
+func ioregSMCNumericTemperatureAnalysis(_ text: String) -> (candidateCount: Int, acceptedCount: Int, rejectedBatteryContextCount: Int) {
+    let nodeRegex = try! NSRegularExpression(pattern: #"^([ \t|]*)\+-o[ \t]+([^ \t<]+)"#)
+    var stack: [(indent: Int, name: String)] = []
+    var candidateCount = 0
+    var acceptedCount = 0
+    var rejectedBatteryContextCount = 0
+
+    for line in text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+        if let nodeGroups = groups(for: nodeRegex, in: line), nodeGroups.count == 2 {
+            let indent = nodeGroups[0].count
+            while let last = stack.last, last.indent >= indent {
+                stack.removeLast()
+            }
+            stack.append((indent: indent, name: nodeGroups[1]))
+        }
+
+        guard matchesNumericTemperature(line) else {
+            continue
+        }
+
+        candidateCount += 1
+        let inBatteryContext = stack.contains { node in
+            node.name == "AppleSmartBattery" || node.name == "AppleSmartBatteryManager"
+        }
+        if inBatteryContext {
+            rejectedBatteryContextCount += 1
+        } else {
+            acceptedCount += 1
+        }
+    }
+
+    return (candidateCount, acceptedCount, rejectedBatteryContextCount)
+}
+
+let batteryOnly = """
++-o Root
+  +-o AppleSmartBatteryManager
+    +-o AppleSmartBattery
+      "Temperature" = 3044
+      "VirtualTemperature" = 3119
+"""
+let mixed = """
++-o Root
+  +-o AppleSmartBattery
+    "Temperature" = 3044
+  +-o AppleThermalZone
+    "Temperature" = 4200
+"""
+let branchPrefixedBattery = """
++-o Root
+| +-o AppleSmartBatteryManager
+| | +-o AppleSmartBattery
+| |   "Temperature" = 3044
+| |   "VirtualTemperature" = 3119
+"""
+
+let batteryOnlyAnalysis = ioregSMCNumericTemperatureAnalysis(batteryOnly)
+if batteryOnlyAnalysis.candidateCount != 2 ||
+    batteryOnlyAnalysis.acceptedCount != 0 ||
+    batteryOnlyAnalysis.rejectedBatteryContextCount != 2 {
+    fatalError("ioreg-smc battery-only analysis should reject battery-context candidates: \(batteryOnlyAnalysis)")
+}
+
+let mixedAnalysis = ioregSMCNumericTemperatureAnalysis(mixed)
+if mixedAnalysis.candidateCount != 2 ||
+    mixedAnalysis.acceptedCount != 1 ||
+    mixedAnalysis.rejectedBatteryContextCount != 1 {
+    fatalError("ioreg-smc mixed analysis should accept only non-battery candidates: \(mixedAnalysis)")
+}
+
+let branchPrefixedBatteryAnalysis = ioregSMCNumericTemperatureAnalysis(branchPrefixedBattery)
+if branchPrefixedBatteryAnalysis.candidateCount != 2 ||
+    branchPrefixedBatteryAnalysis.acceptedCount != 0 ||
+    branchPrefixedBatteryAnalysis.rejectedBatteryContextCount != 2 {
+    fatalError("ioreg-smc branch-prefixed battery analysis should reject battery-context candidates: \(branchPrefixedBatteryAnalysis)")
+}
+SWIFT
+swift - <<'SWIFT'
+import Foundation
+
 let raw = Data("abc🙂".utf8).prefix(5)
 let text = String(decoding: raw, as: UTF8.self)
 precondition(raw.count == 5, "bounded capture must retain raw byte count")
@@ -1839,6 +1946,14 @@ if ! grep -q 'readBoundedData' "$temperature_smappservice_provider_ioreg_smc/sou
     ! grep -q 'String(decoding: stdoutData.0, as: UTF8.self)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
     ! grep -q 'stdoutBytes=\\(stdoutByteCount)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
     echo "Temperature SMAppService provider helper source did not include bounded file-backed output capture" >&2
+    cat "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
+    exit 1
+fi
+if ! grep -q 'ioregSMCNumericTemperatureAnalysis' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'AppleSmartBatteryManager' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'numericTemperatureRejectedBatteryContextCount' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'ioreg-smc-battery-context-only' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
+    echo "Temperature SMAppService provider helper source did not reject ioreg-smc battery-context temperature candidates" >&2
     cat "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
     exit 1
 fi

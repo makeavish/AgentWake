@@ -171,7 +171,7 @@ The provider proof must choose a fresh, permission-compatible temperature source
 
 Current artifact: [Temperature Provider Check](temperature-provider-check.md).
 
-The May 12, 2026 non-root source check did not select a production provider. `ProcessInfo.thermalState` remains a supplemental coarse signal, `pmset -g therm` did not provide current numeric temperature evidence, and AppleSmartBattery temperature did not prove closed-bag coverage or freshness. Later no-membership `SMAppService` provider runs proved that an ad-hoc helper can launch as root on this machine. The tested `powermetrics` sampler variants did not provide a trustworthy numeric cutoff source. The bounded `ioreg-smc` diagnostic source now runs as root through SMAppService without timing out, but its visible numeric candidates are under `AppleSmartBattery`; coverage analysis is still missing and these values should not be promoted as CPU/package cutoff proof. Helper-side provider validation is tracked in [#25](https://github.com/makeavish/ClawShell/issues/25).
+The May 12, 2026 non-root source check did not select a production provider. `ProcessInfo.thermalState` remains a supplemental coarse signal, `pmset -g therm` did not provide current numeric temperature evidence, and AppleSmartBattery temperature did not prove closed-bag coverage or freshness. Later no-membership `SMAppService` provider runs proved that an ad-hoc helper can launch as root on this machine. The tested `powermetrics` sampler variants did not provide a trustworthy numeric cutoff source. The bounded `ioreg-smc` diagnostic source now runs as root through SMAppService without timing out, but its visible numeric candidates are under `AppleSmartBattery`; new proof attempts reject those battery-context values as production cutoff candidates. Helper-side provider validation is tracked in [#25](https://github.com/makeavish/ClawShell/issues/25).
 
 Before attempting helper/root sampling, run the non-mutating preflight:
 
@@ -232,8 +232,9 @@ with `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc`. That mode runs
 `/usr/sbin/ioreg -r -c AppleSMCKeysEndpoint -l` from the approved helper. The
 current SMAppService artifact runs that bounded source as root within the 1
 second timeout, but the observed numeric candidates are under
-`AppleSmartBattery`. The next #25 step is to reject those candidates for
-closed-bag coverage or promote a better helper-owned source.
+`AppleSmartBattery`. New proof attempts reject those candidates for production
+cutoff evidence and must promote a better helper-owned source before #25 can
+close.
 
 Each artifact also gets a unique SMAppService identity derived from its output
 path so repeated ad-hoc attempts do not reuse stale approval/code-signing state.
