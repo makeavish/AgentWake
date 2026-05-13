@@ -1165,6 +1165,8 @@ for required_file in \
     evidence/smc-endpoint-inventory.status \
     evidence/pmu-temperature-sensor-inventory.txt \
     evidence/pmu-temperature-sensor-inventory.status \
+    evidence/nvme-temperature-sensor-inventory.txt \
+    evidence/nvme-temperature-sensor-inventory.status \
     evidence/die-temperature-controller-inventory.txt \
     evidence/die-temperature-controller-inventory.status \
     evidence/hidutil-service-inventory.txt \
@@ -1276,6 +1278,10 @@ case "$*" in
   *AppleARMPMUTempSensor*)
     echo '+-o AppleARMPMUTempSensor  <class AppleARMPMUTempSensor>'
     ;;
+  *AppleEmbeddedNVMeTemperatureSensor*)
+    echo '+-o AppleEmbeddedNVMeTemperatureSensor  <class AppleEmbeddedNVMeTemperatureSensor>'
+    echo '  |   "Product" = "NAND CH0 temp"'
+    ;;
   *AppleDieTempController*)
     echo '+-o AppleDieTempController  <class AppleDieTempController>'
     ;;
@@ -1323,6 +1329,7 @@ PATH="$temperature_alt_source_fake_bin:$PATH" \
 for expected_key in \
     smcEndpointPresent=true \
     pmuTempSensorPresent=true \
+    nvmeTempSensorPresent=true \
     dieTempControllerPresent=true \
     hidutilAvailable=true \
     hidPmuTemperatureInventoryPresent=true \
@@ -1387,6 +1394,11 @@ if ! awk -F '\t' '$1 == "numeric-temperature-candidates" && $2 == "evidence" && 
 fi
 if ! awk -F '\t' '$1 == "hidutil-service-inventory" && $2 == "evidence" && $3 == "evidence/hidutil-service-inventory.txt" { found = 1 } END { exit !found }' "$temperature_alt_source_fake/source-probe-manifest.tsv"; then
     echo "Temperature alternate source probe manifest did not attach hidutil service inventory evidence" >&2
+    cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "nvme-temperature-sensor-inventory" && $2 == "evidence" && $3 == "evidence/nvme-temperature-sensor-inventory.txt" { found = 1 } END { exit !found }' "$temperature_alt_source_fake/source-probe-manifest.tsv"; then
+    echo "Temperature alternate source probe manifest did not attach NVMe temperature sensor inventory evidence" >&2
     cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
     exit 1
 fi

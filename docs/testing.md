@@ -204,14 +204,15 @@ scripts/temperature-provider-alt-source-probe.sh \
   --output-dir .build/temperature-provider-proof/alt-source-probe-$(date -u +%Y%m%dT%H%M%SZ)
 ```
 
-This records local SMC, PMU temperature sensor, die temperature controller, HID
-service, and IOReport-style surfaces. It also writes
+This records local SMC, PMU temperature sensor, NVMe temperature sensor, die
+temperature controller, HID service, and IOReport-style surfaces. It also writes
 `evidence/numeric-temperature-candidates.txt` so reviewers can see the exact
 labeled numeric temperature-like lines without promoting generic `die-id` or
 `*-temp` identifiers, and `evidence/rejected-temperature-candidates.txt` for
 battery-context lines that look numeric but are not cutoff candidates. The
 `hidutil` inventory is also discovery-only: PMU `tdev`/`tdie` names are sensor
-leads, not current readings. It is discovery evidence only:
+leads, not current readings. NVMe `NAND ... temp` product names are likewise
+inventory, not scalar readings. It is discovery evidence only:
 `providerProofReady` and `numericCutoffSource` stay `false` until helper-owned
 numeric output, freshness, cadence, timeout behavior, and closed-bag coverage
 are proven.
