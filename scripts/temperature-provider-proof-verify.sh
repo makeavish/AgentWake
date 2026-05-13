@@ -327,8 +327,8 @@ verify_config() {
     if ! is_choice_value "$CONFIG_HARDWARE_CLASS" "MacBook" "desktop" "unknown"; then
         record_error "validation-config.txt" "hardwareClass must be MacBook, desktop, or unknown"
     fi
-    if ! is_choice_value "$CONFIG_PROVIDER_SOURCE" "powermetrics" "ioreg-smc" "SMC" "IOReport" "other"; then
-        record_error "validation-config.txt" "providerSource must be powermetrics, ioreg-smc, SMC, IOReport, or other"
+    if ! is_choice_value "$CONFIG_PROVIDER_SOURCE" "powermetrics" "ioreg-smc" "ioreg-pmu" "SMC" "IOReport" "other"; then
+        record_error "validation-config.txt" "providerSource must be powermetrics, ioreg-smc, ioreg-pmu, SMC, IOReport, or other"
     fi
     if [[ "$CONFIG_HELPER_OWNED" != "true" ]]; then
         record_error "validation-config.txt" "helperOwned must be true for #25 evidence"
@@ -396,7 +396,7 @@ verify_manual_result() {
         check_required_field "$label"
     done
 
-    check_choice_field "Provider source" "powermetrics" "ioreg-smc" "SMC" "IOReport" "other"
+    check_choice_field "Provider source" "powermetrics" "ioreg-smc" "ioreg-pmu" "SMC" "IOReport" "other"
     check_choice_field "Helper-owned provider" "yes"
     check_choice_field "Numeric cutoff source" "yes"
     check_choice_field "No user-visible prompts" "yes"

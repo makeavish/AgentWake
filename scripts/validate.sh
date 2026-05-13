@@ -1995,6 +1995,37 @@ if ! grep -q 'ioregSMCNumericTemperatureAnalysis' "$temperature_smappservice_pro
     cat "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
     exit 1
 fi
+temperature_smappservice_provider_ioreg_pmu="$bag_mode_smoke_dir/temperature-smappservice-provider-ioreg-pmu"
+CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu \
+    CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
+    scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_ioreg_pmu" >/dev/null
+if ! grep -q '^providerSource=ioreg-pmu$' "$temperature_smappservice_provider_ioreg_pmu/validation-config.txt"; then
+    echo "Temperature SMAppService provider harness did not record ioreg-pmu provider source" >&2
+    cat "$temperature_smappservice_provider_ioreg_pmu/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^caseId=apple-silicon-ioreg-pmu-smappservice$' "$temperature_smappservice_provider_ioreg_pmu/validation-config.txt"; then
+    echo "Temperature SMAppService provider harness did not use the ioreg-pmu default case id" >&2
+    cat "$temperature_smappservice_provider_ioreg_pmu/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^powermetricsSamplers=not-used$' "$temperature_smappservice_provider_ioreg_pmu/validation-config.txt"; then
+    echo "Temperature SMAppService provider harness did not ignore stale powermetrics sampler settings for ioreg-pmu" >&2
+    cat "$temperature_smappservice_provider_ioreg_pmu/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q -- '--provider-source' "$temperature_smappservice_provider_ioreg_pmu/evidence/provider-command-or-api.txt" || \
+    ! grep -q '"ioreg-pmu"' "$temperature_smappservice_provider_ioreg_pmu/evidence/provider-command-or-api.txt"; then
+    echo "Temperature SMAppService provider harness did not wire ioreg-pmu source into the LaunchDaemon command" >&2
+    cat "$temperature_smappservice_provider_ioreg_pmu/evidence/provider-command-or-api.txt" >&2
+    exit 1
+fi
+if ! grep -q 'case "ioreg-pmu"' "$temperature_smappservice_provider_ioreg_pmu/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'AppleARMPMUTempSensor' "$temperature_smappservice_provider_ioreg_pmu/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
+    echo "Temperature SMAppService provider helper source did not include ioreg-pmu command path" >&2
+    cat "$temperature_smappservice_provider_ioreg_pmu/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
+    exit 1
+fi
 temperature_smappservice_provider_multi_samplers="$bag_mode_smoke_dir/temperature-smappservice-provider-multi-samplers"
 CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=thermal,cpu_power \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_multi_samplers" >/dev/null
@@ -2286,7 +2317,7 @@ if CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=smc \
     echo "Temperature SMAppService provider harness accepted an invalid provider source" >&2
     exit 1
 fi
-if ! grep -q "CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE must be one of: powermetrics, ioreg-smc" "$bag_mode_smoke_error"; then
+if ! grep -q "CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE must be one of: powermetrics, ioreg-smc, ioreg-pmu" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
@@ -2652,6 +2683,11 @@ cp -R "$temperature_proof_dir" "$temperature_proof_ioreg_smc"
 sed -i '' 's/providerSource=powermetrics/providerSource=ioreg-smc/' "$temperature_proof_ioreg_smc/validation-config.txt"
 sed -i '' 's/- Provider source: powermetrics/- Provider source: ioreg-smc/' "$temperature_proof_ioreg_smc/manual-result.md"
 scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_ioreg_smc/provider-manifest.tsv" >/dev/null
+temperature_proof_ioreg_pmu="$bag_mode_smoke_dir/temperature-proof-ioreg-pmu"
+cp -R "$temperature_proof_dir" "$temperature_proof_ioreg_pmu"
+sed -i '' 's/providerSource=powermetrics/providerSource=ioreg-pmu/' "$temperature_proof_ioreg_pmu/validation-config.txt"
+sed -i '' 's/- Provider source: powermetrics/- Provider source: ioreg-pmu/' "$temperature_proof_ioreg_pmu/manual-result.md"
+scripts/temperature-provider-proof-verify.sh --manifest "$temperature_proof_ioreg_pmu/provider-manifest.tsv" >/dev/null
 
 temperature_proof_scaffold="$bag_mode_smoke_dir/temperature-proof-scaffold"
 scripts/temperature-provider-proof-scaffold.sh --output-dir "$temperature_proof_scaffold" >/dev/null

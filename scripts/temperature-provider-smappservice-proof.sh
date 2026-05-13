@@ -17,7 +17,8 @@ for #25. The default mode is non-mutating: it builds an ad-hoc signed app and
 LaunchDaemon helper that will run one timeout-bounded provider sample when
 registered and approved. The default source is powermetrics; set
 CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc for the diagnostic I/O Registry
-SMC endpoint source.
+SMC endpoint source, or ioreg-pmu for the AppleARMPMUTempSensor inventory
+candidate.
 
 --register calls SMAppService and can change local helper state. Use it only
 during an intentional #25 prototype run.
@@ -195,9 +196,9 @@ require_provider_source() {
     local name="$1"
     local value="$2"
     case "$value" in
-        powermetrics|ioreg-smc) ;;
+        powermetrics|ioreg-smc|ioreg-pmu) ;;
         *)
-            echo "$name must be one of: powermetrics, ioreg-smc" >&2
+            echo "$name must be one of: powermetrics, ioreg-smc, ioreg-pmu" >&2
             exit 64
             ;;
     esac
@@ -241,6 +242,9 @@ if [[ -z "$CASE_ID" ]]; then
     case "$PROVIDER_SOURCE" in
         ioreg-smc)
             CASE_ID="apple-silicon-ioreg-smc-smappservice"
+            ;;
+        ioreg-pmu)
+            CASE_ID="apple-silicon-ioreg-pmu-smappservice"
             ;;
         *)
             CASE_ID="apple-silicon-powermetrics-smappservice"
@@ -814,6 +818,9 @@ switch providerSource {
 case "ioreg-smc":
     commandPath = ioregPath
     commandArguments = ["-r", "-c", "AppleSMCKeysEndpoint", "-l"]
+case "ioreg-pmu":
+    commandPath = ioregPath
+    commandArguments = ["-r", "-c", "AppleARMPMUTempSensor", "-l"]
 default:
     commandPath = powermetricsPath
     var arguments = ["-n", "1", "-i", "\(sampleRateMs)", "--samplers", powermetricsSamplers]

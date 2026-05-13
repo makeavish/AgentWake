@@ -19,6 +19,8 @@ SMAppService provider artifacts:
 - `.build/temperature-provider-proof/ioreg-smc-prepare-20260513T061711Z`
 - `.build/temperature-provider-proof/bounded-ioreg-smc-local`
 - `.build/temperature-provider-proof/ioreg-smc-bounded-smappservice-20260513T071633Z`
+- `.build/temperature-provider-proof/ioreg-pmu-local-20260513T105941Z`
+- `.build/temperature-provider-proof/ioreg-pmu-smappservice-20260513T110017Z`
 
 Alternate source probe artifacts:
 
@@ -60,6 +62,7 @@ Reference:
 | SMAppService helper `powermetrics --samplers thermal` | Ad-hoc/no-membership helper launched as root | Timed out after partial output; captured thermal pressure only | No numeric temperature observed | Not validated; no cutoff signal captured | Helper path viable, command not proven |
 | SMAppService helper `powermetrics --samplers all` | Same no-membership helper launched as root | 1s run produced only the command header; 5s diagnostic emitted broad task/power output but still timed out | No trustworthy numeric temperature observed after detector correction | Not validated; no cutoff signal captured | Diagnostic only; command not viable as provider |
 | SMAppService helper `ioreg -r -c AppleSMCKeysEndpoint -l` | Same no-membership helper launched as root | Early 1s run timed out after partial I/O Registry output; later bounded run completed before its timeout | Numeric-looking values were visible, but the accepted-provider detector rejects them as AppleSmartBattery context | Not validated; no freshness/cadence/coverage proof | Diagnostic only; no cutoff provider selected |
+| SMAppService helper `ioreg -r -c AppleARMPMUTempSensor -l` | Register attempt for a fresh identity reached `requiresApproval`; direct generated-helper command ran without root | Direct generated-helper run completed within the 1s timeout; SMAppService artifact did not bootstrap before approval | No numeric temperature candidates observed | PMU node names such as `PMU tdev*` are metadata, not readings | Candidate rejected until a real PMU reading API is found |
 
 Captured values from `validation-config.txt`:
 
@@ -309,13 +312,41 @@ and `PMU tdev*`, but it does not expose a current scalar reading through the
 non-mutating `ioreg` inventory. Treat those PMU nodes as future API/research
 surfaces, not selected provider output.
 
+The follow-up `.build/temperature-provider-proof/ioreg-pmu-local-20260513T105941Z`
+artifact adds `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu`, which runs
+`/usr/sbin/ioreg -r -c AppleARMPMUTempSensor -l`. A direct generated-helper run
+completed inside the 1 second timeout and captured 278,760 stdout bytes without
+truncation, but found no numeric candidates:
+
+```text
+providerSource=ioreg-pmu
+command=/usr/sbin/ioreg -r -c AppleARMPMUTempSensor -l
+timeoutSeconds=1
+durationSeconds=1
+timedOut=false
+exitCode=0
+helperOwned=false
+numericTemperatureObserved=false
+numericTemperatureCandidateCount=0
+numericTemperatureAcceptedCount=0
+```
+
+The fresh SMAppService artifact
+`.build/temperature-provider-proof/ioreg-pmu-smappservice-20260513T110017Z`
+registered the same source and then waited at least 15 seconds before
+post-approval capture, but status remained raw `2` (`requiresApproval`) and
+`launchctl` could not find the daemon. It therefore does not provide
+helper-owned PMU output. This is still useful negative evidence: PMU `ioreg`
+support is now explicit in the proof harness, and the local visible PMU surface
+does not expose a numeric cutoff candidate.
+
 ## Conclusion
 
 No production Bag Mode temperature provider is selected from the non-root
-sources, helper-owned `powermetrics` variants, or the helper-owned `ioreg-smc`
-diagnostic source tested.
+sources, helper-owned `powermetrics` variants, the helper-owned `ioreg-smc`
+diagnostic source, or the visible PMU `ioreg` sensor inventory tested.
 
-`ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. The no-membership `SMAppService` path can launch a helper as root on this machine. The tested `powermetrics` sampler variants did not provide a trustworthy numeric cutoff source. The bounded `ioreg-smc` diagnostic path now runs as root through SMAppService without timing out, but its observed `AppleSmartBattery` values are rejected as production cutoff candidates and do not prove CPU/package or closed-bag thermal coverage. The refreshed alternate-source probe has no accepted non-battery numeric candidates; [#25](https://github.com/makeavish/ClawShell/issues/25) must still prove helper/root non-battery numeric output, freshness, cadence, timeout, and coverage.
+`ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. The no-membership `SMAppService` path can launch a helper as root on this machine. The tested `powermetrics` sampler variants did not provide a trustworthy numeric cutoff source. The bounded `ioreg-smc` diagnostic path now runs as root through SMAppService without timing out, but its observed `AppleSmartBattery` values are rejected as production cutoff candidates and do not prove CPU/package or closed-bag thermal coverage. The `ioreg-pmu` path is now explicit in the helper harness, but the visible `AppleARMPMUTempSensor` inventory exposes PMU sensor names without numeric readings, and the fresh SMAppService attempt stayed approval-pending. The refreshed alternate-source probe has no accepted non-battery numeric candidates; [#25](https://github.com/makeavish/ClawShell/issues/25) must still prove helper/root non-battery numeric output, freshness, cadence, timeout, and coverage.
 
 Production Bag Mode remains blocked until [#25](https://github.com/makeavish/ClawShell/issues/25) validates a no-membership helper or helper-equivalent provider that can supply fresh, permission-compatible thermal evidence with the required fail-closed behavior.
 
@@ -401,6 +432,20 @@ are the only candidates. The bounded SMAppService run is root-owned and
 no-timeout, but it is still candidate-source evidence rather than provider
 proof because freshness, cadence, closed-bag coverage, fail-closed evidence,
 and a non-battery numeric cutoff source are still missing.
+
+To test the PMU I/O Registry inventory path explicitly, use:
+
+```bash
+CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu \
+  scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/ioreg-pmu-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+That source runs `/usr/sbin/ioreg -r -c AppleARMPMUTempSensor -l`. On this
+machine, the direct generated-helper run finished within the timeout but
+reported `numericTemperatureCandidateCount=0`. The first SMAppService run for a
+fresh PMU identity stayed at `requiresApproval`, so root-owned PMU sampling is
+not yet captured.
 
 Each new artifact also gets a unique SMAppService bundle/helper identity derived
 from its output path. This avoids reusing stale macOS approval/code-signing state
