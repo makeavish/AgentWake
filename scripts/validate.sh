@@ -2978,6 +2978,17 @@ if ! grep -q "plistName=$helper_smappservice_prepare_label.plist" "$helper_smapp
     cat "$helper_smappservice_prepare/evidence/helper-status-before-approval.txt" >&2
     exit 1
 fi
+if ! grep -q '^daemonCommand=status$' "$helper_smappservice_prepare/validation-config.txt"; then
+    echo "SMAppService helper prototype harness did not record default daemon command" >&2
+    cat "$helper_smappservice_prepare/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '2 => "--command"' "$helper_smappservice_prepare/evidence/launchdaemon-plist.txt" ||
+    ! grep -q '3 => "status"' "$helper_smappservice_prepare/evidence/launchdaemon-plist.txt"; then
+    echo "SMAppService helper prototype LaunchDaemon did not include default command argument" >&2
+    cat "$helper_smappservice_prepare/evidence/launchdaemon-plist.txt" >&2
+    exit 1
+fi
 if ! grep -q '^registerAttempted=false$' "$helper_smappservice_prepare/validation-config.txt"; then
     echo "SMAppService helper prototype harness unexpectedly attempted registration in default mode" >&2
     exit 1
@@ -3063,6 +3074,29 @@ fi
 if ! grep -q 'plistName=com.makeavish.ClawShell.HelperPrototype.manual01.daemon.plist' "$helper_smappservice_manual_identity/evidence/helper-status-before-approval.txt"; then
     echo "SMAppService helper prototype controller did not use manual plist name" >&2
     cat "$helper_smappservice_manual_identity/evidence/helper-status-before-approval.txt" >&2
+    exit 1
+fi
+helper_smappservice_daemon_command="$bag_mode_smoke_dir/helper-smappservice-daemon-command"
+CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND=repair \
+    scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_daemon_command" >/dev/null
+if ! grep -q '^daemonCommand=repair$' "$helper_smappservice_daemon_command/validation-config.txt"; then
+    echo "SMAppService helper prototype harness did not honor daemon command" >&2
+    cat "$helper_smappservice_daemon_command/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '3 => "repair"' "$helper_smappservice_daemon_command/evidence/launchdaemon-plist.txt"; then
+    echo "SMAppService helper prototype LaunchDaemon did not include configured daemon command" >&2
+    cat "$helper_smappservice_daemon_command/evidence/launchdaemon-plist.txt" >&2
+    exit 1
+fi
+helper_smappservice_bad_daemon_command="$bag_mode_smoke_dir/helper-smappservice-bad-daemon-command"
+if CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND=arbitraryShellCommand \
+    scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_bad_daemon_command" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness accepted an invalid daemon command" >&2
+    exit 1
+fi
+if ! grep -q "CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND must be one of" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
 helper_smappservice_bad_identity="$bag_mode_smoke_dir/helper-smappservice-bad-identity"
@@ -3158,6 +3192,28 @@ if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smapps
     exit 1
 fi
 if ! grep -q "appBundleIdentifier to match identitySuffix" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_capture_missing_command="$bag_mode_smoke_dir/helper-smappservice-capture-missing-command"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_missing_command"
+sed -i '' '/^daemonCommand=/d' "$helper_smappservice_capture_missing_command/validation-config.txt"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_missing_command" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype post-approval capture accepted missing daemonCommand" >&2
+    exit 1
+fi
+if ! grep -q "missing required daemonCommand" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_capture_mismatched_command="$bag_mode_smoke_dir/helper-smappservice-capture-mismatched-command"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_mismatched_command"
+plutil -replace ProgramArguments.3 -string repair "$helper_smappservice_capture_mismatched_command/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_mismatched_command" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype post-approval capture accepted LaunchDaemon command mismatched with daemonCommand" >&2
+    exit 1
+fi
+if ! grep -q "LaunchDaemon ProgramArguments to match daemonCommand" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
@@ -3461,6 +3517,7 @@ chmod +x "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.
     printf 'appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.%s\n' "$helper_smappservice_prepare_identity"
     printf 'helperLabel=%s\n' "$helper_smappservice_prepare_label"
     printf 'identitySuffix=%s\n' "$helper_smappservice_prepare_identity"
+    printf 'daemonCommand=status\n'
     printf 'unregisterAttempted=false\n'
 } >"$helper_smappservice_capture_unregister_fake/validation-config.txt"
 cp "$helper_smappservice_prepare/prototype-manifest.tsv" "$helper_smappservice_capture_unregister_fake/prototype-manifest.tsv"

@@ -136,6 +136,14 @@ row; registration, approved helper command API, and lifecycle rows remain
 `--register --i-understand-this-registers-helper`; that may require System
 Settings approval before the helper bootstraps.
 
+By default, the approved LaunchDaemon runs the fixed `status` command in
+dry-run mode. To prepare one artifact for a different approved-helper dry-run
+command dispatch probe, set
+`CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND` to one of `status`,
+`enableBagMode`, `disableBagMode`, `repair`, or `uninstall` before creating and
+registering the artifact. The selected command is written to
+`daemonCommand=<command>` and into the LaunchDaemon `ProgramArguments`.
+
 Each artifact gets a unique SMAppService bundle/helper identity derived from its
 output path. This avoids reusing stale macOS approval/code-signing state between
 ad-hoc helper prototype attempts. To force a deterministic suffix for
@@ -192,6 +200,7 @@ helperLabel=com.makeavish.ClawShell.HelperPrototype.h123abc4567.daemon
 identitySuffix=h123abc4567
 launchDaemonPlist=ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.ClawShell.HelperPrototype.h123abc4567.daemon.plist
 helperInstallPath=smappservice
+daemonCommand=status
 localAuthModel=ad-hoc app/helper signature plus root-owned pairing token
 developerIDApplicationSigned=false
 packageInstallerUsed=false

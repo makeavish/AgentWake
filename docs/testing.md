@@ -310,6 +310,10 @@ output path, and write it to `appBundleIdentifier`, `helperLabel`, and
 `identitySuffix` in `validation-config.txt`. Set
 `CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX=<lettersAndDigits>` only when a
 deterministic comparison identity is needed.
+New artifacts also default the approved LaunchDaemon command to `status`. Set
+`CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND=<fixed-command>` before creating an
+artifact to probe `enableBagMode`, `disableBagMode`, `repair`, or `uninstall`
+as dry-run root-owned command dispatch after approval.
 
 After any required System Settings approval, append non-mutating status evidence
 to the same artifact directory:

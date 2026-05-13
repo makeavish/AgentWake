@@ -127,6 +127,28 @@ if [[ "$APPEND_CAPTURE" == true && -z "$(find "$OUTPUT_DIR" -mindepth 1 -maxdept
     exit 73
 fi
 
+DAEMON_COMMAND="${CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND:-status}"
+
+require_helper_command() {
+    local name="$1"
+    local value="$2"
+    if [[ "$value" == *[$'\n\r\t']* ]]; then
+        echo "$name must not contain control characters" >&2
+        exit 64
+    fi
+    case "$value" in
+        status|enableBagMode|disableBagMode|repair|uninstall) ;;
+        *)
+            echo "$name must be one of: status, enableBagMode, disableBagMode, repair, uninstall" >&2
+            exit 64
+            ;;
+    esac
+}
+
+if [[ "$APPEND_CAPTURE" == false ]]; then
+    require_helper_command "CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND" "$DAEMON_COMMAND"
+fi
+
 if [[ "$APPEND_CAPTURE" == false ]]; then
     mkdir -p "$OUTPUT_DIR"
 fi
@@ -209,6 +231,12 @@ if [[ "$APPEND_CAPTURE" == true && -f "$CONFIG_FILE" ]]; then
         echo "$CAPTURE_ACTION_NAME requires appBundleIdentifier to match identitySuffix: $IDENTITY_SUFFIX" >&2
         exit 73
     fi
+    DAEMON_COMMAND="$(config_value daemonCommand "$CONFIG_FILE" || true)"
+    if [[ -z "$DAEMON_COMMAND" ]]; then
+        echo "$CAPTURE_ACTION_NAME missing required daemonCommand in validation config" >&2
+        exit 73
+    fi
+    require_helper_command "daemonCommand" "$DAEMON_COMMAND"
 else
     if [[ -z "$IDENTITY_SUFFIX" ]]; then
         IDENTITY_SUFFIX="$(derive_identity_suffix)"
@@ -550,6 +578,13 @@ require_existing_capture_artifact() {
         echo "$CAPTURE_ACTION_NAME requires LaunchDaemon Label to match helperLabel: $LAUNCHD_DIR/$PLIST_NAME" >&2
         exit 73
     fi
+    local plist_command_flag plist_command
+    plist_command_flag="$(plutil -extract ProgramArguments.2 raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
+    plist_command="$(plutil -extract ProgramArguments.3 raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
+    if [[ "$plist_command_flag" != "--command" || "$plist_command" != "$DAEMON_COMMAND" ]]; then
+        echo "$CAPTURE_ACTION_NAME requires LaunchDaemon ProgramArguments to match daemonCommand: $DAEMON_COMMAND" >&2
+        exit 73
+    fi
 }
 
 assert_controller_plist_name() {
@@ -841,9 +876,10 @@ EOF
 }
 
 write_launchdaemon_plist() {
-    local helper_path helper_log stdout_log stderr_log
+    local helper_path helper_log daemon_command stdout_log stderr_log
     helper_path="$(xml_escape "$MACOS_DIR/$HELPER_NAME")"
     helper_log="$(xml_escape "$RUNTIME_DIR/helper.log")"
+    daemon_command="$(xml_escape "$DAEMON_COMMAND")"
     stdout_log="$(xml_escape "$RUNTIME_DIR/helper.stdout.log")"
     stderr_log="$(xml_escape "$RUNTIME_DIR/helper.stderr.log")"
     cat >"$LAUNCHD_DIR/$PLIST_NAME" <<EOF
@@ -857,6 +893,8 @@ write_launchdaemon_plist() {
   <array>
     <string>$helper_path</string>
     <string>--daemon</string>
+    <string>--command</string>
+    <string>$daemon_command</string>
     <string>--log</string>
     <string>$helper_log</string>
   </array>
@@ -940,6 +978,7 @@ helperLabel=$HELPER_LABEL
 identitySuffix=$IDENTITY_SUFFIX
 launchDaemonPlist=$APP_NAME.app/Contents/Library/LaunchDaemons/$PLIST_NAME
 helperInstallPath=$HELPER_INSTALL_PATH
+daemonCommand=$DAEMON_COMMAND
 localAuthModel=ad-hoc app/helper signature plus binary hash capture; pairing token not implemented in this prototype harness
 developerIDApplicationSigned=false
 packageInstallerUsed=false
@@ -963,6 +1002,7 @@ cat >"$OUTPUT_DIR/manual-result.md" <<EOF
 - App bundle id: $BUNDLE_ID
 - Helper label: $HELPER_LABEL
 - Identity suffix: $IDENTITY_SUFFIX
+- Daemon command: $DAEMON_COMMAND
 
 ## Signing
 - App signed: yes
