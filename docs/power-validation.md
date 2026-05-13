@@ -67,7 +67,7 @@ sudo scripts/bag-mode-primitive-validation.sh \
   --i-understand-this-changes-power-settings
 ```
 
-Mutating runs record and restore the pre-run `disablesleep` value rather than assuming rollback is always `disablesleep 0`.
+Mutating runs record and restore the pre-run `disablesleep` value rather than assuming rollback is always `disablesleep 0`. If `pmset -g custom` omits the `disablesleep` row, the harness records the effective default/off value as `0` so rollback can still be explicit.
 When a baseline-only evidence directory is reused, pass that exact directory
 back with `--output-dir <baseline-dir> --apply --continue`. The harness keeps
 the original `before/` snapshot and refreshes `validation-config.txt` to

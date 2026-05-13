@@ -44,7 +44,7 @@ sudo scripts/bag-mode-primitive-validation.sh \
   --i-understand-this-changes-power-settings
 ```
 
-Mutating mode requires root so rollback cannot stall on an expired sudo prompt. It records the prior `disablesleep` value, applies `/usr/bin/pmset disablesleep 1`, captures `during-applied/`, waits for the manual lid-close/reopen window, captures `after-lid-window/`, and restores the prior `disablesleep` value.
+Mutating mode requires root so rollback cannot stall on an expired sudo prompt. It records the prior `disablesleep` value, applies `/usr/bin/pmset disablesleep 1`, captures `during-applied/`, waits for the manual lid-close/reopen window, captures `after-lid-window/`, and restores the prior `disablesleep` value. On macOS versions where `pmset -g custom` omits the `disablesleep` row until it is customized, the harness treats the missing row as the default/off value `0` for rollback.
 
 If you started with a baseline-only directory, rerun that exact directory:
 

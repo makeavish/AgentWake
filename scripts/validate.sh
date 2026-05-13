@@ -493,7 +493,11 @@ log_file="${CLAWSHELL_FAKE_PMSET_LOG:?}"
 printf '%s\n' "$*" >>"$log_file"
 if [[ "${1:-}" == "-g" && "${2:-}" == "custom" ]]; then
     printf 'Battery Power:\n'
-    printf ' disablesleep %s\n' "$(cat "$state_file")"
+    if [[ "${CLAWSHELL_FAKE_PMSET_EMPTY_DISABLESLEEP_ON_READ:-0}" == "1" ]]; then
+        printf ' disablesleep\n'
+    elif [[ "${CLAWSHELL_FAKE_PMSET_OMIT_DISABLESLEEP_ON_READ:-0}" != "1" ]]; then
+        printf ' disablesleep %s\n' "$(cat "$state_file")"
+    fi
     exit 0
 fi
 if [[ "${1:-}" == "-g" ]]; then
@@ -576,6 +580,81 @@ if [[ -f "$bag_mode_apply_transition/ROLLBACK_REQUIRED.txt" ]]; then
 fi
 if grep -q 'Baseline-only' "$bag_mode_apply_transition/README.txt"; then
     echo "Bag Mode primitive harness left stale baseline README after apply transition" >&2
+    exit 1
+fi
+
+bag_mode_apply_missing_transition="$bag_mode_smoke_dir/apply-missing-disablesleep"
+bag_mode_apply_missing_state="$bag_mode_smoke_dir/apply-missing-state"
+bag_mode_apply_missing_log="$bag_mode_smoke_dir/apply-missing-commands.log"
+printf '0\n' >"$bag_mode_apply_missing_state"
+touch "$bag_mode_apply_missing_log"
+scripts/bag-mode-primitive-validation.sh \
+    --output-dir "$bag_mode_apply_missing_transition" \
+    --case-id validate-apply-missing-disablesleep >/dev/null
+PATH="$bag_mode_apply_bin:$PATH" \
+CLAWSHELL_BAG_MODE_PRIMITIVE_TEST_PMSET=1 \
+CLAWSHELL_PMSET_BIN="$bag_mode_apply_bin/pmset" \
+CLAWSHELL_FAKE_PMSET_STATE="$bag_mode_apply_missing_state" \
+CLAWSHELL_FAKE_PMSET_LOG="$bag_mode_apply_missing_log" \
+CLAWSHELL_FAKE_PMSET_OMIT_DISABLESLEEP_ON_READ=1 \
+    scripts/bag-mode-primitive-validation.sh \
+        --output-dir "$bag_mode_apply_missing_transition" \
+        --case-id validate-apply-missing-disablesleep \
+        --hold-seconds 1 \
+        --apply \
+        --continue \
+        --i-understand-this-changes-power-settings >/dev/null
+if ! grep -q '^previousDisablesleep=0$' "$bag_mode_apply_missing_transition/validation-config.txt"; then
+    echo "Bag Mode primitive harness did not treat a missing disablesleep row as default/off" >&2
+    exit 1
+fi
+if ! grep -q '^rollbackCommand=.*/pmset disablesleep 0$' "$bag_mode_apply_missing_transition/validation-config.txt"; then
+    echo "Bag Mode primitive harness did not record rollback to default/off for a missing disablesleep row" >&2
+    exit 1
+fi
+if [[ "$(cat "$bag_mode_apply_missing_state")" != "0" ]]; then
+    echo "Bag Mode primitive harness fake pmset state did not return to default/off for missing disablesleep row" >&2
+    exit 1
+fi
+if ! grep -q '^disablesleep 1$' "$bag_mode_apply_missing_log" ||
+   ! grep -q '^disablesleep 0$' "$bag_mode_apply_missing_log"; then
+    echo "Bag Mode primitive harness did not apply and roll back when disablesleep row is absent" >&2
+    cat "$bag_mode_apply_missing_log" >&2
+    exit 1
+fi
+
+bag_mode_apply_empty_transition="$bag_mode_smoke_dir/apply-empty-disablesleep"
+bag_mode_apply_empty_state="$bag_mode_smoke_dir/apply-empty-state"
+bag_mode_apply_empty_log="$bag_mode_smoke_dir/apply-empty-commands.log"
+bag_mode_apply_empty_error="$bag_mode_smoke_dir/apply-empty-error.txt"
+printf '0\n' >"$bag_mode_apply_empty_state"
+touch "$bag_mode_apply_empty_log"
+scripts/bag-mode-primitive-validation.sh \
+    --output-dir "$bag_mode_apply_empty_transition" \
+    --case-id validate-apply-empty-disablesleep >/dev/null
+set +e
+PATH="$bag_mode_apply_bin:$PATH" \
+CLAWSHELL_BAG_MODE_PRIMITIVE_TEST_PMSET=1 \
+CLAWSHELL_PMSET_BIN="$bag_mode_apply_bin/pmset" \
+CLAWSHELL_FAKE_PMSET_STATE="$bag_mode_apply_empty_state" \
+CLAWSHELL_FAKE_PMSET_LOG="$bag_mode_apply_empty_log" \
+CLAWSHELL_FAKE_PMSET_EMPTY_DISABLESLEEP_ON_READ=1 \
+    scripts/bag-mode-primitive-validation.sh \
+        --output-dir "$bag_mode_apply_empty_transition" \
+        --case-id validate-apply-empty-disablesleep \
+        --hold-seconds 1 \
+        --apply \
+        --continue \
+        --i-understand-this-changes-power-settings >"$bag_mode_apply_empty_error" 2>&1
+bag_mode_apply_empty_status=$?
+set -e
+if [[ "$bag_mode_apply_empty_status" -eq 0 ]]; then
+    echo "Bag Mode primitive harness accepted malformed empty disablesleep row" >&2
+    exit 1
+fi
+if grep -q '^disablesleep 1$' "$bag_mode_apply_empty_log"; then
+    echo "Bag Mode primitive harness mutated power settings after malformed empty disablesleep row" >&2
+    cat "$bag_mode_apply_empty_log" >&2
     exit 1
 fi
 

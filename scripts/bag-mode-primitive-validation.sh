@@ -146,10 +146,20 @@ snapshot() {
 
 current_disablesleep() {
     "$PMSET_BIN" -g custom | awk '
-        BEGIN { found = "" }
-        $1 == "disablesleep" { found = $2 }
+        BEGIN {
+            found = ""
+            seen = 0
+        }
+        $1 == "disablesleep" {
+            seen = 1
+            found = $2
+        }
         END {
-            if (found == "") {
+            if (seen == 0) {
+                print "0"
+                exit 0
+            }
+            if (found !~ /^[0-9]+$/) {
                 exit 1
             }
             print found
