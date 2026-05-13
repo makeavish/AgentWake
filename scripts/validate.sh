@@ -3107,6 +3107,8 @@ rebase_helper_smappservice_launchdaemon() {
     /usr/libexec/PlistBuddy -c "Set :ProgramArguments:0 $artifact_dir/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon" "$artifact_plist"
     /usr/libexec/PlistBuddy -c "Set :ProgramArguments:5 $artifact_dir/runtime/helper.log" "$artifact_plist"
     /usr/libexec/PlistBuddy -c "Set :ProgramArguments:7 $artifact_dir/runtime/helper-ledger.jsonl" "$artifact_plist"
+    /usr/libexec/PlistBuddy -c "Set :StandardOutPath $artifact_dir/runtime/helper.stdout.log" "$artifact_plist"
+    /usr/libexec/PlistBuddy -c "Set :StandardErrorPath $artifact_dir/runtime/helper.stderr.log" "$artifact_plist"
 }
 if [[ ! "$helper_smappservice_prepare_identity" =~ ^h[A-Fa-f0-9]{10}$ ]]; then
     echo "SMAppService helper prototype harness did not derive a stable unique identity suffix" >&2
@@ -3421,6 +3423,26 @@ if ! grep -q "LaunchDaemon ProgramArguments to contain only the expected helper 
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
+for tampered_stream_case in \
+    "StandardOutPath|$bag_mode_smoke_dir/outside-helper.stdout.log|LaunchDaemon StandardOutPath to use the artifact helper stdout log" \
+    "StandardErrorPath|$bag_mode_smoke_dir/outside-helper.stderr.log|LaunchDaemon StandardErrorPath to use the artifact helper stderr log"
+do
+    IFS='|' read -r tampered_stream_key tampered_stream_value tampered_stream_error <<EOF
+$tampered_stream_case
+EOF
+    helper_smappservice_capture_tampered_stream="$bag_mode_smoke_dir/helper-smappservice-capture-tampered-$tampered_stream_key"
+    cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_tampered_stream"
+    rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_tampered_stream"
+    /usr/libexec/PlistBuddy -c "Set :$tampered_stream_key $tampered_stream_value" "$helper_smappservice_capture_tampered_stream/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+    if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_tampered_stream" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+        echo "SMAppService helper prototype post-approval capture accepted tampered $tampered_stream_key" >&2
+        exit 1
+    fi
+    if ! grep -q "$tampered_stream_error" "$bag_mode_smoke_error"; then
+        cat "$bag_mode_smoke_error" >&2
+        exit 1
+    fi
+done
 helper_smappservice_capture_missing_ledger="$bag_mode_smoke_dir/helper-smappservice-capture-missing-ledger"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_missing_ledger"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_missing_ledger"
@@ -3621,10 +3643,30 @@ if ! grep -q '^exitCode=1$' "$helper_smappservice_prepare/evidence/root-ledger-s
     cat "$helper_smappservice_prepare/evidence/root-ledger-schema-and-permissions.status" >&2
     exit 1
 fi
+printf '%s\n' \
+    'event=helper-command' \
+    'commandJson="status"' \
+    '{"schemaVersion":1,"event":"bagModeHelperLedgerSample","command":"status","effect":"dry-run"}' \
+    >"$helper_smappservice_prepare/runtime/helper.stdout.log"
+CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" --capture-post-approval >/dev/null
+if ! grep -q '^exitCode=0$' "$helper_smappservice_prepare/evidence/helper-stdout-after-approval.status"; then
+    echo "SMAppService helper prototype post-approval stdout capture did not succeed for seeded stdout" >&2
+    cat "$helper_smappservice_prepare/evidence/helper-stdout-after-approval.status" >&2
+    cat "$helper_smappservice_prepare/evidence/helper-stdout-after-approval.txt" >&2
+    exit 1
+fi
+if ! grep -q '"event":"bagModeHelperLedgerSample"' "$helper_smappservice_prepare/evidence/helper-stdout-after-approval.txt" ||
+   ! grep -q 'commandJson="status"' "$helper_smappservice_prepare/evidence/helper-stdout-after-approval.txt"; then
+    echo "SMAppService helper prototype post-approval stdout capture did not include mirrored helper evidence" >&2
+    cat "$helper_smappservice_prepare/evidence/helper-stdout-after-approval.txt" >&2
+    exit 1
+fi
 for post_approval_capture in \
     helper-status-after-approval \
     launchctl-status \
     helper-bootstrap-after-approval \
+    helper-stdout-after-approval \
+    helper-stderr-after-approval \
     root-ledger-schema-and-permissions \
     root-ledger-ownership-sample \
     log-evidence
@@ -3687,10 +3729,17 @@ fi
 helper_smappservice_manual_helper="$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon"
 helper_smappservice_manual_log="$bag_mode_smoke_dir/helper-smappservice-manual-helper.log"
 helper_smappservice_manual_ledger="$bag_mode_smoke_dir/helper-smappservice-manual-helper-ledger.jsonl"
-"$helper_smappservice_manual_helper" --daemon --command repair --log "$helper_smappservice_manual_log" --ledger "$helper_smappservice_manual_ledger" >/dev/null
+helper_smappservice_manual_stdout="$bag_mode_smoke_dir/helper-smappservice-manual-helper.stdout"
+"$helper_smappservice_manual_helper" --daemon --command repair --log "$helper_smappservice_manual_log" --ledger "$helper_smappservice_manual_ledger" >"$helper_smappservice_manual_stdout"
 if ! grep -q '"command":"repair"' "$helper_smappservice_manual_ledger"; then
     echo "SMAppService helper prototype daemon did not write dry-run ledger JSON" >&2
     cat "$helper_smappservice_manual_ledger" >&2
+    exit 1
+fi
+if ! grep -q '"event":"bagModeHelperLedgerSample"' "$helper_smappservice_manual_stdout" ||
+   ! grep -q '"command":"repair"' "$helper_smappservice_manual_stdout"; then
+    echo "SMAppService helper prototype daemon did not mirror dry-run ledger JSON to stdout" >&2
+    cat "$helper_smappservice_manual_stdout" >&2
     exit 1
 fi
 if ! grep -q '"effect":"dry-run"' "$helper_smappservice_manual_ledger"; then

@@ -337,8 +337,11 @@ artifact to probe `enableBagMode`, `disableBagMode`, `repair`, or `uninstall`
 as dry-run root-owned command dispatch after approval.
 The config records `rootLedgerPath=runtime/helper-ledger.jsonl`, and the
 LaunchDaemon passes the resolved absolute artifact path. The post-approval
-capture snapshots that dry-run ledger file for review without auto-promoting
-the verifier rows.
+capture records ledger permissions and contents when readable without
+auto-promoting the verifier rows. Approved helpers may write root-owned `0600`
+log and ledger files; the helper also mirrors dry-run ledger JSON to
+`runtime/helper.stdout.log` so the post-approval capture can retain reviewable
+output without requiring non-interactive sudo.
 
 After any required System Settings approval, append non-mutating status evidence
 to the same artifact directory:
@@ -350,9 +353,9 @@ scripts/helper-service-smappservice-prototype.sh \
 ```
 
 The append mode captures controller status, `launchctl` state, helper runtime
-logs, and unified logs. It does not call `register()` or `unregister()`, and it
-does not promote manifest rows automatically; review the captured output before
-turning any `TODO` row into evidence.
+logs, helper stdout/stderr, and unified logs. It does not call `register()` or
+`unregister()`, and it does not promote manifest rows automatically; review the
+captured output before turning any `TODO` row into evidence.
 
 After cleanup approval, append mutating unregister evidence to the same artifact
 directory:

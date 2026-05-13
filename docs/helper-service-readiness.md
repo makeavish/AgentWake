@@ -179,8 +179,10 @@ registering the artifact. The selected command is written to
 `daemonCommand=<command>` and into the LaunchDaemon `ProgramArguments`.
 The config records `rootLedgerPath=runtime/helper-ledger.jsonl`, and the
 LaunchDaemon receives the resolved absolute artifact path. After approval,
-post-approval capture records ledger permissions and contents as dry-run helper
-ledger evidence for deliberate review; this is not the final production
+post-approval capture records ledger permissions and contents when readable.
+Because the helper writes root-owned `0600` log and ledger files, the helper
+also mirrors dry-run ledger JSON to `runtime/helper.stdout.log`, which launchd
+creates as a readable capture surface. This is not the final production
 root-owned ledger implementation.
 
 Each artifact gets a unique SMAppService bundle/helper identity derived from its
@@ -201,10 +203,10 @@ scripts/helper-service-smappservice-prototype.sh \
 ```
 
 The append mode captures `SMAppService` status, `launchctl` state, helper
-runtime logs, and unified log output. It does not promote manifest rows
-automatically; review the captured output, update the manifest and manual
-result deliberately, then run the verifier before attaching the artifact to
-#27.
+runtime logs, helper stdout/stderr, and unified log output. It does not promote
+manifest rows automatically; review the captured output, update the manifest
+and manual result deliberately, then run the verifier before attaching the
+artifact to #27.
 
 After cleanup approval, append mutating unregister evidence to the same
 artifact directory:

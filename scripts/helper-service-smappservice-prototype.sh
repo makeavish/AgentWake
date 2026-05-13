@@ -666,6 +666,17 @@ require_existing_capture_artifact() {
         echo "$CAPTURE_ACTION_NAME requires LaunchDaemon ProgramArguments to contain only the expected helper arguments" >&2
         exit 73
     fi
+    local plist_stdout plist_stderr
+    plist_stdout="$(plutil -extract StandardOutPath raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
+    plist_stderr="$(plutil -extract StandardErrorPath raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
+    if [[ "$plist_stdout" != "$RUNTIME_DIR/helper.stdout.log" ]]; then
+        echo "$CAPTURE_ACTION_NAME requires LaunchDaemon StandardOutPath to use the artifact helper stdout log" >&2
+        exit 73
+    fi
+    if [[ "$plist_stderr" != "$RUNTIME_DIR/helper.stderr.log" ]]; then
+        echo "$CAPTURE_ACTION_NAME requires LaunchDaemon StandardErrorPath to use the artifact helper stderr log" >&2
+        exit 73
+    fi
 }
 
 assert_controller_plist_name() {
@@ -685,6 +696,8 @@ capture_post_approval_status() {
         launchctl-status \
         log-evidence \
         helper-bootstrap-after-approval \
+        helper-stdout-after-approval \
+        helper-stderr-after-approval \
         root-ledger-schema-and-permissions \
         root-ledger-ownership-sample
 
@@ -693,6 +706,8 @@ capture_post_approval_status() {
     capture "launchctl-status" launchctl print "system/$HELPER_LABEL" || true
     capture "log-evidence" log show --style syslog --last "${CLAWSHELL_SMAPP_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
     capture_file_snapshot "helper-bootstrap-after-approval" "$RUNTIME_DIR/helper.log" || true
+    capture_file_snapshot "helper-stdout-after-approval" "$RUNTIME_DIR/helper.stdout.log" || true
+    capture_file_snapshot "helper-stderr-after-approval" "$RUNTIME_DIR/helper.stderr.log" || true
     capture_ledger_snapshot "root-ledger-schema-and-permissions" "$ROOT_LEDGER_PATH" || true
     capture_ledger_snapshot "root-ledger-ownership-sample" "$ROOT_LEDGER_PATH" || true
 
@@ -709,6 +724,8 @@ Captured files:
 - \`evidence/helper-status-after-approval.txt\`
 - \`evidence/launchctl-status.txt\`
 - \`evidence/helper-bootstrap-after-approval.txt\`
+- \`evidence/helper-stdout-after-approval.txt\`
+- \`evidence/helper-stderr-after-approval.txt\`
 - \`evidence/root-ledger-schema-and-permissions.txt\`
 - \`evidence/root-ledger-ownership-sample.txt\`
 - \`evidence/log-evidence.txt\`
@@ -990,6 +1007,9 @@ if let ledgerPath {
 }
 
 print(payload, terminator: "")
+if ledgerPath != nil {
+    print(ledgerPayload, terminator: "")
+}
 if !commandAllowed {
     exit(64)
 }
