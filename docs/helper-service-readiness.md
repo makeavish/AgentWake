@@ -281,6 +281,27 @@ manifest rows, so it is not verifier-accepted #27 proof. It does not prove the
 full fixed-command matrix, production Bag Mode state mutation, or the admin
 approval/password UI flow.
 
+Three follow-up command-specific artifacts reached enabled status after waiting
+at least 15 seconds for approval propagation:
+
+```text
+.build/helper-service-prototype/smappservice-command-disableBagMode-approved-20260513T060113Z
+.build/helper-service-prototype/smappservice-command-repair-approved-20260513T060213Z
+.build/helper-service-prototype/smappservice-command-uninstall-approved-20260513T060308Z
+```
+
+Each artifact recorded its selected `daemonCommand`, attempted registration,
+post-approval capture, and cleanup unregister. The post-approval status was raw
+`1`, helper stdout recorded `uid=0`, `euid=0`, the expected `commandJson`
+value, `allowed=true`, `effect=dry-run`, and a mirrored
+`bagModeHelperLedgerSample`. Cleanup succeeded for each artifact:
+`unregisterResult=success`, status moved from raw `1` to raw `0`, follow-up
+status stayed raw `0`, and `launchctl` reported service-not-found. Together
+with the earlier `enableBagMode` artifact, this covers approved dry-run dispatch
+for the current fixed-command set. It still does not prove production Bag Mode
+state mutation, production repair/uninstall behavior, or the admin
+approval/password UI flow.
+
 By default, the approved LaunchDaemon runs the fixed `status` command in
 dry-run mode. To prepare one artifact for a different approved-helper dry-run
 command dispatch probe, set
