@@ -2953,6 +2953,16 @@ if ! grep -q '^helperInstallPath=smappservice$' "$helper_smappservice_prepare/va
 fi
 helper_smappservice_prepare_identity="$(awk -F= '$1 == "identitySuffix" { print $2; found = 1 } END { exit !found }' "$helper_smappservice_prepare/validation-config.txt")"
 helper_smappservice_prepare_label="$(awk -F= '$1 == "helperLabel" { print $2; found = 1 } END { exit !found }' "$helper_smappservice_prepare/validation-config.txt")"
+rebase_helper_smappservice_launchdaemon() {
+    local artifact_dir="$1"
+    local artifact_plist="$artifact_dir/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+    if [[ ! -f "$artifact_plist" ]]; then
+        return 0
+    fi
+    /usr/libexec/PlistBuddy -c "Set :ProgramArguments:0 $artifact_dir/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon" "$artifact_plist"
+    /usr/libexec/PlistBuddy -c "Set :ProgramArguments:5 $artifact_dir/runtime/helper.log" "$artifact_plist"
+    /usr/libexec/PlistBuddy -c "Set :ProgramArguments:7 $artifact_dir/runtime/helper-ledger.jsonl" "$artifact_plist"
+}
 if [[ ! "$helper_smappservice_prepare_identity" =~ ^h[A-Fa-f0-9]{10}$ ]]; then
     echo "SMAppService helper prototype harness did not derive a stable unique identity suffix" >&2
     cat "$helper_smappservice_prepare/validation-config.txt" >&2
@@ -2983,8 +2993,15 @@ if ! grep -q '^daemonCommand=status$' "$helper_smappservice_prepare/validation-c
     cat "$helper_smappservice_prepare/validation-config.txt" >&2
     exit 1
 fi
+if ! grep -q '^rootLedgerPath=runtime/helper-ledger.jsonl$' "$helper_smappservice_prepare/validation-config.txt"; then
+    echo "SMAppService helper prototype harness did not record root ledger path" >&2
+    cat "$helper_smappservice_prepare/validation-config.txt" >&2
+    exit 1
+fi
 if ! grep -q '2 => "--command"' "$helper_smappservice_prepare/evidence/launchdaemon-plist.txt" ||
-    ! grep -q '3 => "status"' "$helper_smappservice_prepare/evidence/launchdaemon-plist.txt"; then
+    ! grep -q '3 => "status"' "$helper_smappservice_prepare/evidence/launchdaemon-plist.txt" ||
+    ! grep -q '6 => "--ledger"' "$helper_smappservice_prepare/evidence/launchdaemon-plist.txt" ||
+    ! grep -q '7 => ".*runtime/helper-ledger.jsonl"' "$helper_smappservice_prepare/evidence/launchdaemon-plist.txt"; then
     echo "SMAppService helper prototype LaunchDaemon did not include default command argument" >&2
     cat "$helper_smappservice_prepare/evidence/launchdaemon-plist.txt" >&2
     exit 1
@@ -3151,6 +3168,7 @@ do
 done
 helper_smappservice_capture_symlink_executable="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-executable"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_executable"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_symlink_executable"
 rm -f "$helper_smappservice_capture_symlink_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
 ln -s /bin/echo "$helper_smappservice_capture_symlink_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_executable" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
@@ -3163,6 +3181,7 @@ if ! grep -q "regular executable artifact path" "$bag_mode_smoke_error"; then
 fi
 helper_smappservice_capture_symlink_plist="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-plist"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_plist"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_symlink_plist"
 rm -f "$helper_smappservice_capture_symlink_plist/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
 ln -s /etc/hosts "$helper_smappservice_capture_symlink_plist/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_plist" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
@@ -3175,6 +3194,7 @@ if ! grep -q "regular bundle metadata path" "$bag_mode_smoke_error"; then
 fi
 helper_smappservice_capture_mismatched_label="$bag_mode_smoke_dir/helper-smappservice-capture-mismatched-label"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_mismatched_label"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_mismatched_label"
 sed -i '' 's/^helperLabel=.*/helperLabel=com.makeavish.ClawShell.HelperPrototype.other.daemon/' "$helper_smappservice_capture_mismatched_label/validation-config.txt"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_mismatched_label" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype post-approval capture accepted helperLabel mismatched with identitySuffix" >&2
@@ -3186,6 +3206,7 @@ if ! grep -q "helperLabel to match identitySuffix" "$bag_mode_smoke_error"; then
 fi
 helper_smappservice_capture_mismatched_bundle="$bag_mode_smoke_dir/helper-smappservice-capture-mismatched-bundle"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_mismatched_bundle"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_mismatched_bundle"
 sed -i '' 's/^appBundleIdentifier=.*/appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.other/' "$helper_smappservice_capture_mismatched_bundle/validation-config.txt"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_mismatched_bundle" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype post-approval capture accepted appBundleIdentifier mismatched with identitySuffix" >&2
@@ -3197,6 +3218,7 @@ if ! grep -q "appBundleIdentifier to match identitySuffix" "$bag_mode_smoke_erro
 fi
 helper_smappservice_capture_missing_command="$bag_mode_smoke_dir/helper-smappservice-capture-missing-command"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_missing_command"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_missing_command"
 sed -i '' '/^daemonCommand=/d' "$helper_smappservice_capture_missing_command/validation-config.txt"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_missing_command" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype post-approval capture accepted missing daemonCommand" >&2
@@ -3208,7 +3230,8 @@ if ! grep -q "missing required daemonCommand" "$bag_mode_smoke_error"; then
 fi
 helper_smappservice_capture_mismatched_command="$bag_mode_smoke_dir/helper-smappservice-capture-mismatched-command"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_mismatched_command"
-plutil -replace ProgramArguments.3 -string repair "$helper_smappservice_capture_mismatched_command/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_mismatched_command"
+/usr/libexec/PlistBuddy -c "Set :ProgramArguments:3 repair" "$helper_smappservice_capture_mismatched_command/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_mismatched_command" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype post-approval capture accepted LaunchDaemon command mismatched with daemonCommand" >&2
     exit 1
@@ -3217,9 +3240,82 @@ if ! grep -q "LaunchDaemon ProgramArguments to match daemonCommand" "$bag_mode_s
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
+for tampered_arg_case in \
+    "0|/bin/echo|LaunchDaemon ProgramArguments to use the bundled helper daemon" \
+    "1|--not-daemon|LaunchDaemon ProgramArguments to use the bundled helper daemon" \
+    "2|--not-command|LaunchDaemon ProgramArguments to match daemonCommand" \
+    "4|--not-log|LaunchDaemon ProgramArguments to use the artifact helper log" \
+    "5|$bag_mode_smoke_dir/outside-helper.log|LaunchDaemon ProgramArguments to use the artifact helper log" \
+    "6|--not-ledger|LaunchDaemon ProgramArguments to match rootLedgerPath"
+do
+    IFS='|' read -r tampered_arg_index tampered_arg_value tampered_arg_error <<EOF
+$tampered_arg_case
+EOF
+    helper_smappservice_capture_tampered_arg="$bag_mode_smoke_dir/helper-smappservice-capture-tampered-arg-$tampered_arg_index"
+    cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_tampered_arg"
+    rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_tampered_arg"
+    /usr/libexec/PlistBuddy -c "Set :ProgramArguments:$tampered_arg_index $tampered_arg_value" "$helper_smappservice_capture_tampered_arg/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+    if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_tampered_arg" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+        echo "SMAppService helper prototype post-approval capture accepted tampered ProgramArguments.$tampered_arg_index" >&2
+        exit 1
+    fi
+    if ! grep -q "$tampered_arg_error" "$bag_mode_smoke_error"; then
+        cat "$bag_mode_smoke_error" >&2
+        exit 1
+    fi
+done
+helper_smappservice_capture_extra_arg="$bag_mode_smoke_dir/helper-smappservice-capture-extra-arg"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_extra_arg"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_extra_arg"
+/usr/libexec/PlistBuddy -c "Add :ProgramArguments:8 string unexpected" "$helper_smappservice_capture_extra_arg/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_extra_arg" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype post-approval capture accepted extra LaunchDaemon argument" >&2
+    exit 1
+fi
+if ! grep -q "LaunchDaemon ProgramArguments to contain only the expected helper arguments" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_capture_missing_ledger="$bag_mode_smoke_dir/helper-smappservice-capture-missing-ledger"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_missing_ledger"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_missing_ledger"
+sed -i '' '/^rootLedgerPath=/d' "$helper_smappservice_capture_missing_ledger/validation-config.txt"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_missing_ledger" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype post-approval capture accepted missing rootLedgerPath" >&2
+    exit 1
+fi
+if ! grep -q "missing required rootLedgerPath" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_capture_bad_ledger_config="$bag_mode_smoke_dir/helper-smappservice-capture-bad-ledger-config"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_bad_ledger_config"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_bad_ledger_config"
+sed -i '' 's#^rootLedgerPath=.*#rootLedgerPath=runtime/other-ledger.jsonl#' "$helper_smappservice_capture_bad_ledger_config/validation-config.txt"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_bad_ledger_config" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype post-approval capture accepted unsupported rootLedgerPath" >&2
+    exit 1
+fi
+if ! grep -q "requires rootLedgerPath to be runtime/helper-ledger.jsonl" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_capture_mismatched_ledger="$bag_mode_smoke_dir/helper-smappservice-capture-mismatched-ledger"
+cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_mismatched_ledger"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_mismatched_ledger"
+/usr/libexec/PlistBuddy -c "Set :ProgramArguments:7 $helper_smappservice_capture_mismatched_ledger/runtime/other-ledger.jsonl" "$helper_smappservice_capture_mismatched_ledger/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_mismatched_ledger" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype post-approval capture accepted LaunchDaemon ledger mismatched with rootLedgerPath" >&2
+    exit 1
+fi
+if ! grep -q "LaunchDaemon ProgramArguments to match rootLedgerPath" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
 helper_smappservice_capture_symlink_config="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-config"
 helper_smappservice_capture_config_victim="$bag_mode_smoke_dir/helper-smappservice-capture-config-victim"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_config"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_symlink_config"
 printf 'victim-before\n' >"$helper_smappservice_capture_config_victim"
 rm -f "$helper_smappservice_capture_symlink_config/validation-config.txt"
 ln -s "$helper_smappservice_capture_config_victim" "$helper_smappservice_capture_symlink_config/validation-config.txt"
@@ -3238,6 +3334,7 @@ if [[ "$(cat "$helper_smappservice_capture_config_victim")" != "victim-before" ]
 fi
 helper_smappservice_capture_non_regular_manifest="$bag_mode_smoke_dir/helper-smappservice-capture-non-regular-manifest"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_non_regular_manifest"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_non_regular_manifest"
 rm -f "$helper_smappservice_capture_non_regular_manifest/prototype-manifest.tsv"
 mkdir "$helper_smappservice_capture_non_regular_manifest/prototype-manifest.tsv"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_non_regular_manifest" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
@@ -3250,6 +3347,7 @@ if ! grep -q "regular artifact file path" "$bag_mode_smoke_error"; then
 fi
 helper_smappservice_capture_bad_evidence="$bag_mode_smoke_dir/helper-smappservice-capture-bad-evidence"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_bad_evidence"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_bad_evidence"
 rm -rf "$helper_smappservice_capture_bad_evidence/evidence"
 printf 'not an evidence directory\n' >"$helper_smappservice_capture_bad_evidence/evidence"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_bad_evidence" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
@@ -3268,6 +3366,7 @@ fi
 helper_smappservice_capture_symlink_evidence="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-evidence"
 helper_smappservice_capture_symlink_target="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-target"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_evidence"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_symlink_evidence"
 mkdir -p "$helper_smappservice_capture_symlink_target"
 rm -rf "$helper_smappservice_capture_symlink_evidence/evidence"
 ln -s "$helper_smappservice_capture_symlink_target" "$helper_smappservice_capture_symlink_evidence/evidence"
@@ -3291,6 +3390,7 @@ if grep -q '^postApprovalCaptureAttempted=true$' "$helper_smappservice_capture_s
 fi
 helper_smappservice_capture_unwritable="$bag_mode_smoke_dir/helper-smappservice-capture-unwritable"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_unwritable"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_unwritable"
 chmod a-w "$helper_smappservice_capture_unwritable/evidence"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_unwritable" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     chmod u+w "$helper_smappservice_capture_unwritable/evidence"
@@ -3309,6 +3409,7 @@ if grep -q '^postApprovalCaptureAttempted=true$' "$helper_smappservice_capture_u
 fi
 helper_smappservice_capture_readonly_file="$bag_mode_smoke_dir/helper-smappservice-capture-readonly-file"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_readonly_file"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_readonly_file"
 touch "$helper_smappservice_capture_readonly_file/evidence/helper-status-after-approval.txt"
 touch "$helper_smappservice_capture_readonly_file/evidence/helper-status-after-approval.status"
 chmod a-w "$helper_smappservice_capture_readonly_file/evidence/helper-status-after-approval.txt" \
@@ -3333,6 +3434,7 @@ fi
 helper_smappservice_capture_temp_symlink="$bag_mode_smoke_dir/helper-smappservice-capture-temp-symlink"
 helper_smappservice_capture_temp_victim="$bag_mode_smoke_dir/helper-smappservice-capture-temp-victim"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_temp_symlink"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_temp_symlink"
 printf 'victim-before\n' >"$helper_smappservice_capture_temp_victim"
 ln -s "$helper_smappservice_capture_temp_victim" "$helper_smappservice_capture_temp_symlink/validation-config.txt.tmp"
 CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_temp_symlink" --capture-post-approval >/dev/null
@@ -3364,10 +3466,22 @@ if ! grep -q '^postApprovalCaptureAttempted=true$' "$helper_smappservice_prepare
     cat "$helper_smappservice_prepare/validation-config.txt" >&2
     exit 1
 fi
+if ! grep -q "missingOrEmpty=.*runtime/helper-ledger.jsonl" "$helper_smappservice_prepare/evidence/root-ledger-schema-and-permissions.txt"; then
+    echo "SMAppService helper prototype unapproved post-approval capture did not mark missing ledger explicitly" >&2
+    cat "$helper_smappservice_prepare/evidence/root-ledger-schema-and-permissions.txt" >&2
+    exit 1
+fi
+if ! grep -q '^exitCode=1$' "$helper_smappservice_prepare/evidence/root-ledger-schema-and-permissions.status"; then
+    echo "SMAppService helper prototype unapproved post-approval capture did not record missing ledger as non-zero evidence status" >&2
+    cat "$helper_smappservice_prepare/evidence/root-ledger-schema-and-permissions.status" >&2
+    exit 1
+fi
 for post_approval_capture in \
     helper-status-after-approval \
     launchctl-status \
     helper-bootstrap-after-approval \
+    root-ledger-schema-and-permissions \
+    root-ledger-ownership-sample \
     log-evidence
 do
     if [[ ! -s "$helper_smappservice_prepare/evidence/$post_approval_capture.txt" ]]; then
@@ -3382,6 +3496,8 @@ done
 for unpromoted_capture_row in \
     helper-status-after-approval \
     helper-bootstrap-after-approval \
+    root-ledger-schema-and-permissions \
+    root-ledger-ownership-sample \
     launchctl-status \
     log-evidence
 do
@@ -3393,6 +3509,7 @@ do
 done
 helper_smappservice_capture_symlink_source="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-source"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_source"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_symlink_source"
 rm -f "$helper_smappservice_capture_symlink_source/runtime/helper.log"
 ln -s /etc/hosts "$helper_smappservice_capture_symlink_source/runtime/helper.log"
 CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_source" --capture-post-approval >/dev/null
@@ -3408,6 +3525,7 @@ if ! grep -q '^exitCode=1$' "$helper_smappservice_capture_symlink_source/evidenc
 fi
 helper_smappservice_capture_non_regular_source="$bag_mode_smoke_dir/helper-smappservice-capture-non-regular-source"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_non_regular_source"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_non_regular_source"
 rm -f "$helper_smappservice_capture_non_regular_source/runtime/helper.log"
 mkdir "$helper_smappservice_capture_non_regular_source/runtime/helper.log"
 CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_non_regular_source" --capture-post-approval >/dev/null
@@ -3419,6 +3537,71 @@ fi
 if ! grep -q '^exitCode=1$' "$helper_smappservice_capture_non_regular_source/evidence/helper-bootstrap-after-approval.status"; then
     echo "SMAppService helper prototype post-approval capture did not fail non-regular runtime source" >&2
     cat "$helper_smappservice_capture_non_regular_source/evidence/helper-bootstrap-after-approval.status" >&2
+    exit 1
+fi
+helper_smappservice_manual_helper="$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon"
+helper_smappservice_manual_log="$bag_mode_smoke_dir/helper-smappservice-manual-helper.log"
+helper_smappservice_manual_ledger="$bag_mode_smoke_dir/helper-smappservice-manual-helper-ledger.jsonl"
+"$helper_smappservice_manual_helper" --daemon --command repair --log "$helper_smappservice_manual_log" --ledger "$helper_smappservice_manual_ledger" >/dev/null
+if ! grep -q '"command":"repair"' "$helper_smappservice_manual_ledger"; then
+    echo "SMAppService helper prototype daemon did not write dry-run ledger JSON" >&2
+    cat "$helper_smappservice_manual_ledger" >&2
+    exit 1
+fi
+if ! grep -q '"effect":"dry-run"' "$helper_smappservice_manual_ledger"; then
+    echo "SMAppService helper prototype daemon ledger did not record dry-run effect" >&2
+    cat "$helper_smappservice_manual_ledger" >&2
+    exit 1
+fi
+helper_smappservice_manual_symlink_victim="$bag_mode_smoke_dir/helper-smappservice-manual-symlink-victim"
+helper_smappservice_manual_symlink_ledger="$bag_mode_smoke_dir/helper-smappservice-manual-symlink-ledger.jsonl"
+printf 'victim-before\n' >"$helper_smappservice_manual_symlink_victim"
+ln -s "$helper_smappservice_manual_symlink_victim" "$helper_smappservice_manual_symlink_ledger"
+if "$helper_smappservice_manual_helper" --daemon --command repair --log "$bag_mode_smoke_dir/helper-smappservice-manual-symlink-ledger.log" --ledger "$helper_smappservice_manual_symlink_ledger" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype daemon followed symlinked ledger path" >&2
+    exit 1
+fi
+if ! grep -q "ledgerWriteError=unsafe-or-unwritable" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if [[ "$(cat "$helper_smappservice_manual_symlink_victim")" != "victim-before" ]]; then
+    echo "SMAppService helper prototype daemon modified symlink ledger victim" >&2
+    cat "$helper_smappservice_manual_symlink_victim" >&2
+    exit 1
+fi
+helper_smappservice_manual_symlink_parent="$bag_mode_smoke_dir/helper-smappservice-manual-symlink-parent"
+helper_smappservice_manual_symlink_parent_target="$bag_mode_smoke_dir/helper-smappservice-manual-symlink-parent-target"
+mkdir -p "$helper_smappservice_manual_symlink_parent_target"
+ln -s "$helper_smappservice_manual_symlink_parent_target" "$helper_smappservice_manual_symlink_parent"
+if "$helper_smappservice_manual_helper" --daemon --command repair --log "$bag_mode_smoke_dir/helper-smappservice-manual-symlink-parent.log" --ledger "$helper_smappservice_manual_symlink_parent/helper-ledger.jsonl" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype daemon followed symlinked ledger parent" >&2
+    exit 1
+fi
+if ! grep -q "ledgerWriteError=unsafe-or-unwritable" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if [[ -e "$helper_smappservice_manual_symlink_parent_target/helper-ledger.jsonl" ]]; then
+    echo "SMAppService helper prototype daemon wrote through symlinked ledger parent" >&2
+    cat "$helper_smappservice_manual_symlink_parent_target/helper-ledger.jsonl" >&2
+    exit 1
+fi
+helper_smappservice_manual_symlink_log="$bag_mode_smoke_dir/helper-smappservice-manual-symlink.log"
+helper_smappservice_manual_log_victim="$bag_mode_smoke_dir/helper-smappservice-manual-log-victim"
+printf 'victim-before\n' >"$helper_smappservice_manual_log_victim"
+ln -s "$helper_smappservice_manual_log_victim" "$helper_smappservice_manual_symlink_log"
+if "$helper_smappservice_manual_helper" --daemon --command repair --log "$helper_smappservice_manual_symlink_log" --ledger "$bag_mode_smoke_dir/helper-smappservice-manual-symlink-log-ledger.jsonl" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype daemon followed symlinked log path" >&2
+    exit 1
+fi
+if ! grep -q "logWriteError=unsafe-or-unwritable" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if [[ "$(cat "$helper_smappservice_manual_log_victim")" != "victim-before" ]]; then
+    echo "SMAppService helper prototype daemon modified symlink log victim" >&2
+    cat "$helper_smappservice_manual_log_victim" >&2
     exit 1
 fi
 helper_smappservice_unregister_without_ack="$bag_mode_smoke_dir/helper-smappservice-unregister-without-ack"
@@ -3449,6 +3632,7 @@ if ! grep -q "Use only one" "$bag_mode_smoke_error"; then
 fi
 helper_smappservice_capture_unregister_symlink_executable="$bag_mode_smoke_dir/helper-smappservice-capture-unregister-symlink-executable"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_unregister_symlink_executable"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_unregister_symlink_executable"
 rm -f "$helper_smappservice_capture_unregister_symlink_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
 ln -s /bin/echo "$helper_smappservice_capture_unregister_symlink_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
 if scripts/helper-service-smappservice-prototype.sh \
@@ -3464,6 +3648,7 @@ if ! grep -q "regular executable artifact path" "$bag_mode_smoke_error"; then
 fi
 helper_smappservice_capture_unregister_non_regular_executable="$bag_mode_smoke_dir/helper-smappservice-capture-unregister-non-regular-executable"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_unregister_non_regular_executable"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_unregister_non_regular_executable"
 rm -f "$helper_smappservice_capture_unregister_non_regular_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
 mkdir "$helper_smappservice_capture_unregister_non_regular_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
 if scripts/helper-service-smappservice-prototype.sh \
@@ -3486,6 +3671,7 @@ cp "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/Info.plis
     "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/Info.plist"
 cp "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist" \
     "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_unregister_fake"
 {
     printf '%s\n' '#!/usr/bin/env bash'
     printf '%s\n' 'set -euo pipefail'
@@ -3518,6 +3704,7 @@ chmod +x "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.
     printf 'helperLabel=%s\n' "$helper_smappservice_prepare_label"
     printf 'identitySuffix=%s\n' "$helper_smappservice_prepare_identity"
     printf 'daemonCommand=status\n'
+    printf 'rootLedgerPath=runtime/helper-ledger.jsonl\n'
     printf 'unregisterAttempted=false\n'
 } >"$helper_smappservice_capture_unregister_fake/validation-config.txt"
 cp "$helper_smappservice_prepare/prototype-manifest.tsv" "$helper_smappservice_capture_unregister_fake/prototype-manifest.tsv"

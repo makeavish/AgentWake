@@ -128,6 +128,7 @@ if [[ "$APPEND_CAPTURE" == true && -z "$(find "$OUTPUT_DIR" -mindepth 1 -maxdept
 fi
 
 DAEMON_COMMAND="${CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND:-status}"
+ROOT_LEDGER_PATH_REL="runtime/helper-ledger.jsonl"
 
 require_helper_command() {
     local name="$1"
@@ -237,6 +238,15 @@ if [[ "$APPEND_CAPTURE" == true && -f "$CONFIG_FILE" ]]; then
         exit 73
     fi
     require_helper_command "daemonCommand" "$DAEMON_COMMAND"
+    ROOT_LEDGER_PATH_REL="$(config_value rootLedgerPath "$CONFIG_FILE" || true)"
+    if [[ -z "$ROOT_LEDGER_PATH_REL" ]]; then
+        echo "$CAPTURE_ACTION_NAME missing required rootLedgerPath in validation config" >&2
+        exit 73
+    fi
+    if [[ "$ROOT_LEDGER_PATH_REL" != "runtime/helper-ledger.jsonl" ]]; then
+        echo "$CAPTURE_ACTION_NAME requires rootLedgerPath to be runtime/helper-ledger.jsonl" >&2
+        exit 73
+    fi
 else
     if [[ -z "$IDENTITY_SUFFIX" ]]; then
         IDENTITY_SUFFIX="$(derive_identity_suffix)"
@@ -255,6 +265,7 @@ LAUNCHD_DIR="$CONTENTS_DIR/Library/LaunchDaemons"
 RUNTIME_DIR="$OUTPUT_DIR/runtime"
 SOURCE_DIR="$OUTPUT_DIR/source-package"
 EVIDENCE_DIR="$OUTPUT_DIR/evidence"
+ROOT_LEDGER_PATH="$OUTPUT_DIR/$ROOT_LEDGER_PATH_REL"
 
 if [[ "$APPEND_CAPTURE" == false ]]; then
     mkdir -p "$MACOS_DIR" "$LAUNCHD_DIR" "$RUNTIME_DIR" "$SOURCE_DIR" "$EVIDENCE_DIR"
@@ -466,6 +477,53 @@ capture_file_snapshot() {
     return "$status"
 }
 
+capture_ledger_snapshot() {
+    local name="$1"
+    local source_file="$2"
+    local out="$EVIDENCE_DIR/$name.txt"
+    local status_file="$EVIDENCE_DIR/$name.status"
+    local start finish status block_status
+    start="$(date +%s)"
+    status=0
+    set +e
+    {
+        printf '$ test -f %q && stat -f %q %q && sed -n 1,200p %q\n' \
+            "$source_file" \
+            'mode=%Sp owner=%Su group=%Sg path=%N' \
+            "$source_file" \
+            "$source_file"
+        if [[ -L "$source_file" ]]; then
+            echo "symlinkSource=$source_file"
+            status=1
+        elif [[ ! -e "$source_file" ]]; then
+            echo "missingOrEmpty=$source_file"
+            status=1
+        elif [[ ! -f "$source_file" ]]; then
+            echo "nonRegularSource=$source_file"
+            status=1
+        elif [[ -s "$source_file" ]]; then
+            stat -f 'mode=%Sp owner=%Su group=%Sg path=%N' "$source_file"
+            sed -n '1,200p' "$source_file"
+            status=$?
+        else
+            echo "missingOrEmpty=$source_file"
+            status=1
+        fi
+    } >"$out" 2>&1
+    block_status=$?
+    set -e
+    if [[ "$block_status" -ne 0 ]]; then
+        status=1
+    fi
+    finish="$(date +%s)"
+    {
+        echo "command=ledger-snapshot $source_file"
+        echo "exitCode=$status"
+        echo "durationSeconds=$(( finish - start ))"
+    } >"$status_file"
+    return "$status"
+}
+
 require_writable_capture_targets() {
     local name target
     for name in "$@"; do
@@ -578,11 +636,34 @@ require_existing_capture_artifact() {
         echo "$CAPTURE_ACTION_NAME requires LaunchDaemon Label to match helperLabel: $LAUNCHD_DIR/$PLIST_NAME" >&2
         exit 73
     fi
-    local plist_command_flag plist_command
+    local plist_executable plist_daemon_flag plist_command_flag plist_command plist_log_flag plist_log
+    plist_executable="$(plutil -extract ProgramArguments.0 raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
+    plist_daemon_flag="$(plutil -extract ProgramArguments.1 raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
     plist_command_flag="$(plutil -extract ProgramArguments.2 raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
     plist_command="$(plutil -extract ProgramArguments.3 raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
+    plist_log_flag="$(plutil -extract ProgramArguments.4 raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
+    plist_log="$(plutil -extract ProgramArguments.5 raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
+    if [[ "$plist_executable" != "$MACOS_DIR/$HELPER_NAME" || "$plist_daemon_flag" != "--daemon" ]]; then
+        echo "$CAPTURE_ACTION_NAME requires LaunchDaemon ProgramArguments to use the bundled helper daemon" >&2
+        exit 73
+    fi
     if [[ "$plist_command_flag" != "--command" || "$plist_command" != "$DAEMON_COMMAND" ]]; then
         echo "$CAPTURE_ACTION_NAME requires LaunchDaemon ProgramArguments to match daemonCommand: $DAEMON_COMMAND" >&2
+        exit 73
+    fi
+    if [[ "$plist_log_flag" != "--log" || "$plist_log" != "$RUNTIME_DIR/helper.log" ]]; then
+        echo "$CAPTURE_ACTION_NAME requires LaunchDaemon ProgramArguments to use the artifact helper log" >&2
+        exit 73
+    fi
+    local plist_ledger_flag plist_ledger
+    plist_ledger_flag="$(plutil -extract ProgramArguments.6 raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
+    plist_ledger="$(plutil -extract ProgramArguments.7 raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
+    if [[ "$plist_ledger_flag" != "--ledger" || "$plist_ledger" != "$ROOT_LEDGER_PATH" ]]; then
+        echo "$CAPTURE_ACTION_NAME requires LaunchDaemon ProgramArguments to match rootLedgerPath: $ROOT_LEDGER_PATH_REL" >&2
+        exit 73
+    fi
+    if plutil -extract ProgramArguments.8 raw -o - "$LAUNCHD_DIR/$PLIST_NAME" >/dev/null 2>&1; then
+        echo "$CAPTURE_ACTION_NAME requires LaunchDaemon ProgramArguments to contain only the expected helper arguments" >&2
         exit 73
     fi
 }
@@ -603,13 +684,17 @@ capture_post_approval_status() {
         helper-status-after-approval \
         launchctl-status \
         log-evidence \
-        helper-bootstrap-after-approval
+        helper-bootstrap-after-approval \
+        root-ledger-schema-and-permissions \
+        root-ledger-ownership-sample
 
     capture "helper-status-after-approval" "$MACOS_DIR/$APP_NAME" status || true
     assert_controller_plist_name "helper-status-after-approval"
     capture "launchctl-status" launchctl print "system/$HELPER_LABEL" || true
     capture "log-evidence" log show --style syslog --last "${CLAWSHELL_SMAPP_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
     capture_file_snapshot "helper-bootstrap-after-approval" "$RUNTIME_DIR/helper.log" || true
+    capture_ledger_snapshot "root-ledger-schema-and-permissions" "$ROOT_LEDGER_PATH" || true
+    capture_ledger_snapshot "root-ledger-ownership-sample" "$ROOT_LEDGER_PATH" || true
 
     config_set_key "postApprovalCaptureAttempted" "true"
 
@@ -624,6 +709,8 @@ Captured files:
 - \`evidence/helper-status-after-approval.txt\`
 - \`evidence/launchctl-status.txt\`
 - \`evidence/helper-bootstrap-after-approval.txt\`
+- \`evidence/root-ledger-schema-and-permissions.txt\`
+- \`evidence/root-ledger-ownership-sample.txt\`
 - \`evidence/log-evidence.txt\`
 
 This command does not promote manifest rows automatically. Review the captured
@@ -779,9 +866,97 @@ func jsonArray(_ values: [String]) -> String {
     return encoded
 }
 
+func normalizedAbsolutePath(_ path: String) -> String? {
+    guard path.hasPrefix("/") else {
+        return nil
+    }
+    let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
+    if standardized == "/var" {
+        return "/private/var"
+    }
+    if standardized.hasPrefix("/var/") {
+        return "/private/var/" + String(standardized.dropFirst("/var/".count))
+    }
+    if standardized == "/tmp" {
+        return "/private/tmp"
+    }
+    if standardized.hasPrefix("/tmp/") {
+        return "/private/tmp/" + String(standardized.dropFirst("/tmp/".count))
+    }
+    return standardized
+}
+
+func openVerifiedParentDirectory(for path: String) -> (fd: Int32, leaf: String)? {
+    guard let normalizedPath = normalizedAbsolutePath(path) else {
+        return nil
+    }
+    let parent = (normalizedPath as NSString).deletingLastPathComponent
+    let leaf = (normalizedPath as NSString).lastPathComponent
+    guard !leaf.isEmpty && leaf != "." && leaf != ".." else {
+        return nil
+    }
+
+    var currentFD = open("/", O_RDONLY | O_DIRECTORY)
+    if currentFD == -1 {
+        return nil
+    }
+
+    for component in parent.split(separator: "/").map(String.init) {
+        if component.isEmpty || component == "." {
+            continue
+        }
+        if component == ".." {
+            close(currentFD)
+            return nil
+        }
+        let nextFD = component.withCString { name in
+            openat(currentFD, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        }
+        close(currentFD)
+        if nextFD == -1 {
+            return nil
+        }
+        currentFD = nextFD
+    }
+
+    return (currentFD, leaf)
+}
+
+func appendSafely(_ payload: String, to path: String) -> Bool {
+    guard let parent = openVerifiedParentDirectory(for: path) else {
+        return false
+    }
+    defer {
+        close(parent.fd)
+    }
+
+    let fd = parent.leaf.withCString { leaf in
+        openat(parent.fd, leaf, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+    }
+    if fd == -1 {
+        return false
+    }
+    defer {
+        close(fd)
+    }
+
+    let bytes = Array(payload.utf8)
+    let written = bytes.withUnsafeBufferPointer { buffer -> Int in
+        guard let baseAddress = buffer.baseAddress else {
+            return 0
+        }
+        return write(fd, baseAddress, buffer.count)
+    }
+    if written != bytes.count {
+        return false
+    }
+    return fchmod(fd, S_IRUSR | S_IWUSR) == 0
+}
+
 let command = argumentValue(after: "--command") ?? "status"
 let commandAllowed = allowedCommands.contains(command)
 let logPath = argumentValue(after: "--log")
+let ledgerPath = argumentValue(after: "--ledger")
 let payload = """
 event=helper-command
 timestampUtc=\(ISO8601DateFormatter().string(from: Date()))
@@ -795,18 +970,22 @@ argumentsJson=\(jsonArray(arguments))
 
 """
 
+let ledgerPayload = """
+{"schemaVersion":1,"event":"bagModeHelperLedgerSample","timestampUtc":\(jsonValue(ISO8601DateFormatter().string(from: Date()))),"ownerTokenHash":"prototype-no-token","helperGeneration":1,"bootSession":"prototype-unverified","command":\(jsonValue(command)),"allowed":\(commandAllowed),"effect":"dry-run","priorState":{},"expectedCurrentValues":{}}
+
+"""
+
 if let logPath {
-    let url = URL(fileURLWithPath: logPath)
-    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    if let data = payload.data(using: .utf8) {
-        if FileManager.default.fileExists(atPath: logPath),
-           let handle = try? FileHandle(forWritingTo: url) {
-            try? handle.seekToEnd()
-            try? handle.write(contentsOf: data)
-            try? handle.close()
-        } else {
-            try? data.write(to: url, options: .atomic)
-        }
+    if !appendSafely(payload, to: logPath) {
+        fputs("logWriteError=unsafe-or-unwritable\n", stderr)
+        exit(73)
+    }
+}
+
+if let ledgerPath {
+    if !appendSafely(ledgerPayload, to: ledgerPath) {
+        fputs("ledgerWriteError=unsafe-or-unwritable\n", stderr)
+        exit(73)
     }
 }
 
@@ -876,10 +1055,11 @@ EOF
 }
 
 write_launchdaemon_plist() {
-    local helper_path helper_log daemon_command stdout_log stderr_log
+    local helper_path helper_log daemon_command root_ledger_path stdout_log stderr_log
     helper_path="$(xml_escape "$MACOS_DIR/$HELPER_NAME")"
     helper_log="$(xml_escape "$RUNTIME_DIR/helper.log")"
     daemon_command="$(xml_escape "$DAEMON_COMMAND")"
+    root_ledger_path="$(xml_escape "$ROOT_LEDGER_PATH")"
     stdout_log="$(xml_escape "$RUNTIME_DIR/helper.stdout.log")"
     stderr_log="$(xml_escape "$RUNTIME_DIR/helper.stderr.log")"
     cat >"$LAUNCHD_DIR/$PLIST_NAME" <<EOF
@@ -897,6 +1077,8 @@ write_launchdaemon_plist() {
     <string>$daemon_command</string>
     <string>--log</string>
     <string>$helper_log</string>
+    <string>--ledger</string>
+    <string>$root_ledger_path</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -979,6 +1161,7 @@ identitySuffix=$IDENTITY_SUFFIX
 launchDaemonPlist=$APP_NAME.app/Contents/Library/LaunchDaemons/$PLIST_NAME
 helperInstallPath=$HELPER_INSTALL_PATH
 daemonCommand=$DAEMON_COMMAND
+rootLedgerPath=$ROOT_LEDGER_PATH_REL
 localAuthModel=ad-hoc app/helper signature plus binary hash capture; pairing token not implemented in this prototype harness
 developerIDApplicationSigned=false
 packageInstallerUsed=false
@@ -1003,6 +1186,7 @@ cat >"$OUTPUT_DIR/manual-result.md" <<EOF
 - Helper label: $HELPER_LABEL
 - Identity suffix: $IDENTITY_SUFFIX
 - Daemon command: $DAEMON_COMMAND
+- Root ledger path: $ROOT_LEDGER_PATH_REL
 
 ## Signing
 - App signed: yes
@@ -1053,8 +1237,8 @@ manifest_row() {
     manifest_row "admin-approval-or-password-flow" "TODO" "" "Capture approval flow during interactive prototype"
     manifest_row "helper-bootstrap-after-approval" "TODO" "" "Capture helper runtime log after approval"
     manifest_row "post-reboot-helper-bootstrap" "TODO" "" "Capture after reboot"
-    manifest_row "root-ledger-schema-and-permissions" "TODO" "" "Implement/capture root ledger"
-    manifest_row "root-ledger-ownership-sample" "TODO" "" "Capture root ledger sample"
+    manifest_row "root-ledger-schema-and-permissions" "TODO" "" "Dry-run ledger capture is available after approval at evidence/root-ledger-schema-and-permissions.txt; promote only after root-owned helper output is reviewed"
+    manifest_row "root-ledger-ownership-sample" "TODO" "" "Dry-run ledger capture is available after approval at evidence/root-ledger-ownership-sample.txt; promote only after root-owned helper output is reviewed"
     manifest_row "helper-update-old-inactive" "TODO" "" "Exercise update"
     manifest_row "helper-update-ledger-compatibility" "TODO" "" "Exercise update ledger compatibility"
     manifest_row "helper-repair-conflict" "TODO" "" "Exercise repair/conflict"

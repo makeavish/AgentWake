@@ -143,6 +143,11 @@ command dispatch probe, set
 `enableBagMode`, `disableBagMode`, `repair`, or `uninstall` before creating and
 registering the artifact. The selected command is written to
 `daemonCommand=<command>` and into the LaunchDaemon `ProgramArguments`.
+The config records `rootLedgerPath=runtime/helper-ledger.jsonl`, and the
+LaunchDaemon receives the resolved absolute artifact path. After approval,
+post-approval capture records ledger permissions and contents as dry-run helper
+ledger evidence for deliberate review; this is not the final production
+root-owned ledger implementation.
 
 Each artifact gets a unique SMAppService bundle/helper identity derived from its
 output path. This avoids reusing stale macOS approval/code-signing state between
@@ -201,7 +206,8 @@ identitySuffix=h123abc4567
 launchDaemonPlist=ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.ClawShell.HelperPrototype.h123abc4567.daemon.plist
 helperInstallPath=smappservice
 daemonCommand=status
-localAuthModel=ad-hoc app/helper signature plus root-owned pairing token
+rootLedgerPath=runtime/helper-ledger.jsonl
+localAuthModel=ad-hoc app/helper signature plus binary hash capture; pairing token not implemented in this prototype harness
 developerIDApplicationSigned=false
 packageInstallerUsed=false
 homebrewCaskUsed=false
