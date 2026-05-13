@@ -17,8 +17,8 @@ for #25. The default mode is non-mutating: it builds an ad-hoc signed app and
 LaunchDaemon helper that will run one timeout-bounded provider sample when
 registered and approved. The default source is powermetrics; set
 CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc for the diagnostic I/O Registry
-SMC endpoint source, or ioreg-pmu for the AppleARMPMUTempSensor inventory
-candidate.
+SMC endpoint source, ioreg-pmu for the AppleARMPMUTempSensor inventory
+candidate, or thermal-levels for the root-gated thermal levels command.
 
 --register calls SMAppService and can change local helper state. Use it only
 during an intentional #25 prototype run.
@@ -196,9 +196,9 @@ require_provider_source() {
     local name="$1"
     local value="$2"
     case "$value" in
-        powermetrics|ioreg-smc|ioreg-pmu) ;;
+        powermetrics|ioreg-smc|ioreg-pmu|thermal-levels) ;;
         *)
-            echo "$name must be one of: powermetrics, ioreg-smc, ioreg-pmu" >&2
+            echo "$name must be one of: powermetrics, ioreg-smc, ioreg-pmu, thermal-levels" >&2
             exit 64
             ;;
     esac
@@ -245,6 +245,9 @@ if [[ -z "$CASE_ID" ]]; then
             ;;
         ioreg-pmu)
             CASE_ID="apple-silicon-ioreg-pmu-smappservice"
+            ;;
+        thermal-levels)
+            CASE_ID="apple-silicon-thermal-levels-smappservice"
             ;;
         *)
             CASE_ID="apple-silicon-powermetrics-smappservice"
@@ -811,6 +814,7 @@ let powermetricsSamplers = argumentValue(after: "--powermetrics-samplers") ?? "t
 let showInitialUsage = CommandLine.arguments.contains("--show-initial-usage")
 let powermetricsPath = "/usr/bin/powermetrics"
 let ioregPath = "/usr/sbin/ioreg"
+let thermalPath = "/usr/bin/thermal"
 let outputByteLimit = 2_000_000
 let commandPath: String
 let commandArguments: [String]
@@ -821,6 +825,9 @@ case "ioreg-smc":
 case "ioreg-pmu":
     commandPath = ioregPath
     commandArguments = ["-r", "-c", "AppleARMPMUTempSensor", "-l"]
+case "thermal-levels":
+    commandPath = thermalPath
+    commandArguments = ["levels"]
 default:
     commandPath = powermetricsPath
     var arguments = ["-n", "1", "-i", "\(sampleRateMs)", "--samplers", powermetricsSamplers]
@@ -1034,6 +1041,7 @@ providerSource=\(providerSource)
 providerCommandPath=\(commandPath)
 powermetricsPath=\(powermetricsPath)
 ioregPath=\(ioregPath)
+thermalPath=\(thermalPath)
 sampleRateMs=\(sampleRateMs)
 timeoutSeconds=\(timeoutSeconds)
 showInitialUsage=\(showInitialUsage)

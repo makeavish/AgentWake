@@ -246,6 +246,9 @@ Set `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu` to run the PMU inventory
 candidate `/usr/sbin/ioreg -r -c AppleARMPMUTempSensor -l`; current local
 evidence can run this source from the approved helper as root, but still sees
 PMU sensor names without numeric reading candidates.
+Set `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=thermal-levels` to run the root-gated
+`/usr/bin/thermal levels` command from the approved helper as a diagnostic
+source candidate.
 The helper writes provider stdout/stderr to temporary files and reads back at
 most 2,000,000 bytes per stream so large I/O Registry output cannot block the
 child process on a full pipe. That mode is candidate-source evidence only until it has bounded
