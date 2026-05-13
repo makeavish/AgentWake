@@ -27,6 +27,7 @@ Alternate source probe artifacts:
 - `.build/temperature-provider-proof/alt-source-classified-20260513T082121Z`
 - `.build/temperature-provider-proof/alt-source-hidutil-20260513T131843Z`
 - `.build/temperature-provider-proof/alt-source-nvme-20260513T134806Z`
+- `.build/temperature-provider-proof/alt-source-hid-dump-20260513T143454Z`
 
 ## Question
 
@@ -314,16 +315,25 @@ and `PMU tdev*`, but it does not expose a current scalar reading through the
 non-mutating `ioreg` inventory. Treat those PMU nodes as future API/research
 surfaces, not selected provider output.
 
-The follow-up alternate-source probes
-`.build/temperature-provider-proof/alt-source-hidutil-20260513T131843Z` and
-`.build/temperature-provider-proof/alt-source-nvme-20260513T134806Z` add the
-HID service inventory from `hidutil list` and the
-`AppleEmbeddedNVMeTemperatureSensor` inventory:
+The follow-up alternate-source probe
+`.build/temperature-provider-proof/alt-source-hidutil-20260513T131843Z` adds
+the HID service inventory from `hidutil list`:
 
 ```text
 evidenceFormat=temperature-alt-source-probe-v2
 hidutilAvailable=true
 hidPmuTemperatureInventoryPresent=true
+numericTemperatureObserved=false
+numericTemperatureCandidateCount=0
+numericCutoffSource=false
+providerProofReady=false
+```
+
+The later `.build/temperature-provider-proof/alt-source-nvme-20260513T134806Z`
+artifact adds the `AppleEmbeddedNVMeTemperatureSensor` inventory:
+
+```text
+evidenceFormat=temperature-alt-source-probe-v2
 nvmeTempSensorPresent=true
 numericTemperatureObserved=false
 numericTemperatureCandidateCount=0
@@ -340,6 +350,14 @@ leads, but they are still names and registry metadata rather than current
 temperature readings. The NVMe inventory similarly exposes a product name such
 as `NAND CH0 temp`, but not a current scalar reading in the non-mutating local
 inventory. They do not change the provider conclusion.
+
+Newer alternate-source probe artifacts use
+`evidenceFormat=temperature-alt-source-probe-v3` and add bounded HID
+temperature-service NDJSON plus filtered `hidutil dump services` evidence. The
+additional fields (`hidPmuTemperatureServiceCount`,
+`hidNvmeTemperatureInventoryPresent`, and `hidTemperatureServiceDumpPresent`)
+make the PMU/NVMe HID surface easier to audit, but they remain service metadata
+only and do not promote `numericCutoffSource`.
 
 The follow-up `.build/temperature-provider-proof/ioreg-pmu-local-20260513T105941Z`
 artifact adds `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu`, which runs
@@ -428,8 +446,8 @@ scripts/temperature-provider-alt-source-probe.sh \
 ```
 
 This captures local SMC, PMU temperature sensor, NVMe temperature sensor, die
-temperature controller, HID service, and IOReport-style surfaces as discovery
-evidence. It also writes
+temperature controller, HID service/dump, and IOReport-style surfaces as
+discovery evidence. It also writes
 `evidence/numeric-temperature-candidates.txt`, a bounded list of captured lines
 that look like labeled numeric temperature values and should be reviewed before
 the next helper-owned provider attempt, plus
@@ -437,11 +455,11 @@ the next helper-owned provider attempt, plus
 look numeric but are not production cutoff candidates. Generic `die-id`,
 `die-count`, and `*-temp` table/interface identifiers are intentionally
 excluded from the accepted candidate list. PMU `tdev`/`tdie` rows from
-`hidutil list` and NVMe `NAND ... temp` product names are captured as inventory
-leads only. The probe does not select a provider or promote numeric cutoff
-proof; `providerProofReady=false` remains expected until helper-owned numeric
-output, freshness, cadence, timeout behavior, and closed-bag coverage are
-proven.
+`hidutil list`, HID temperature-service NDJSON/dump output, and NVMe
+`NAND ... temp` product names are captured as inventory leads only. The probe
+does not select a provider or promote numeric cutoff proof;
+`providerProofReady=false` remains expected until helper-owned numeric output,
+freshness, cadence, timeout behavior, and closed-bag coverage are proven.
 
 To build the no-membership `SMAppService` provider candidate without changing
 helper registration state, run:

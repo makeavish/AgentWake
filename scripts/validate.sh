@@ -1171,6 +1171,10 @@ for required_file in \
     evidence/die-temperature-controller-inventory.status \
     evidence/hidutil-service-inventory.txt \
     evidence/hidutil-service-inventory.status \
+    evidence/hidutil-temperature-service-ndjson.txt \
+    evidence/hidutil-temperature-service-ndjson.status \
+    evidence/hidutil-temperature-service-dump.txt \
+    evidence/hidutil-temperature-service-dump.status \
     evidence/ioreport-temperature-legend-inventory.txt \
     evidence/ioreport-temperature-legend-inventory.status \
     evidence/numeric-temperature-candidates.txt \
@@ -1184,6 +1188,11 @@ do
 done
 if ! grep -q '^providerProofReady=false$' "$temperature_alt_source_dir/validation-config.txt"; then
     echo "Temperature alternate source probe overclaimed provider proof readiness" >&2
+    cat "$temperature_alt_source_dir/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -q '^evidenceFormat=temperature-alt-source-probe-v3$' "$temperature_alt_source_dir/validation-config.txt"; then
+    echo "Temperature alternate source probe did not record v3 evidence format" >&2
     cat "$temperature_alt_source_dir/validation-config.txt" >&2
     exit 1
 fi
@@ -1309,12 +1318,32 @@ EOF
 chmod +x "$temperature_alt_source_fake_bin/ioreg"
 cat >"$temperature_alt_source_fake_bin/hidutil" <<'EOF'
 #!/usr/bin/env bash
-if [[ "$1" == "list" ]]; then
+if [[ "$1" == "list" && "${2:-}" == "--ndjson" ]]; then
+    cat <<'SERVICES'
+{"Built-In":true,"VendorID":0,"type":"service","IOClass":"AppleSMCKeysEndpoint","Product":"PMU tdev1","PrimaryUsagePage":65280,"IORegistryEntryID":4294969528,"PrimaryUsage":5,"LocationID":1414541668,"ProductID":0}
+{"Built-In":true,"VendorID":0,"type":"service","IOClass":"AppleSMCKeysEndpoint","Product":"PMU tdie7","PrimaryUsagePage":65280,"IORegistryEntryID":4294969950,"PrimaryUsage":5,"LocationID":1414543202,"ProductID":0}
+{"Built-In":true,"VendorID":0,"type":"service","IOClass":"AppleEmbeddedNVMeTemperatureSensor","Product":"NAND CH0 temp","PrimaryUsagePage":65280,"IORegistryEntryID":4294970263,"PrimaryUsage":5,"LocationID":1414410350,"ProductID":0}
+SERVICES
+elif [[ "$1" == "list" ]]; then
     cat <<'SERVICES'
 Services:
 VendorID ProductID LocationID UsagePage Usage RegistryID  Transport            Class                                Product                            UserClass               Built-In
 0x0      0x0       0x54503164 65280     5     0x1000008b8 (null)               AppleSMCKeysEndpoint                 PMU tdev1                          (null)                  1
 0x0      0x0       0x54503762 65280     5     0x100000a5e (null)               AppleSMCKeysEndpoint                 PMU tdie7                          (null)                  1
+0x0      0x0       0x544e306e 65280     5     0x100000b97 (null)               AppleEmbeddedNVMeTemperatureSensor   NAND CH0 temp                      (null)                  1
+SERVICES
+elif [[ "$1" == "dump" && "${2:-}" == "services" ]]; then
+    cat <<'SERVICES'
+            IOClass = AppleARMPMUTempSensor;
+            Product = "PMU tdev1";
+            PrimaryUsage = 5;
+            PrimaryUsagePage = 65280;
+            ReportInterval = 0;
+            IOClass = AppleEmbeddedNVMeTemperatureSensor;
+            Product = "NAND CH0 temp";
+            PrimaryUsage = 5;
+            PrimaryUsagePage = 65280;
+            ReportInterval = 0;
 SERVICES
 else
     echo "unexpected hidutil arguments: $*" >&2
@@ -1333,6 +1362,9 @@ for expected_key in \
     dieTempControllerPresent=true \
     hidutilAvailable=true \
     hidPmuTemperatureInventoryPresent=true \
+    hidPmuTemperatureServiceCount=2 \
+    hidNvmeTemperatureInventoryPresent=true \
+    hidTemperatureServiceDumpPresent=true \
     ioreportTemperatureLegendPresent=true \
     candidateSurfaceAvailable=true \
     numericTemperatureObserved=true \
@@ -1394,6 +1426,16 @@ if ! awk -F '\t' '$1 == "numeric-temperature-candidates" && $2 == "evidence" && 
 fi
 if ! awk -F '\t' '$1 == "hidutil-service-inventory" && $2 == "evidence" && $3 == "evidence/hidutil-service-inventory.txt" { found = 1 } END { exit !found }' "$temperature_alt_source_fake/source-probe-manifest.tsv"; then
     echo "Temperature alternate source probe manifest did not attach hidutil service inventory evidence" >&2
+    cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "hidutil-temperature-service-ndjson" && $2 == "evidence" && $3 == "evidence/hidutil-temperature-service-ndjson.txt" { found = 1 } END { exit !found }' "$temperature_alt_source_fake/source-probe-manifest.tsv"; then
+    echo "Temperature alternate source probe manifest did not attach hidutil temperature service NDJSON evidence" >&2
+    cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "hidutil-temperature-service-dump" && $2 == "evidence" && $3 == "evidence/hidutil-temperature-service-dump.txt" { found = 1 } END { exit !found }' "$temperature_alt_source_fake/source-probe-manifest.tsv"; then
+    echo "Temperature alternate source probe manifest did not attach hidutil temperature service dump evidence" >&2
     cat "$temperature_alt_source_fake/source-probe-manifest.tsv" >&2
     exit 1
 fi
