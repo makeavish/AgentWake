@@ -327,10 +327,15 @@ post-approval capture reached raw `1` (`enabled`). That artifact does not prove
 which System Settings UI, if any, was shown before enablement. `launchctl`
 found the ServiceManagement-managed daemon with
 `runs = 1` and `last exit code = 0`; helper stdout recorded `uid=0`, `euid=0`,
-and a mirrored `bagModeHelperLedgerSample` JSON event. Treat this as local
-SMAppService root-bootstrap evidence, not complete #27 evidence. The manifest
-still needs deliberate promotion only after reviewing reboot, update, repair,
-unregister/cleanup, CLI command, and failure-case captures.
+and a mirrored `bagModeHelperLedgerSample` JSON event. A later
+`--capture-unregister` run on the same artifact recorded
+`unregisterResult=success`, status raw `1 -> 0`, follow-up status raw `0`, and
+`launchctl` service-not-found. Treat this as local SMAppService root-bootstrap
+and unregister evidence, not complete #27 evidence. The manifest still needs
+deliberate promotion only after reviewing fixed-command API,
+admin-approval/password-flow, post-approval status/bootstrap/log/launchctl,
+root-ledger schema/ownership, reboot, update, repair, CLI command,
+failure-case, and helper-owned Bag Mode state cleanup captures.
 New artifacts derive a unique SMAppService bundle/helper identity from the
 output path, and write it to `appBundleIdentifier`, `helperLabel`, and
 `identitySuffix` in `validation-config.txt`. Set
@@ -374,9 +379,10 @@ scripts/helper-service-smappservice-prototype.sh \
 
 This cleanup mode calls `unregister()` from the existing app bundle, then
 captures follow-up `status`, `launchctl`, and unified log evidence. It does not
-promote manifest rows automatically. Review the captured output before mapping
-it to `helper-uninstall`, `helper-uninstall-state-cleanup`, and the manual
-uninstall fields, then run the verifier.
+promote manifest rows automatically. The current artifact proves the unregister
+call removed the ServiceManagement job; keep helper-owned Bag Mode state cleanup
+as a separate required evidence row until a real helper-owned Bag Mode state is
+created and removed.
 
 Use the non-mutating prototype scaffold when starting a new #27 evidence
 package:

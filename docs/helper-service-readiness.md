@@ -73,11 +73,15 @@ The product plan now treats Apple Developer Program membership as deferred until
 `SMAppService` remains the source-backed first target to prototype, and the
 latest no-membership helper artifact moved past the earlier approval-pending
 state. The fresh ad-hoc helper reached `enabled`, launchd submitted the
-ServiceManagement daemon, and readable stdout captured a root-owned dry-run
-ledger sample. That proves the local SMAppService root bootstrap path is viable
-on this machine, but #7 still cannot claim the helper path is complete: #27
-still needs reboot, update, repair, unregister/cleanup, CLI, and failure-case
-lifecycle evidence before production Bag Mode can depend on it.
+ServiceManagement daemon, readable stdout captured a root-owned dry-run ledger
+sample, and a later unregister capture removed the service. That proves the
+local SMAppService root bootstrap and unregister path is viable on this machine,
+but #7 still cannot claim the helper path is complete: #27 still needs the
+approved fixed-command API row, admin-approval/password-flow evidence,
+post-approval status/bootstrap/log/launchctl row promotion, root-ledger
+schema/ownership promotion, reboot, update, repair, CLI, failure-case, and
+helper-owned Bag Mode state cleanup evidence before production Bag Mode can
+depend on it.
 
 The design should keep these constraints:
 
@@ -205,17 +209,25 @@ helperRuntimeEuid=0
 helperStdoutLedgerEvent=bagModeHelperLedgerSample
 rootLedgerMode=-rw-------
 rootLedgerOwner=root
+unregisterStatusBeforeRaw=1 (enabled)
+unregisterResult=success
+unregisterStatusAfterRaw=0 (notRegistered)
+statusAfterUnregisterRaw=0 (notRegistered)
+launchctlAfterUnregister=service-not-found
 ```
 
 This artifact proves the no-membership/ad-hoc SMAppService helper can bootstrap
-as root and can expose reviewable stdout ledger evidence even when the real
-root-owned ledger is unreadable to the normal user. The artifact does not prove
-which System Settings UI, if any, was shown before the status became enabled; it
-only proves the observed `requiresApproval`/`enabled` state transition and root
-runtime behavior. Treat this as successful local bootstrap evidence, not a
-complete #27 proof: the verifier still fails until the remaining reboot,
-update, repair, unregister/cleanup, CLI command, and failure case rows are
-completed and reviewed.
+as root, can expose reviewable stdout ledger evidence even when the real
+root-owned ledger is unreadable to the normal user, and can unregister so
+launchctl no longer finds the daemon. The artifact does not prove which System
+Settings UI, if any, was shown before the status became enabled; it only proves
+the observed `requiresApproval`/`enabled`/`notRegistered` state transitions,
+root runtime behavior, and ServiceManagement cleanup. Treat this as successful
+local bootstrap and unregister evidence, not a complete #27 proof: the verifier
+still fails until the remaining fixed-command API, admin-approval/password-flow,
+post-approval status/bootstrap/log/launchctl, root-ledger schema/ownership,
+reboot, update, repair, CLI command, failure case, and helper-owned Bag Mode
+state cleanup rows are completed and reviewed.
 
 By default, the approved LaunchDaemon runs the fixed `status` command in
 dry-run mode. To prepare one artifact for a different approved-helper dry-run
@@ -267,9 +279,11 @@ scripts/helper-service-smappservice-prototype.sh \
 
 This cleanup mode calls `unregister()` from the existing app bundle and records
 follow-up `status`, `launchctl`, and unified log output without auto-promoting
-manifest rows. Review the captured output before mapping it to
-`helper-uninstall`, `helper-uninstall-state-cleanup`, and the manual uninstall
-fields, then run the verifier.
+manifest rows. The current artifact captured `unregisterResult=success`, status
+`1 -> 0`, follow-up status `0`, and `launchctl` service-not-found. Review the
+captured output before mapping it to `helper-uninstall`; keep
+`helper-uninstall-state-cleanup` incomplete until helper-owned Bag Mode state
+cleanup is exercised, then run the verifier.
 
 The verifier expects three files at the manifest root:
 
@@ -410,9 +424,12 @@ Optional manifest `checkId` rows:
 
 ## Conclusion
 
-The current no-membership `SMAppService` helper shape reached enabled status
-and bootstrapped as root with readable stdout ledger evidence, so the local
-ad-hoc SMAppService path remains viable before Developer ID funding. Bag Mode
-still remains blocked until #27 records the rest of the helper lifecycle:
-reboot, update, repair, unregister/cleanup, CLI helper commands, and failure
-cases. Developer ID signing remains a later distribution/trust milestone.
+The current no-membership `SMAppService` helper shape reached enabled status,
+bootstrapped as root with readable stdout ledger evidence, and unregistered so
+launchctl no longer finds the service. The local ad-hoc SMAppService path
+remains viable before Developer ID funding. Bag Mode still remains blocked until
+#27 records the rest of the verifier-required helper proof: fixed command API,
+admin approval/password flow, post-approval status/bootstrap/log/launchctl,
+root-ledger schema/ownership, reboot, update, repair, CLI helper commands,
+failure cases, and helper-owned Bag Mode state cleanup. Developer ID signing
+remains a later distribution/trust milestone.
