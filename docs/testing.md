@@ -235,7 +235,8 @@ creating the artifact to compare root-owned sampler variants such as `all`,
 `/usr/sbin/ioreg -r -c AppleSMCKeysEndpoint -l` source from the approved helper.
 Set `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu` to run the PMU inventory
 candidate `/usr/sbin/ioreg -r -c AppleARMPMUTempSensor -l`; current local
-evidence sees PMU sensor names but no numeric reading candidates.
+evidence can run this source from the approved helper as root, but still sees
+PMU sensor names without numeric reading candidates.
 The helper writes provider stdout/stderr to temporary files and reads back at
 most 2,000,000 bytes per stream so large I/O Registry output cannot block the
 child process on a full pipe. That mode is candidate-source evidence only until it has bounded
