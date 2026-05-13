@@ -318,14 +318,19 @@ dry-run command parser smoke output for `status`, `enableBagMode`,
 `fixed-command-api`, registration, approval, reboot, update, uninstall, and
 failure-case rows as `TODO`. Registration requires an explicit acknowledgement flag:
 `--register --i-understand-this-registers-helper`.
-The current no-membership `SMAppService` helper register attempt is recorded at
-`.build/helper-service-prototype/smappservice-register-20260513T033434Z`.
-It returned `SMAppServiceErrorDomain Code=1` / `Operation not permitted` while
-moving status raw `3` (`notFound`) to `2` (`requiresApproval`). Treat that
-artifact as approval-pending evidence, not fallback-justifying rejection
-evidence by itself. Approve it in System Settings and run
-`--capture-post-approval` against the same artifact before deciding whether a
-`launchdaemon-fallback` package is needed.
+The current no-membership `SMAppService` helper bootstrap evidence is recorded
+at
+`.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z`.
+The initial register attempt returned `SMAppServiceErrorDomain Code=1` /
+`Operation not permitted` while moving to `requiresApproval`, but the later
+post-approval capture reached raw `1` (`enabled`). That artifact does not prove
+which System Settings UI, if any, was shown before enablement. `launchctl`
+found the ServiceManagement-managed daemon with
+`runs = 1` and `last exit code = 0`; helper stdout recorded `uid=0`, `euid=0`,
+and a mirrored `bagModeHelperLedgerSample` JSON event. Treat this as local
+SMAppService root-bootstrap evidence, not complete #27 evidence. The manifest
+still needs deliberate promotion only after reviewing reboot, update, repair,
+unregister/cleanup, CLI command, and failure-case captures.
 New artifacts derive a unique SMAppService bundle/helper identity from the
 output path, and write it to `appBundleIdentifier`, `helperLabel`, and
 `identitySuffix` in `validation-config.txt`. Set

@@ -9,7 +9,7 @@ Follow-up: [#27](https://github.com/makeavish/ClawShell/issues/27)
 Local readiness artifact: `.build/helper-service-readiness/recheck-20260512T105510Z`
 
 Latest SMAppService register artifact:
-`.build/helper-service-prototype/smappservice-register-20260513T033434Z`
+`.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z`
 
 ## Question
 
@@ -70,7 +70,14 @@ The product plan now treats Apple Developer Program membership as deferred until
 
 ## Provisional Design Verdict
 
-`SMAppService` remains the source-backed first target to prototype, but #7 cannot claim the helper path is validated yet. The latest no-membership register attempt returned `Operation not permitted` while moving from `notFound` to `requiresApproval`, so the next #27 prototype step is System Settings approval plus post-approval capture before deciding whether fallback local/admin-approved LaunchDaemon evidence is required.
+`SMAppService` remains the source-backed first target to prototype, and the
+latest no-membership helper artifact moved past the earlier approval-pending
+state. The fresh ad-hoc helper reached `enabled`, launchd submitted the
+ServiceManagement daemon, and readable stdout captured a root-owned dry-run
+ledger sample. That proves the local SMAppService root bootstrap path is viable
+on this machine, but #7 still cannot claim the helper path is complete: #27
+still needs reboot, update, repair, unregister/cleanup, CLI, and failure-case
+lifecycle evidence before production Bag Mode can depend on it.
 
 The design should keep these constraints:
 
@@ -139,7 +146,7 @@ row; registration, approved helper command API, and lifecycle rows remain
 rerun with `--register --i-understand-this-registers-helper`; that may require
 System Settings approval before the helper bootstraps.
 
-The May 13, 2026 register attempt used a fresh unique identity:
+The first May 13, 2026 register attempt used a fresh unique identity:
 
 ```bash
 scripts/helper-service-smappservice-prototype.sh \
@@ -169,6 +176,46 @@ the command returned `Operation not permitted`, but the service status moved to
 fallback evidence is required. The verifier is still expected to fail because
 lifecycle rows such as approved bootstrap, reboot, update, uninstall cleanup,
 CLI helper commands, and failure cases are not yet complete.
+
+A later fresh artifact from the PR #75-era harness reached the enabled state
+in post-approval capture:
+
+```bash
+scripts/helper-service-smappservice-prototype.sh \
+  --output-dir .build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z \
+  --register \
+  --i-understand-this-registers-helper
+scripts/helper-service-smappservice-prototype.sh \
+  --output-dir .build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z \
+  --capture-post-approval
+```
+
+Captured result:
+
+```text
+appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.h5dba3aad54
+helperLabel=com.makeavish.ClawShell.HelperPrototype.h5dba3aad54.daemon
+identitySuffix=h5dba3aad54
+statusAfterApprovalRaw=1 (enabled)
+launchctlManagedBy=com.apple.xpc.ServiceManagement
+launchctlRuns=1
+launchctlLastExitCode=0
+helperRuntimeUid=0
+helperRuntimeEuid=0
+helperStdoutLedgerEvent=bagModeHelperLedgerSample
+rootLedgerMode=-rw-------
+rootLedgerOwner=root
+```
+
+This artifact proves the no-membership/ad-hoc SMAppService helper can bootstrap
+as root and can expose reviewable stdout ledger evidence even when the real
+root-owned ledger is unreadable to the normal user. The artifact does not prove
+which System Settings UI, if any, was shown before the status became enabled; it
+only proves the observed `requiresApproval`/`enabled` state transition and root
+runtime behavior. Treat this as successful local bootstrap evidence, not a
+complete #27 proof: the verifier still fails until the remaining reboot,
+update, repair, unregister/cleanup, CLI command, and failure case rows are
+completed and reviewed.
 
 By default, the approved LaunchDaemon runs the fixed `status` command in
 dry-run mode. To prepare one artifact for a different approved-helper dry-run
@@ -313,9 +360,10 @@ Optional rows are `smappservice-rejection`, `package-installer-signing`, and
 paths were not exercised. If `helperInstallPath=launchdaemon-fallback`, the
 verifier requires package-relative `smappservice-rejection` evidence, such as
 `evidence/smappservice-rejection.txt`, copied or captured into the fallback
-package. The current SMAppService register artifact reached `requiresApproval`,
-so it is not enough by itself to justify fallback; pair it with post-approval
-denial/failure evidence before using it as fallback evidence. The
+package. The current SMAppService register artifact reached enabled status and
+bootstrapped the helper, so it does not justify fallback by itself; fallback
+evidence would need a later post-approval denial, lifecycle failure, or other
+captured reason that the `SMAppService` path cannot satisfy #27. The
 `launchDaemonPlist` config value must point to the installed
 `/Library/LaunchDaemons/<label>.plist` artifact. Verifier success means the
 evidence package is structurally complete only. It does not prove the helper
@@ -362,8 +410,9 @@ Optional manifest `checkId` rows:
 
 ## Conclusion
 
-The current no-membership `SMAppService` helper shape reached
-`requiresApproval` while also returning `Operation not permitted`, so Bag Mode
-remains blocked until #27 records post-approval helper evidence or a verified
-fallback local/admin-approved helper path. Developer ID signing remains a later
-distribution/trust milestone.
+The current no-membership `SMAppService` helper shape reached enabled status
+and bootstrapped as root with readable stdout ledger evidence, so the local
+ad-hoc SMAppService path remains viable before Developer ID funding. Bag Mode
+still remains blocked until #27 records the rest of the helper lifecycle:
+reboot, update, repair, unregister/cleanup, CLI helper commands, and failure
+cases. Developer ID signing remains a later distribution/trust milestone.

@@ -10,7 +10,7 @@ three evidence issues:
 | Issue | Current local state | Next operator action |
 |---|---|---|
 | [#29](https://github.com/makeavish/ClawShell/issues/29) primitive matrix | Real hardware `pmset disablesleep` matrix evidence is still missing. | Run the primitive matrix on target hardware, fill `manual-result.md`, verify the manifest, and attach pass/fail/inconclusive evidence. |
-| [#27](https://github.com/makeavish/ClawShell/issues/27) no-membership helper prototype | `.build/helper-service-readiness/recheck-20260512T105510Z` records full Xcode/tooling available, Developer ID Application identities = 0, Developer ID Installer identities = 0, and `signedPrototypeReady=false`. `.build/helper-service-prototype/smappservice-register-20260513T033434Z` records the current ad-hoc `SMAppService` helper register attempt returning `SMAppServiceErrorDomain Code=1` / `Operation not permitted` while moving from `notFound` to `requiresApproval`. Developer ID membership is intentionally deferred. | Approve the helper in System Settings, run post-approval capture against the same artifact, then decide whether fallback LaunchDaemon install/update/uninstall evidence is needed. |
+| [#27](https://github.com/makeavish/ClawShell/issues/27) no-membership helper prototype | `.build/helper-service-readiness/recheck-20260512T105510Z` records full Xcode/tooling available, Developer ID Application identities = 0, Developer ID Installer identities = 0, and `signedPrototypeReady=false`. `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z` records a fresh ad-hoc `SMAppService` helper reaching enabled status, launchd `runs = 1`, root helper stdout with `uid=0`/`euid=0`, and mirrored `bagModeHelperLedgerSample` JSON while the root ledger remains `0600`. Developer ID membership is intentionally deferred. | Complete the remaining #27 lifecycle proof: reboot bootstrap, update/old-helper inactive behavior, repair/ledger compatibility, unregister/cleanup, CLI helper commands, and failure cases before deciding whether fallback LaunchDaemon evidence is needed. |
 | [#25](https://github.com/makeavish/ClawShell/issues/25) thermal provider proof | The unique no-membership `SMAppService` helper artifacts provide root-runtime evidence after approval, but are not verifier-accepted provider proof. `powermetrics --samplers thermal` captured only thermal pressure before timing out, `--samplers all` timed out at 1s, and the 5s `all` diagnostic has no trustworthy numeric temperature when interpreted with the hardened detector. | Test a different helper-owned source, then capture provider freshness, cadence, timeout, coverage, and fail-closed evidence. |
 
 Readiness harnesses, scaffolds, and verifier success are support gates only.
@@ -99,11 +99,28 @@ Each case must record the exact command applied, rollback command, `pmset -g cus
 
 ## Helper Spike
 
-The helper proof must answer whether Bag Mode can use a local/admin-approved helper without Apple Developer Program membership. `SMAppService` LaunchDaemon is still the preferred first target; the current ad-hoc no-membership helper shape reached `requiresApproval` while returning `Operation not permitted`, so it needs System Settings approval and post-approval capture before fallback is justified. Homebrew cask install/upgrade/uninstall semantics are a related packaging gate unless the prototype is exercised through a cask-installed app.
+The helper proof must answer whether Bag Mode can use a local/admin-approved
+helper without Apple Developer Program membership. `SMAppService` LaunchDaemon
+is still the preferred first target; the latest ad-hoc no-membership helper
+artifact reached enabled status and bootstrapped as root, so fallback
+LaunchDaemon evidence is not justified by the earlier approval-pending register
+state alone. Homebrew cask install/upgrade/uninstall semantics are a related
+packaging gate unless the prototype is exercised through a cask-installed app.
 
 Current artifact: [Helper Service Readiness](helper-service-readiness.md).
 
-The May 12, 2026 source/readiness check kept `SMAppService` as the source-backed first target to prototype. Full Xcode is now detected from `/Applications/Xcode.app` even when the active `xcode-select` directory points at Command Line Tools, but this local environment has no Developer ID signing identities and the product plan defers Apple Developer Program membership until traction or donations justify it. The May 13, 2026 no-membership `SMAppService` register attempt for the current ad-hoc helper shape returned `Operation not permitted` and moved to `requiresApproval`; the required #27 prototype now needs System Settings approval and post-approval capture, then either full lifecycle evidence or fallback local/admin-approved LaunchDaemon evidence.
+The May 12, 2026 source/readiness check kept `SMAppService` as the source-backed
+first target to prototype. Full Xcode is now detected from
+`/Applications/Xcode.app` even when the active `xcode-select` directory points
+at Command Line Tools, but this local environment has no Developer ID signing
+identities and the product plan defers Apple Developer Program membership until
+traction or donations justify it. The May 13, 2026 no-membership
+`SMAppService` helper artifact
+`.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z`
+reached enabled status, was submitted by ServiceManagement, ran once as root,
+and wrote a readable stdout mirror containing `bagModeHelperLedgerSample`. The
+required #27 prototype now needs the rest of the lifecycle evidence rather than
+another approval-only capture.
 
 Before attaching a helper prototype package, run:
 
