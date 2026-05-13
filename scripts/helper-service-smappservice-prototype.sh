@@ -132,8 +132,91 @@ if [[ "$APPEND_CAPTURE" == false ]]; then
 fi
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 
-BUNDLE_ID="com.makeavish.ClawShell.HelperPrototype"
-HELPER_LABEL="com.makeavish.ClawShell.HelperPrototype.daemon"
+CONFIG_FILE="$OUTPUT_DIR/validation-config.txt"
+MANIFEST_FILE="$OUTPUT_DIR/prototype-manifest.tsv"
+
+if [[ "$APPEND_CAPTURE" == true ]]; then
+    if [[ -L "$CONFIG_FILE" || ( -e "$CONFIG_FILE" && ! -f "$CONFIG_FILE" ) ]]; then
+        echo "$CAPTURE_ACTION_NAME requires regular artifact file path: $CONFIG_FILE" >&2
+        exit 73
+    fi
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        echo "$CAPTURE_ACTION_NAME missing required artifact file path: $CONFIG_FILE" >&2
+        exit 73
+    fi
+fi
+
+config_value() {
+    local key="$1"
+    local file="${2:-$CONFIG_FILE}"
+    [[ -f "$file" ]] || return 1
+    awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$file"
+}
+
+derive_identity_suffix() {
+    local digest
+    digest="$(printf '%s' "$OUTPUT_DIR" | shasum -a 256 | awk '{ print substr($1, 1, 10) }')"
+    printf 'h%s' "$digest"
+}
+
+require_identity_suffix() {
+    local name="$1"
+    local value="$2"
+    if ! [[ "$value" =~ ^[A-Za-z][A-Za-z0-9]{0,31}$ ]]; then
+        echo "$name must start with a letter and contain only letters/digits, max 32 chars" >&2
+        exit 64
+    fi
+}
+
+require_helper_label() {
+    local name="$1"
+    local value="$2"
+    if ! [[ "$value" =~ ^com[.]makeavish[.]ClawShell[.]HelperPrototype[.][A-Za-z][A-Za-z0-9]{0,31}[.]daemon$ ]]; then
+        echo "$name must be a ClawShell helper prototype label" >&2
+        exit 73
+    fi
+}
+
+if [[ -n "${CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX:-}" ]]; then
+    require_identity_suffix "CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX" "$CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX"
+fi
+
+BASE_BUNDLE_ID="com.makeavish.ClawShell.HelperPrototype"
+BASE_HELPER_LABEL="com.makeavish.ClawShell.HelperPrototype"
+IDENTITY_SUFFIX="${CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX:-}"
+if [[ "$APPEND_CAPTURE" == true && -f "$CONFIG_FILE" ]]; then
+    HELPER_LABEL="$(config_value helperLabel "$CONFIG_FILE" || true)"
+    BUNDLE_ID="$(config_value appBundleIdentifier "$CONFIG_FILE" || true)"
+    IDENTITY_SUFFIX="$(config_value identitySuffix "$CONFIG_FILE" || true)"
+    if [[ -z "$HELPER_LABEL" ]]; then
+        echo "$CAPTURE_ACTION_NAME missing required helperLabel in validation config" >&2
+        exit 73
+    fi
+    require_helper_label "helperLabel" "$HELPER_LABEL"
+    if [[ -z "$IDENTITY_SUFFIX" ]]; then
+        echo "$CAPTURE_ACTION_NAME missing required identitySuffix in validation config" >&2
+        exit 73
+    fi
+    require_identity_suffix "identitySuffix" "$IDENTITY_SUFFIX"
+    if [[ -z "$BUNDLE_ID" ]]; then
+        BUNDLE_ID="$BASE_BUNDLE_ID.$IDENTITY_SUFFIX"
+    fi
+    if [[ "$HELPER_LABEL" != "$BASE_HELPER_LABEL.$IDENTITY_SUFFIX.daemon" ]]; then
+        echo "$CAPTURE_ACTION_NAME requires helperLabel to match identitySuffix: $IDENTITY_SUFFIX" >&2
+        exit 73
+    fi
+    if [[ "$BUNDLE_ID" != "$BASE_BUNDLE_ID.$IDENTITY_SUFFIX" ]]; then
+        echo "$CAPTURE_ACTION_NAME requires appBundleIdentifier to match identitySuffix: $IDENTITY_SUFFIX" >&2
+        exit 73
+    fi
+else
+    if [[ -z "$IDENTITY_SUFFIX" ]]; then
+        IDENTITY_SUFFIX="$(derive_identity_suffix)"
+    fi
+    require_identity_suffix "CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX" "$IDENTITY_SUFFIX"
+    BUNDLE_ID="$BASE_BUNDLE_ID.$IDENTITY_SUFFIX"
+    HELPER_LABEL="$BASE_HELPER_LABEL.$IDENTITY_SUFFIX.daemon"
+fi
 APP_NAME="ClawShellHelperPrototype"
 HELPER_NAME="ClawShellHelperPrototypeDaemon"
 PLIST_NAME="$HELPER_LABEL.plist"
@@ -154,9 +237,6 @@ if [[ -x /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild ]]; then
 fi
 
 CODESIGN="$(xcrun --find codesign)"
-
-CONFIG_FILE="$OUTPUT_DIR/validation-config.txt"
-MANIFEST_FILE="$OUTPUT_DIR/prototype-manifest.tsv"
 
 capture() {
     local name="$1"
@@ -464,6 +544,22 @@ require_existing_capture_artifact() {
         echo "$CAPTURE_ACTION_NAME requires writable validation config: $CONFIG_FILE" >&2
         exit 73
     fi
+    local plist_label
+    plist_label="$(plutil -extract Label raw -o - "$LAUNCHD_DIR/$PLIST_NAME" 2>/dev/null || true)"
+    if [[ "$plist_label" != "$HELPER_LABEL" ]]; then
+        echo "$CAPTURE_ACTION_NAME requires LaunchDaemon Label to match helperLabel: $LAUNCHD_DIR/$PLIST_NAME" >&2
+        exit 73
+    fi
+}
+
+assert_controller_plist_name() {
+    local evidence_name="$1"
+    local evidence_file="$EVIDENCE_DIR/$evidence_name.txt"
+    if ! grep -Fq "plistName=$PLIST_NAME" "$evidence_file"; then
+        echo "$CAPTURE_ACTION_NAME requires controller plistName to match helperLabel: $PLIST_NAME" >&2
+        cat "$evidence_file" >&2
+        exit 73
+    fi
 }
 
 capture_post_approval_status() {
@@ -475,6 +571,7 @@ capture_post_approval_status() {
         helper-bootstrap-after-approval
 
     capture "helper-status-after-approval" "$MACOS_DIR/$APP_NAME" status || true
+    assert_controller_plist_name "helper-status-after-approval"
     capture "launchctl-status" launchctl print "system/$HELPER_LABEL" || true
     capture "log-evidence" log show --style syslog --last "${CLAWSHELL_SMAPP_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
     capture_file_snapshot "helper-bootstrap-after-approval" "$RUNTIME_DIR/helper.log" || true
@@ -512,7 +609,9 @@ capture_unregister_status() {
         log-evidence-after-unregister
 
     capture "helper-uninstall" "$MACOS_DIR/$APP_NAME" unregister || true
+    assert_controller_plist_name "helper-uninstall"
     capture "helper-status-after-unregister" "$MACOS_DIR/$APP_NAME" status || true
+    assert_controller_plist_name "helper-status-after-unregister"
     capture "launchctl-status-after-unregister" launchctl print "system/$HELPER_LABEL" || true
     capture "log-evidence-after-unregister" log show --style syslog --last "${CLAWSHELL_SMAPP_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
 
@@ -551,7 +650,7 @@ xml_escape() {
 
 write_controller_source() {
     mkdir -p "$SOURCE_DIR/Sources/ClawShellHelperPrototype"
-    cat >"$SOURCE_DIR/Sources/ClawShellHelperPrototype/main.swift" <<'SWIFT'
+    cat >"$SOURCE_DIR/Sources/ClawShellHelperPrototype/main.swift" <<SWIFT
 import Foundation
 import ServiceManagement
 
@@ -563,7 +662,7 @@ struct Controller {
             exit(2)
         }
 
-        let plistName = "com.makeavish.ClawShell.HelperPrototype.daemon.plist"
+        let plistName = "$PLIST_NAME"
         let service = SMAppService.daemon(plistName: plistName)
         let command = CommandLine.arguments.dropFirst().first ?? "status"
 
@@ -815,12 +914,14 @@ REGISTER_NOTE="Run --register --i-understand-this-registers-helper during the in
 
 if [[ "$REGISTER" == true ]]; then
     capture "helper-install-or-register" "$MACOS_DIR/$APP_NAME" register || true
+    assert_controller_plist_name "helper-install-or-register"
     REGISTER_EXIT="$(sed -n 's/^exitCode=//p' "$EVIDENCE_DIR/helper-install-or-register.status" | head -n 1)"
     REGISTER_EVIDENCE_STATUS="evidence"
     REGISTER_EVIDENCE_PATH="evidence/helper-install-or-register.txt"
     REGISTER_NOTE="SMAppService register attempted; inspect status and System Settings approval state"
 elif [[ "$UNREGISTER" == true ]]; then
     capture "helper-uninstall" "$MACOS_DIR/$APP_NAME" unregister || true
+    assert_controller_plist_name "helper-uninstall"
 fi
 
 MACOS_VERSION="$(sw_vers -productVersion)"
@@ -836,6 +937,7 @@ metadataRedacted=true
 macOSVersion=$MACOS_VERSION
 appBundleIdentifier=$BUNDLE_ID
 helperLabel=$HELPER_LABEL
+identitySuffix=$IDENTITY_SUFFIX
 launchDaemonPlist=$APP_NAME.app/Contents/Library/LaunchDaemons/$PLIST_NAME
 helperInstallPath=$HELPER_INSTALL_PATH
 localAuthModel=ad-hoc app/helper signature plus binary hash capture; pairing token not implemented in this prototype harness
@@ -858,6 +960,9 @@ cat >"$OUTPUT_DIR/manual-result.md" <<EOF
 - LaunchDaemon plist: $APP_NAME.app/Contents/Library/LaunchDaemons/$PLIST_NAME
 - Helper install path: smappservice
 - Helper install API/path: SMAppService.daemon(plistName:)
+- App bundle id: $BUNDLE_ID
+- Helper label: $HELPER_LABEL
+- Identity suffix: $IDENTITY_SUFFIX
 
 ## Signing
 - App signed: yes
