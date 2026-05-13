@@ -332,7 +332,7 @@ signed app/helper bundle and captures layout/signing/status outputs plus
 dry-run command parser smoke output for `status`, `enableBagMode`,
 `disableBagMode`, `repair`, and `uninstall`, but leaves the required
 `fixed-command-api`, registration, approval, reboot, update, uninstall, and
-failure-case rows as `TODO`. Registration requires an explicit acknowledgement flag:
+installed-helper/fallback failure-case rows incomplete. Registration requires an explicit acknowledgement flag:
 `--register --i-understand-this-registers-helper`.
 The current no-membership `SMAppService` helper bootstrap evidence is recorded
 at
@@ -350,7 +350,7 @@ and a mirrored `bagModeHelperLedgerSample` JSON event. A later
 and unregister evidence, not complete #27 evidence. The manifest still needs
 deliberate promotion only after reviewing admin-approval/password-flow,
 reboot, update, production restore conflict behavior, production
-repair/uninstall behavior, failure-case, and helper-owned Bag Mode state cleanup
+repair/uninstall behavior, installed-helper/fallback failure-case, and helper-owned Bag Mode state cleanup
 captures. The local post-approval
 status/bootstrap/launchctl/stdout-log/unified-log boundary and dry-run
 root-ledger schema/ownership boundary are reviewed through the current
@@ -395,6 +395,13 @@ auto-promoting the verifier rows. Approved helpers may write root-owned `0600`
 log and ledger files; the helper also mirrors dry-run ledger JSON to
 `runtime/helper.stdout.log` so the post-approval capture can retain reviewable
 output without requiring non-interactive sudo.
+
+Default prepare artifacts now also capture local helper-auth failure probes for
+unpaired caller, bundle/label mismatch, wrong effective user, stale helper
+generation, and denied/revoked approval state. These populate the corresponding
+failure-case manifest rows with dry-run evidence from the generated helper. They
+are local auth-model evidence only; production installed-helper and fallback
+failure behavior still need separate lifecycle proof.
 
 After any required System Settings approval, append non-mutating status evidence
 to the same artifact directory:

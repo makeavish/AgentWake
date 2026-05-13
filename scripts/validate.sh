@@ -3579,6 +3579,11 @@ for required_status in \
     helper-signing-or-auth-model \
     caller-auth-model \
     fixed-command-api \
+    failure-unpaired-caller \
+    failure-wrong-bundle-id-or-label \
+    failure-wrong-user \
+    failure-stale-app-version \
+    failure-denied-or-revoked-approval \
     helper-status-before-approval
 do
     if ! grep -q '^exitCode=0$' "$helper_smappservice_prepare/evidence/$required_status.status"; then
@@ -3596,6 +3601,24 @@ fi
 if ! awk -F '\t' '$1 == "fixed-command-api" && $2 == "TODO" && $4 ~ /Dry-run command parser smoke/ { found = 1 } END { exit !found }' "$helper_smappservice_prepare/prototype-manifest.tsv"; then
     echo "SMAppService helper prototype harness should leave fixed command API row as TODO until approved helper evidence exists" >&2
     cat "$helper_smappservice_prepare/prototype-manifest.tsv" >&2
+    exit 1
+fi
+for failure_row in \
+    failure-unpaired-caller \
+    failure-wrong-bundle-id-or-label \
+    failure-wrong-user \
+    failure-stale-app-version \
+    failure-denied-or-revoked-approval
+do
+    if ! awk -F '\t' -v row="$failure_row" '$1 == row && $2 == "evidence" && $3 == "evidence/" row ".txt" { found = 1 } END { exit !found }' "$helper_smappservice_prepare/prototype-manifest.tsv"; then
+        echo "SMAppService helper prototype harness did not promote failure row evidence: $failure_row" >&2
+        cat "$helper_smappservice_prepare/prototype-manifest.tsv" >&2
+        exit 1
+    fi
+done
+if ! grep -q 'pairing-token' "$helper_smappservice_prepare/validation-config.txt"; then
+    echo "SMAppService helper prototype validation config did not describe local auth failure model" >&2
+    cat "$helper_smappservice_prepare/validation-config.txt" >&2
     exit 1
 fi
 for allowed_command in status enableBagMode disableBagMode repair uninstall; do
@@ -3623,6 +3646,35 @@ fi
 if ! grep -Fq 'observedExitCode[arbitraryShellCommand]=64' "$helper_smappservice_prepare/evidence/fixed-command-api.txt"; then
     echo "SMAppService helper prototype fixed command API did not reject arbitrary command with exit 64" >&2
     cat "$helper_smappservice_prepare/evidence/fixed-command-api.txt" >&2
+    exit 1
+fi
+check_helper_failure_case() {
+    local failure_case="$1"
+    local expected_marker="$2"
+    if ! grep -q "$expected_marker" "$helper_smappservice_prepare/evidence/$failure_case.txt"; then
+        echo "SMAppService helper prototype missing auth failure marker for $failure_case" >&2
+        cat "$helper_smappservice_prepare/evidence/$failure_case.txt" >&2
+        exit 1
+    fi
+    if ! grep -q '^observedExitCode=77$' "$helper_smappservice_prepare/evidence/$failure_case.txt"; then
+        echo "SMAppService helper prototype did not reject $failure_case with exit 77" >&2
+        cat "$helper_smappservice_prepare/evidence/$failure_case.txt" >&2
+        exit 1
+    fi
+}
+check_helper_failure_case failure-unpaired-caller unpaired-caller
+check_helper_failure_case failure-wrong-bundle-id-or-label wrong-bundle-id
+check_helper_failure_case failure-wrong-user wrong-user
+check_helper_failure_case failure-stale-app-version stale-app-version
+if ! grep -q "wrong-helper-label" "$helper_smappservice_prepare/evidence/failure-wrong-bundle-id-or-label.txt"; then
+    echo "SMAppService helper prototype wrong bundle/label case did not record label mismatch" >&2
+    cat "$helper_smappservice_prepare/evidence/failure-wrong-bundle-id-or-label.txt" >&2
+    exit 1
+fi
+if ! grep -q "approval-denied" "$helper_smappservice_prepare/evidence/failure-denied-or-revoked-approval.txt" ||
+    ! grep -q "approval-revoked" "$helper_smappservice_prepare/evidence/failure-denied-or-revoked-approval.txt"; then
+    echo "SMAppService helper prototype did not record denied and revoked approval failures" >&2
+    cat "$helper_smappservice_prepare/evidence/failure-denied-or-revoked-approval.txt" >&2
     exit 1
 fi
 if scripts/helper-service-prototype-verify.sh --manifest "$helper_smappservice_prepare/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then

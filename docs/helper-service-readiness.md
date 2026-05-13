@@ -90,8 +90,11 @@ dry-run dispatch evidence for `status`, `enableBagMode`, `disableBagMode`,
 after a post-approval wait of at least 15 seconds where applicable. #7 still cannot
 claim the helper path is complete: #27 still needs admin-approval/password-flow
 evidence, reboot, update, production restore conflict behavior, production
-repair/uninstall behavior, failure-case, and helper-owned Bag Mode state
-cleanup evidence before production Bag Mode can depend on it. The CLI
+repair/uninstall behavior, installed-helper/fallback failure behavior, and
+helper-owned Bag Mode state cleanup evidence before production Bag Mode can
+depend on it. New prepare artifacts also record local dry-run failure-case
+evidence for unpaired caller, bundle/label mismatch, wrong effective user,
+stale helper generation, and denied/revoked approval state. The CLI
 helper-command contract is now covered as a control-socket outcome boundary,
 not as production helper mutation evidence.
 
@@ -122,7 +125,7 @@ Follow-up [#27](https://github.com/makeavish/ClawShell/issues/27) must produce n
 - fixed command API evidence for `status`, `enableBagMode`, `disableBagMode`, `repair`, and `uninstall`
 - reviewed dry-run ledger schema, file ownership/mode, and sample owner token/generation/boot state; production restore conflict behavior and repair output remain open
 - CLI evidence for `clawshell helper status`, `clawshell helper repair`, and `clawshell uninstall --remove-helper --remove-integrations`
-- failure cases for unpaired caller, wrong bundle id, wrong label/plist path, wrong user, stale app version, denied approval, and revoked approval
+- local dry-run failure cases for unpaired caller, wrong bundle id, wrong label/plist path, wrong user, stale app version, denied approval, and revoked approval; production/fallback failure behavior remains open until exercised through the installed helper path
 - Homebrew cask behavior if the prototype is exercised through `brew install --cask`, `brew upgrade --cask`, or `brew uninstall --cask`; otherwise track cask semantics separately from the helper prototype
 
 Before attaching a helper prototype evidence package to #27, run the structural
@@ -192,8 +195,8 @@ the command returned `Operation not permitted`, but the service status moved to
 `--capture-post-approval` against this same artifact before deciding whether
 fallback evidence is required. The verifier is still expected to fail because
 lifecycle rows such as approved bootstrap, reboot, update, uninstall cleanup,
-and failure cases are not yet complete. The later CLI control-routing boundary
-is automated separately.
+and installed-helper/fallback failure behavior are not yet complete. The later
+CLI control-routing boundary is automated separately.
 
 A later fresh artifact from the PR #75-era harness reached the enabled state
 in post-approval capture:
@@ -420,6 +423,21 @@ control-routing behavior only. Production helper-backed repair, uninstall,
 restore conflict handling, and helper-owned Bag Mode cleanup remain separate
 #27 evidence rows.
 
+New prepare artifacts also include local helper-auth failure probes. The
+generated helper accepts optional expected/actual values for pairing token,
+bundle id, helper label, effective user, helper generation, and approval state.
+The default prepare harness records these rows:
+
+- `failure-unpaired-caller`
+- `failure-wrong-bundle-id-or-label`
+- `failure-wrong-user`
+- `failure-stale-app-version`
+- `failure-denied-or-revoked-approval`
+
+Each row captures a fail-closed dry-run rejection from the generated helper.
+Treat this as local auth-model evidence only; it does not replace production
+installed-helper or fallback install failure testing.
+
 The verifier expects three files at the manifest root:
 
 - `validation-config.txt`
@@ -570,6 +588,6 @@ and root-owned `0600` ledger file. The local ad-hoc SMAppService path remains
 viable before Developer ID funding. Bag Mode still remains blocked until #27
 records the rest of the verifier-required helper proof: admin approval/password
 flow, reboot, update, production restore conflict behavior, production
-repair/uninstall behavior, failure cases, and helper-owned Bag Mode state
-cleanup. Developer ID signing remains a later
+repair/uninstall behavior, installed-helper/fallback failure cases, and helper-owned Bag
+Mode state cleanup. Developer ID signing remains a later
 distribution/trust milestone.

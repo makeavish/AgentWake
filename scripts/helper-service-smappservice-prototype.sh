@@ -413,6 +413,129 @@ capture_fixed_command_api_required() {
     fi
 }
 
+capture_expected_helper_failure() {
+    local check_id="$1"
+    local expected_failure="$2"
+    shift 2
+    local out="$EVIDENCE_DIR/$check_id.txt"
+    local status_file="$EVIDENCE_DIR/$check_id.status"
+    local log_file="$RUNTIME_DIR/$check_id.log"
+    local start finish status rc
+    start="$(date +%s)"
+    status=0
+    set +e
+    {
+        printf '$ %q --command status --log %q' "$MACOS_DIR/$HELPER_NAME" "$log_file"
+        printf ' %q' "$@"
+        printf '\n'
+        "$MACOS_DIR/$HELPER_NAME" --command status --log "$log_file" "$@"
+        rc=$?
+        echo "observedExitCode=$rc"
+        if [[ "$rc" -eq 0 ]]; then
+            status=1
+        fi
+    } >"$out" 2>&1
+    set -e
+    if ! grep -q "$expected_failure" "$out"; then
+        status=1
+    fi
+    finish="$(date +%s)"
+    {
+        echo "command=$check_id"
+        echo "exitCode=$status"
+        echo "durationSeconds=$(( finish - start ))"
+        echo "expectedFailure=$expected_failure"
+    } >"$status_file"
+    return "$status"
+}
+
+capture_denied_or_revoked_approval_failure() {
+    local out="$EVIDENCE_DIR/failure-denied-or-revoked-approval.txt"
+    local status_file="$EVIDENCE_DIR/failure-denied-or-revoked-approval.status"
+    local log_file="$RUNTIME_DIR/failure-denied-or-revoked-approval.log"
+    local start finish status rc state
+    start="$(date +%s)"
+    status=0
+    set +e
+    {
+        for state in denied revoked; do
+            printf '$ %q --command status --log %q --approval-state %q\n' "$MACOS_DIR/$HELPER_NAME" "$log_file" "$state"
+            "$MACOS_DIR/$HELPER_NAME" --command status --log "$log_file" --approval-state "$state"
+            rc=$?
+            echo "observedExitCode[$state]=$rc"
+            if [[ "$rc" -eq 0 ]]; then
+                status=1
+            fi
+        done
+    } >"$out" 2>&1
+    set -e
+    if ! grep -q "approval-denied" "$out" || ! grep -q "approval-revoked" "$out"; then
+        status=1
+    fi
+    finish="$(date +%s)"
+    {
+        echo "command=failure-denied-or-revoked-approval"
+        echo "exitCode=$status"
+        echo "durationSeconds=$(( finish - start ))"
+        echo "expectedFailures=approval-denied,approval-revoked"
+    } >"$status_file"
+    return "$status"
+}
+
+capture_failure_cases_required() {
+    capture_expected_helper_failure \
+        "failure-unpaired-caller" \
+        "unpaired-caller" \
+        --expected-pairing-token "prototype-pairing-token" || {
+            echo "Required evidence capture failed: failure-unpaired-caller" >&2
+            cat "$EVIDENCE_DIR/failure-unpaired-caller.txt" >&2
+            exit 1
+        }
+
+    capture_expected_helper_failure \
+        "failure-wrong-bundle-id-or-label" \
+        "wrong-bundle-id" \
+        --expected-bundle-id "$BUNDLE_ID" \
+        --actual-bundle-id "com.example.WrongBundle" \
+        --expected-helper-label "$HELPER_LABEL" \
+        --actual-helper-label "com.example.WrongHelper.daemon" || {
+            echo "Required evidence capture failed: failure-wrong-bundle-id-or-label" >&2
+            cat "$EVIDENCE_DIR/failure-wrong-bundle-id-or-label.txt" >&2
+            exit 1
+        }
+    if ! grep -q "wrong-helper-label" "$EVIDENCE_DIR/failure-wrong-bundle-id-or-label.txt"; then
+        echo "Required evidence capture failed: failure-wrong-bundle-id-or-label did not record wrong-helper-label" >&2
+        cat "$EVIDENCE_DIR/failure-wrong-bundle-id-or-label.txt" >&2
+        exit 1
+    fi
+
+    capture_expected_helper_failure \
+        "failure-wrong-user" \
+        "wrong-user" \
+        --expected-effective-uid "0" \
+        --actual-effective-uid "501" || {
+            echo "Required evidence capture failed: failure-wrong-user" >&2
+            cat "$EVIDENCE_DIR/failure-wrong-user.txt" >&2
+            exit 1
+        }
+
+    capture_expected_helper_failure \
+        "failure-stale-app-version" \
+        "stale-app-version" \
+        --expected-helper-generation "2" \
+        --actual-helper-generation "1" || {
+            echo "Required evidence capture failed: failure-stale-app-version" >&2
+            cat "$EVIDENCE_DIR/failure-stale-app-version.txt" >&2
+            exit 1
+        }
+
+    capture_denied_or_revoked_approval_failure || {
+        echo "Required evidence capture failed: failure-denied-or-revoked-approval" >&2
+        cat "$EVIDENCE_DIR/failure-denied-or-revoked-approval.txt" >&2
+        exit 1
+    }
+}
+
 config_set_key() {
     local key="$1"
     local value="$2"
@@ -974,6 +1097,39 @@ let command = argumentValue(after: "--command") ?? "status"
 let commandAllowed = allowedCommands.contains(command)
 let logPath = argumentValue(after: "--log")
 let ledgerPath = argumentValue(after: "--ledger")
+let expectedPairingToken = argumentValue(after: "--expected-pairing-token")
+let pairingToken = argumentValue(after: "--pairing-token")
+let expectedBundleID = argumentValue(after: "--expected-bundle-id")
+let actualBundleID = argumentValue(after: "--actual-bundle-id")
+let expectedHelperLabel = argumentValue(after: "--expected-helper-label")
+let actualHelperLabel = argumentValue(after: "--actual-helper-label")
+let expectedEffectiveUID = argumentValue(after: "--expected-effective-uid")
+let actualEffectiveUID = argumentValue(after: "--actual-effective-uid") ?? String(geteuid())
+let expectedHelperGeneration = argumentValue(after: "--expected-helper-generation")
+let actualHelperGeneration = argumentValue(after: "--actual-helper-generation")
+let approvalState = argumentValue(after: "--approval-state") ?? "approved"
+
+var authFailures: [String] = []
+if let expectedPairingToken, pairingToken != expectedPairingToken {
+    authFailures.append("unpaired-caller")
+}
+if let expectedBundleID, actualBundleID != expectedBundleID {
+    authFailures.append("wrong-bundle-id")
+}
+if let expectedHelperLabel, actualHelperLabel != expectedHelperLabel {
+    authFailures.append("wrong-helper-label")
+}
+if let expectedEffectiveUID, actualEffectiveUID != expectedEffectiveUID {
+    authFailures.append("wrong-user")
+}
+if let expectedHelperGeneration, actualHelperGeneration != expectedHelperGeneration {
+    authFailures.append("stale-app-version")
+}
+if approvalState == "denied" || approvalState == "revoked" {
+    authFailures.append("approval-\(approvalState)")
+}
+
+let allowed = commandAllowed && authFailures.isEmpty
 let payload = """
 event=helper-command
 timestampUtc=\(ISO8601DateFormatter().string(from: Date()))
@@ -981,14 +1137,17 @@ pid=\(getpid())
 uid=\(getuid())
 euid=\(geteuid())
 commandJson=\(jsonValue(command))
-allowed=\(commandAllowed)
+allowed=\(allowed)
+commandAllowed=\(commandAllowed)
+authFailuresJson=\(jsonArray(authFailures))
+approvalState=\(jsonValue(approvalState))
 effect=dry-run
 argumentsJson=\(jsonArray(arguments))
 
 """
 
 let ledgerPayload = """
-{"schemaVersion":1,"event":"bagModeHelperLedgerSample","timestampUtc":\(jsonValue(ISO8601DateFormatter().string(from: Date()))),"ownerTokenHash":"prototype-no-token","helperGeneration":1,"bootSession":"prototype-unverified","command":\(jsonValue(command)),"allowed":\(commandAllowed),"effect":"dry-run","priorState":{},"expectedCurrentValues":{}}
+{"schemaVersion":1,"event":"bagModeHelperLedgerSample","timestampUtc":\(jsonValue(ISO8601DateFormatter().string(from: Date()))),"ownerTokenHash":"prototype-no-token","helperGeneration":1,"bootSession":"prototype-unverified","command":\(jsonValue(command)),"allowed":\(allowed),"authFailures":\(jsonArray(authFailures)),"effect":"dry-run","priorState":{},"expectedCurrentValues":{}}
 
 """
 
@@ -1012,6 +1171,9 @@ if ledgerPath != nil {
 }
 if !commandAllowed {
     exit(64)
+}
+if !authFailures.isEmpty {
+    exit(77)
 }
 SWIFT
 }
@@ -1144,6 +1306,7 @@ capture_required "app-signing-or-auth-model" "$CODESIGN" -dvvv "$APP_DIR"
 capture_required "helper-signing-or-auth-model" "$CODESIGN" -dvvv "$MACOS_DIR/$HELPER_NAME"
 capture_caller_auth_model_required
 capture_fixed_command_api_required
+capture_failure_cases_required
 capture_optional "spctl-or-gatekeeper-assessment" spctl -a -vv "$APP_DIR"
 capture_required "helper-status-before-approval" "$MACOS_DIR/$APP_NAME" status
 
@@ -1182,7 +1345,7 @@ launchDaemonPlist=$APP_NAME.app/Contents/Library/LaunchDaemons/$PLIST_NAME
 helperInstallPath=$HELPER_INSTALL_PATH
 daemonCommand=$DAEMON_COMMAND
 rootLedgerPath=$ROOT_LEDGER_PATH_REL
-localAuthModel=ad-hoc app/helper signature plus binary hash capture; pairing token not implemented in this prototype harness
+localAuthModel=ad-hoc app/helper signature plus binary hash capture; prototype helper can fail closed for pairing-token, bundle/label, effective-user, generation, and approval-state mismatches
 developerIDApplicationSigned=false
 packageInstallerUsed=false
 homebrewCaskUsed=false
@@ -1227,7 +1390,7 @@ cat >"$OUTPUT_DIR/manual-result.md" <<EOF
 - Helper-owned Bag Mode state removed: TODO
 
 ## Failure Cases
-- Failure cases recorded: TODO
+- Failure cases recorded: yes
 - Homebrew cask used: no
 - Homebrew cask registers helper during install: N/A - cask not used
 
@@ -1269,11 +1432,11 @@ manifest_row() {
     fi
     manifest_row "helper-uninstall-state-cleanup" "TODO" "" "Capture cleanup"
     manifest_row "cli-helper-status-repair-uninstall" "TODO" "" "Capture CLI helper commands"
-    manifest_row "failure-unpaired-caller" "TODO" "" "Exercise caller auth failure"
-    manifest_row "failure-wrong-bundle-id-or-label" "TODO" "" "Exercise bundle/label failure"
-    manifest_row "failure-wrong-user" "TODO" "" "Exercise wrong user failure"
-    manifest_row "failure-stale-app-version" "TODO" "" "Exercise stale app failure"
-    manifest_row "failure-denied-or-revoked-approval" "TODO" "" "Exercise denied/revoked approval"
+    manifest_row "failure-unpaired-caller" "evidence" "evidence/failure-unpaired-caller.txt" "Prototype helper rejected missing pairing token"
+    manifest_row "failure-wrong-bundle-id-or-label" "evidence" "evidence/failure-wrong-bundle-id-or-label.txt" "Prototype helper rejected bundle id and helper label mismatches"
+    manifest_row "failure-wrong-user" "evidence" "evidence/failure-wrong-user.txt" "Prototype helper rejected effective-user mismatch"
+    manifest_row "failure-stale-app-version" "evidence" "evidence/failure-stale-app-version.txt" "Prototype helper rejected stale helper generation"
+    manifest_row "failure-denied-or-revoked-approval" "evidence" "evidence/failure-denied-or-revoked-approval.txt" "Prototype helper rejected denied and revoked approval states"
     manifest_row "launchctl-status" "TODO" "" "Capture launchctl state after approval/bootstrap"
     manifest_row "log-evidence" "TODO" "" "Capture unified logs and helper logs"
     if [[ "$REGISTER" == true && "$REGISTER_EXIT" != "0" ]]; then
