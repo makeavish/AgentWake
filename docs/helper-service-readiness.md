@@ -393,6 +393,22 @@ manifest rows automatically; review the captured output, update the manifest
 and manual result deliberately, then run the verifier before attaching the
 artifact to #27.
 
+After rebooting the machine with the same helper approval state, append
+non-mutating reboot-lifecycle evidence to that same artifact:
+
+```bash
+scripts/helper-service-smappservice-prototype.sh \
+  --output-dir .build/helper-service-prototype/<same-smappservice-register-artifact> \
+  --capture-post-reboot
+```
+
+The post-reboot append mode captures `SMAppService` status, `launchctl` state,
+helper runtime logs, helper stdout/stderr, and unified log output under
+post-reboot evidence filenames. It does not promote the
+`post-reboot-helper-bootstrap` manifest row automatically; review the captured
+output, update the manifest and manual result deliberately, then run the
+verifier.
+
 After cleanup approval, append mutating unregister evidence to the same
 artifact directory:
 

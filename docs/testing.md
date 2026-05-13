@@ -419,6 +419,19 @@ logs, helper stdout/stderr, and unified logs. It does not call `register()` or
 `unregister()`, and it does not promote manifest rows automatically; review the
 captured output before turning any `TODO` row into evidence.
 
+After rebooting the machine with the same approved helper artifact, append
+non-mutating reboot evidence to that artifact:
+
+```sh
+scripts/helper-service-smappservice-prototype.sh \
+  --output-dir .build/helper-service-prototype/<same-smappservice-register-artifact> \
+  --capture-post-reboot
+```
+
+This captures post-reboot controller status, `launchctl`, runtime logs,
+stdout/stderr, and unified logs without promoting the
+`post-reboot-helper-bootstrap` row automatically.
+
 After cleanup approval, append mutating unregister evidence to the same artifact
 directory:
 

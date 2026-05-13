@@ -11,6 +11,7 @@ Usage: scripts/helper-service-smappservice-prototype.sh --output-dir DIR [--case
        scripts/helper-service-smappservice-prototype.sh --output-dir DIR --register --i-understand-this-registers-helper
        scripts/helper-service-smappservice-prototype.sh --output-dir DIR --unregister --i-understand-this-registers-helper
        scripts/helper-service-smappservice-prototype.sh --output-dir DIR --capture-post-approval
+       scripts/helper-service-smappservice-prototype.sh --output-dir DIR --capture-post-reboot
        scripts/helper-service-smappservice-prototype.sh --output-dir DIR --capture-unregister --i-understand-this-registers-helper
 
 Builds a no-membership SMAppService helper prototype evidence package for #27.
@@ -24,6 +25,10 @@ Use them only during an intentional #27 prototype run.
 artifact directory after any required System Settings approval to append status,
 launchctl, and log evidence.
 
+--capture-post-reboot is non-mutating. Run it against the same existing
+artifact directory after rebooting the machine to append helper bootstrap,
+launchctl, and log evidence.
+
 --capture-unregister is mutating. Run it against the same existing artifact
 directory to call SMAppService unregister and append cleanup status evidence.
 USAGE
@@ -34,6 +39,7 @@ CASE_ID="apple-silicon-smappservice-local"
 REGISTER=false
 UNREGISTER=false
 CAPTURE_POST_APPROVAL=false
+CAPTURE_POST_REBOOT=false
 CAPTURE_UNREGISTER=false
 ALLOW_MUTATION=false
 
@@ -59,6 +65,10 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         --capture-post-approval)
             CAPTURE_POST_APPROVAL=true
+            shift
+            ;;
+        --capture-post-reboot)
+            CAPTURE_POST_REBOOT=true
             shift
             ;;
         --capture-unregister)
@@ -89,9 +99,10 @@ MODE_COUNT=0
 [[ "$REGISTER" == true ]] && MODE_COUNT=$((MODE_COUNT + 1))
 [[ "$UNREGISTER" == true ]] && MODE_COUNT=$((MODE_COUNT + 1))
 [[ "$CAPTURE_POST_APPROVAL" == true ]] && MODE_COUNT=$((MODE_COUNT + 1))
+[[ "$CAPTURE_POST_REBOOT" == true ]] && MODE_COUNT=$((MODE_COUNT + 1))
 [[ "$CAPTURE_UNREGISTER" == true ]] && MODE_COUNT=$((MODE_COUNT + 1))
 if [[ "$MODE_COUNT" -gt 1 ]]; then
-    echo "Use only one of --register, --unregister, --capture-post-approval, or --capture-unregister per run." >&2
+    echo "Use only one of --register, --unregister, --capture-post-approval, --capture-post-reboot, or --capture-unregister per run." >&2
     exit 64
 fi
 if [[ ( "$REGISTER" == true || "$UNREGISTER" == true || "$CAPTURE_UNREGISTER" == true ) && "$ALLOW_MUTATION" != true ]]; then
@@ -100,8 +111,11 @@ if [[ ( "$REGISTER" == true || "$UNREGISTER" == true || "$CAPTURE_UNREGISTER" ==
 fi
 APPEND_CAPTURE=false
 CAPTURE_ACTION_NAME="Post-approval capture"
-if [[ "$CAPTURE_POST_APPROVAL" == true || "$CAPTURE_UNREGISTER" == true ]]; then
+if [[ "$CAPTURE_POST_APPROVAL" == true || "$CAPTURE_POST_REBOOT" == true || "$CAPTURE_UNREGISTER" == true ]]; then
     APPEND_CAPTURE=true
+fi
+if [[ "$CAPTURE_POST_REBOOT" == true ]]; then
+    CAPTURE_ACTION_NAME="Post-reboot capture"
 fi
 if [[ "$CAPTURE_UNREGISTER" == true ]]; then
     CAPTURE_ACTION_NAME="Unregister capture"
@@ -662,6 +676,9 @@ require_writable_capture_targets() {
         done
     done
     target="$OUTPUT_DIR/post-approval-capture.md"
+    if [[ "$CAPTURE_POST_REBOOT" == true ]]; then
+        target="$OUTPUT_DIR/post-reboot-capture.md"
+    fi
     if [[ "$CAPTURE_UNREGISTER" == true ]]; then
         target="$OUTPUT_DIR/unregister-capture.md"
     fi
@@ -859,6 +876,53 @@ verifier before attaching the artifact to #27.
 EOF
 
     echo "Post-approval evidence appended to $OUTPUT_DIR"
+    echo "Run scripts/helper-service-prototype-verify.sh --manifest $MANIFEST_FILE to inspect remaining TODO rows."
+}
+
+capture_post_reboot_status() {
+    require_existing_capture_artifact
+    require_writable_capture_targets \
+        helper-status-post-reboot \
+        post-reboot-helper-bootstrap \
+        helper-bootstrap-post-reboot \
+        helper-stdout-post-reboot \
+        helper-stderr-post-reboot \
+        launchctl-status-post-reboot \
+        log-evidence-post-reboot
+
+    capture "helper-status-post-reboot" "$MACOS_DIR/$APP_NAME" status || true
+    assert_controller_plist_name "helper-status-post-reboot"
+    capture "post-reboot-helper-bootstrap" launchctl print "system/$HELPER_LABEL" || true
+    capture "launchctl-status-post-reboot" launchctl print "system/$HELPER_LABEL" || true
+    capture "log-evidence-post-reboot" log show --style syslog --last "${CLAWSHELL_SMAPP_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
+    capture_file_snapshot "helper-bootstrap-post-reboot" "$RUNTIME_DIR/helper.log" || true
+    capture_file_snapshot "helper-stdout-post-reboot" "$RUNTIME_DIR/helper.stdout.log" || true
+    capture_file_snapshot "helper-stderr-post-reboot" "$RUNTIME_DIR/helper.stderr.log" || true
+
+    config_set_key "postRebootCaptureAttempted" "true"
+
+    cat >"$OUTPUT_DIR/post-reboot-capture.md" <<EOF
+# Post-Reboot Capture
+
+This non-mutating capture appended reboot-lifecycle evidence to the existing
+helper prototype artifact.
+
+Captured files:
+
+- \`evidence/helper-status-post-reboot.txt\`
+- \`evidence/post-reboot-helper-bootstrap.txt\`
+- \`evidence/launchctl-status-post-reboot.txt\`
+- \`evidence/helper-bootstrap-post-reboot.txt\`
+- \`evidence/helper-stdout-post-reboot.txt\`
+- \`evidence/helper-stderr-post-reboot.txt\`
+- \`evidence/log-evidence-post-reboot.txt\`
+
+This command does not promote manifest rows automatically. Review the captured
+output, update the manifest and manual result deliberately, then run the
+verifier before attaching the artifact to #27.
+EOF
+
+    echo "Post-reboot evidence appended to $OUTPUT_DIR"
     echo "Run scripts/helper-service-prototype-verify.sh --manifest $MANIFEST_FILE to inspect remaining TODO rows."
 }
 
@@ -1275,6 +1339,10 @@ EOF
 
 if [[ "$CAPTURE_POST_APPROVAL" == true ]]; then
     capture_post_approval_status
+    exit 0
+fi
+if [[ "$CAPTURE_POST_REBOOT" == true ]]; then
+    capture_post_reboot_status
     exit 0
 fi
 if [[ "$CAPTURE_UNREGISTER" == true ]]; then

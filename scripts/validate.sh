@@ -4118,6 +4118,14 @@ if ! grep -q "Use only one" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
+if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" --capture-post-reboot --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness allowed post-reboot capture combined with post-approval capture" >&2
+    exit 1
+fi
+if ! grep -q "Use only one" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
 CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" --capture-post-approval >/dev/null
 if ! grep -q '^postApprovalCaptureAttempted=true$' "$helper_smappservice_prepare/validation-config.txt"; then
     echo "SMAppService helper prototype post-approval capture did not update validation config" >&2
@@ -4185,6 +4193,44 @@ do
         exit 1
     fi
 done
+CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" --capture-post-reboot >/dev/null
+if ! grep -q '^postRebootCaptureAttempted=true$' "$helper_smappservice_prepare/validation-config.txt"; then
+    echo "SMAppService helper prototype post-reboot capture did not update validation config" >&2
+    cat "$helper_smappservice_prepare/validation-config.txt" >&2
+    exit 1
+fi
+if [[ ! -s "$helper_smappservice_prepare/post-reboot-capture.md" ]]; then
+    echo "SMAppService helper prototype post-reboot capture did not write its README" >&2
+    exit 1
+fi
+for post_reboot_capture in \
+    helper-status-post-reboot \
+    post-reboot-helper-bootstrap \
+    launchctl-status-post-reboot \
+    helper-bootstrap-post-reboot \
+    helper-stdout-post-reboot \
+    helper-stderr-post-reboot \
+    log-evidence-post-reboot
+do
+    if [[ ! -s "$helper_smappservice_prepare/evidence/$post_reboot_capture.txt" ]]; then
+        echo "SMAppService helper prototype post-reboot capture missing evidence: $post_reboot_capture" >&2
+        exit 1
+    fi
+    if [[ ! -s "$helper_smappservice_prepare/evidence/$post_reboot_capture.status" ]]; then
+        echo "SMAppService helper prototype post-reboot capture missing status: $post_reboot_capture" >&2
+        exit 1
+    fi
+done
+if ! grep -q "plistName=$helper_smappservice_prepare_label.plist" "$helper_smappservice_prepare/evidence/helper-status-post-reboot.txt"; then
+    echo "SMAppService helper prototype post-reboot status did not use the derived plist name" >&2
+    cat "$helper_smappservice_prepare/evidence/helper-status-post-reboot.txt" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "post-reboot-helper-bootstrap" && $2 == "TODO" { found = 1 } END { exit !found }' "$helper_smappservice_prepare/prototype-manifest.tsv"; then
+    echo "SMAppService helper prototype post-reboot capture should not auto-promote post-reboot row" >&2
+    cat "$helper_smappservice_prepare/prototype-manifest.tsv" >&2
+    exit 1
+fi
 helper_smappservice_capture_symlink_source="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-source"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_source"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_symlink_source"

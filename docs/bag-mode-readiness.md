@@ -155,6 +155,18 @@ optional cask/package evidence. CLI helper status/repair/uninstall command
 outcomes are covered by the control-router tests, but production helper-backed
 repair and uninstall behavior remains open.
 
+For the reboot row, keep the same approved SMAppService artifact and run the
+non-mutating append capture after the machine restarts:
+
+```sh
+scripts/helper-service-smappservice-prototype.sh \
+  --output-dir .build/helper-service-prototype/<same-smappservice-register-artifact> \
+  --capture-post-reboot
+```
+
+This records post-reboot `SMAppService` status, `launchctl`, runtime log,
+stdout/stderr, and unified-log evidence without auto-promoting the verifier row.
+
 Required notes:
 
 - Bundle layout and launchd label
