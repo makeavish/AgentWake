@@ -362,6 +362,12 @@ command dispatch probe, set
 `enableBagMode`, `disableBagMode`, `repair`, or `uninstall` before creating and
 registering the artifact. The selected command is written to
 `daemonCommand=<command>` and into the LaunchDaemon `ProgramArguments`.
+To prepare future helper-update evidence, set
+`CLAWSHELL_HELPER_PROTOTYPE_GENERATION=<positive-integer>` before creating the
+artifact. The generation is written to `validation-config.txt`, the helper
+stdout payload, and the mirrored `bagModeHelperLedgerSample`. This only makes
+generation N/N+1 artifacts auditable; it does not prove update behavior until
+an installed helper update is exercised and reviewed.
 The config records `rootLedgerPath=runtime/helper-ledger.jsonl`, and the
 LaunchDaemon receives the resolved absolute artifact path. After approval,
 post-approval capture records ledger permissions and contents when readable.

@@ -3591,6 +3591,11 @@ if ! grep -q '^daemonCommand=status$' "$helper_smappservice_prepare/validation-c
     cat "$helper_smappservice_prepare/validation-config.txt" >&2
     exit 1
 fi
+if ! grep -q '^helperGeneration=1$' "$helper_smappservice_prepare/validation-config.txt"; then
+    echo "SMAppService helper prototype harness did not record default helper generation" >&2
+    cat "$helper_smappservice_prepare/validation-config.txt" >&2
+    exit 1
+fi
 if ! grep -q '^rootLedgerPath=runtime/helper-ledger.jsonl$' "$helper_smappservice_prepare/validation-config.txt"; then
     echo "SMAppService helper prototype harness did not record root ledger path" >&2
     cat "$helper_smappservice_prepare/validation-config.txt" >&2
@@ -3684,6 +3689,12 @@ if ! grep -Fq 'observedExitCode[arbitraryShellCommand]=64' "$helper_smappservice
     cat "$helper_smappservice_prepare/evidence/fixed-command-api.txt" >&2
     exit 1
 fi
+if ! grep -Fq 'helperGeneration=1' "$helper_smappservice_prepare/evidence/fixed-command-api.txt" ||
+    ! grep -Fq '"helperGeneration":1' "$helper_smappservice_prepare/evidence/fixed-command-api.txt"; then
+    echo "SMAppService helper prototype fixed command API did not emit default helper generation" >&2
+    cat "$helper_smappservice_prepare/evidence/fixed-command-api.txt" >&2
+    exit 1
+fi
 check_helper_failure_case() {
     local failure_case="$1"
     local expected_marker="$2"
@@ -3754,6 +3765,40 @@ fi
 if ! grep -q '3 => "repair"' "$helper_smappservice_daemon_command/evidence/launchdaemon-plist.txt"; then
     echo "SMAppService helper prototype LaunchDaemon did not include configured daemon command" >&2
     cat "$helper_smappservice_daemon_command/evidence/launchdaemon-plist.txt" >&2
+    exit 1
+fi
+helper_smappservice_generation="$bag_mode_smoke_dir/helper-smappservice-generation"
+CLAWSHELL_HELPER_PROTOTYPE_GENERATION=7 \
+    scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_generation" >/dev/null
+if ! grep -q '^helperGeneration=7$' "$helper_smappservice_generation/validation-config.txt"; then
+    echo "SMAppService helper prototype harness did not honor helper generation" >&2
+    cat "$helper_smappservice_generation/validation-config.txt" >&2
+    exit 1
+fi
+if ! grep -Fq 'helperGeneration=7' "$helper_smappservice_generation/evidence/fixed-command-api.txt" ||
+    ! grep -Fq '"helperGeneration":7' "$helper_smappservice_generation/evidence/fixed-command-api.txt"; then
+    echo "SMAppService helper prototype command evidence did not emit configured helper generation" >&2
+    cat "$helper_smappservice_generation/evidence/fixed-command-api.txt" >&2
+    exit 1
+fi
+helper_smappservice_bad_generation="$bag_mode_smoke_dir/helper-smappservice-bad-generation"
+if CLAWSHELL_HELPER_PROTOTYPE_GENERATION=0 \
+    scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_bad_generation" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness accepted an invalid helper generation" >&2
+    exit 1
+fi
+if ! grep -q "CLAWSHELL_HELPER_PROTOTYPE_GENERATION must be a positive integer" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+helper_smappservice_huge_generation="$bag_mode_smoke_dir/helper-smappservice-huge-generation"
+if CLAWSHELL_HELPER_PROTOTYPE_GENERATION=999999999999999999999999999999999999999999999999 \
+    scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_huge_generation" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "SMAppService helper prototype harness accepted an out-of-range helper generation" >&2
+    exit 1
+fi
+if ! grep -q "CLAWSHELL_HELPER_PROTOTYPE_GENERATION must be a positive integer no greater than 2147483647" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
 helper_smappservice_bad_daemon_command="$bag_mode_smoke_dir/helper-smappservice-bad-daemon-command"

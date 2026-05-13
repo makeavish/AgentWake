@@ -167,6 +167,11 @@ scripts/helper-service-smappservice-prototype.sh \
 This records post-reboot `SMAppService` status, `launchctl`, runtime log,
 stdout/stderr, and unified-log evidence without auto-promoting the verifier row.
 
+Helper-generation preparation can be captured by creating separate artifacts
+with `CLAWSHELL_HELPER_PROTOTYPE_GENERATION=<positive-integer>`. Those artifacts
+make generation N/N+1 outputs reviewable, but update rows still require a real
+installed-helper update run before they can move out of TODO state.
+
 Required notes:
 
 - Bundle layout and launchd label

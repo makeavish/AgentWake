@@ -142,7 +142,23 @@ if [[ "$APPEND_CAPTURE" == true && -z "$(find "$OUTPUT_DIR" -mindepth 1 -maxdept
 fi
 
 DAEMON_COMMAND="${CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND:-status}"
+HELPER_GENERATION="${CLAWSHELL_HELPER_PROTOTYPE_GENERATION:-1}"
 ROOT_LEDGER_PATH_REL="runtime/helper-ledger.jsonl"
+
+require_positive_integer() {
+    local name="$1"
+    local value="$2"
+    local max_value="2147483647"
+    if ! [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+        echo "$name must be a positive integer" >&2
+        exit 64
+    fi
+    if [[ "${#value}" -gt "${#max_value}" ]] ||
+        { [[ "${#value}" -eq "${#max_value}" ]] && [[ "$value" > "$max_value" ]]; }; then
+        echo "$name must be a positive integer no greater than $max_value" >&2
+        exit 64
+    fi
+}
 
 require_helper_command() {
     local name="$1"
@@ -162,6 +178,7 @@ require_helper_command() {
 
 if [[ "$APPEND_CAPTURE" == false ]]; then
     require_helper_command "CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND" "$DAEMON_COMMAND"
+    require_positive_integer "CLAWSHELL_HELPER_PROTOTYPE_GENERATION" "$HELPER_GENERATION"
 fi
 
 if [[ "$APPEND_CAPTURE" == false ]]; then
@@ -252,6 +269,11 @@ if [[ "$APPEND_CAPTURE" == true && -f "$CONFIG_FILE" ]]; then
         exit 73
     fi
     require_helper_command "daemonCommand" "$DAEMON_COMMAND"
+    HELPER_GENERATION="$(config_value helperGeneration "$CONFIG_FILE" || true)"
+    if [[ -z "$HELPER_GENERATION" ]]; then
+        HELPER_GENERATION="1"
+    fi
+    require_positive_integer "helperGeneration" "$HELPER_GENERATION"
     ROOT_LEDGER_PATH_REL="$(config_value rootLedgerPath "$CONFIG_FILE" || true)"
     if [[ -z "$ROOT_LEDGER_PATH_REL" ]]; then
         echo "$CAPTURE_ACTION_NAME missing required rootLedgerPath in validation config" >&2
@@ -380,6 +402,7 @@ capture_fixed_command_api() {
     local out="$EVIDENCE_DIR/fixed-command-api.txt"
     local status_file="$EVIDENCE_DIR/fixed-command-api.status"
     local log_file="$RUNTIME_DIR/fixed-command-api.log"
+    local ledger_file="$RUNTIME_DIR/fixed-command-api-ledger.jsonl"
     local start finish status block_status rc command rejected_command
     local allowed_commands=(status enableBagMode disableBagMode repair uninstall)
     start="$(date +%s)"
@@ -388,8 +411,8 @@ capture_fixed_command_api() {
     set +e
     {
         for command in "${allowed_commands[@]}"; do
-            printf '$ %q --command %q --log %q\n' "$MACOS_DIR/$HELPER_NAME" "$command" "$log_file"
-            "$MACOS_DIR/$HELPER_NAME" --command "$command" --log "$log_file"
+            printf '$ %q --command %q --log %q --ledger %q\n' "$MACOS_DIR/$HELPER_NAME" "$command" "$log_file" "$ledger_file"
+            "$MACOS_DIR/$HELPER_NAME" --command "$command" --log "$log_file" --ledger "$ledger_file"
             rc=$?
             echo "observedExitCode[$command]=$rc"
             if [[ "$rc" -ne 0 ]]; then
@@ -397,8 +420,8 @@ capture_fixed_command_api() {
             fi
         done
 
-        printf '$ %q --command %q --log %q\n' "$MACOS_DIR/$HELPER_NAME" "$rejected_command" "$log_file"
-        "$MACOS_DIR/$HELPER_NAME" --command "$rejected_command" --log "$log_file"
+        printf '$ %q --command %q --log %q --ledger %q\n' "$MACOS_DIR/$HELPER_NAME" "$rejected_command" "$log_file" "$ledger_file"
+        "$MACOS_DIR/$HELPER_NAME" --command "$rejected_command" --log "$log_file" --ledger "$ledger_file"
         rc=$?
         echo "observedExitCode[$rejected_command]=$rc"
         if [[ "$rc" -eq 0 ]]; then
@@ -1170,7 +1193,8 @@ let actualHelperLabel = argumentValue(after: "--actual-helper-label")
 let expectedEffectiveUID = argumentValue(after: "--expected-effective-uid")
 let actualEffectiveUID = argumentValue(after: "--actual-effective-uid") ?? String(geteuid())
 let expectedHelperGeneration = argumentValue(after: "--expected-helper-generation")
-let actualHelperGeneration = argumentValue(after: "--actual-helper-generation")
+let helperGeneration = __CLAWSHELL_HELPER_GENERATION__
+let actualHelperGeneration = argumentValue(after: "--actual-helper-generation") ?? String(helperGeneration)
 let approvalState = argumentValue(after: "--approval-state") ?? "approved"
 
 var authFailures: [String] = []
@@ -1205,13 +1229,14 @@ allowed=\(allowed)
 commandAllowed=\(commandAllowed)
 authFailuresJson=\(jsonArray(authFailures))
 approvalState=\(jsonValue(approvalState))
+helperGeneration=\(helperGeneration)
 effect=dry-run
 argumentsJson=\(jsonArray(arguments))
 
 """
 
 let ledgerPayload = """
-{"schemaVersion":1,"event":"bagModeHelperLedgerSample","timestampUtc":\(jsonValue(ISO8601DateFormatter().string(from: Date()))),"ownerTokenHash":"prototype-no-token","helperGeneration":1,"bootSession":"prototype-unverified","command":\(jsonValue(command)),"allowed":\(allowed),"authFailures":\(jsonArray(authFailures)),"effect":"dry-run","priorState":{},"expectedCurrentValues":{}}
+{"schemaVersion":1,"event":"bagModeHelperLedgerSample","timestampUtc":\(jsonValue(ISO8601DateFormatter().string(from: Date()))),"ownerTokenHash":"prototype-no-token","helperGeneration":\(helperGeneration),"bootSession":"prototype-unverified","command":\(jsonValue(command)),"allowed":\(allowed),"authFailures":\(jsonArray(authFailures)),"effect":"dry-run","priorState":{},"expectedCurrentValues":{}}
 
 """
 
@@ -1240,6 +1265,7 @@ if !authFailures.isEmpty {
     exit(77)
 }
 SWIFT
+    /usr/bin/sed -i '' "s/__CLAWSHELL_HELPER_GENERATION__/$HELPER_GENERATION/g" "$SOURCE_DIR/Sources/ClawShellHelperPrototypeDaemon/main.swift"
 }
 
 write_package_manifest() {
@@ -1412,6 +1438,7 @@ identitySuffix=$IDENTITY_SUFFIX
 launchDaemonPlist=$APP_NAME.app/Contents/Library/LaunchDaemons/$PLIST_NAME
 helperInstallPath=$HELPER_INSTALL_PATH
 daemonCommand=$DAEMON_COMMAND
+helperGeneration=$HELPER_GENERATION
 rootLedgerPath=$ROOT_LEDGER_PATH_REL
 localAuthModel=ad-hoc app/helper signature plus binary hash capture; prototype helper can fail closed for pairing-token, bundle/label, effective-user, generation, and approval-state mismatches
 developerIDApplicationSigned=false
@@ -1437,6 +1464,7 @@ cat >"$OUTPUT_DIR/manual-result.md" <<EOF
 - Helper label: $HELPER_LABEL
 - Identity suffix: $IDENTITY_SUFFIX
 - Daemon command: $DAEMON_COMMAND
+- Helper generation: $HELPER_GENERATION
 - Root ledger path: $ROOT_LEDGER_PATH_REL
 
 ## Signing

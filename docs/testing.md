@@ -391,6 +391,11 @@ New artifacts also default the approved LaunchDaemon command to `status`. Set
 `CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND=<fixed-command>` before creating an
 artifact to probe `enableBagMode`, `disableBagMode`, `repair`, or `uninstall`
 as dry-run root-owned command dispatch after approval.
+Set `CLAWSHELL_HELPER_PROTOTYPE_GENERATION=<positive-integer>` before creating
+an artifact when preparing generation N/N+1 helper-update evidence. The
+generation is recorded in `validation-config.txt`, helper stdout, and the
+mirrored dry-run ledger JSON; update verifier rows still require real installed
+helper update evidence.
 The config records `rootLedgerPath=runtime/helper-ledger.jsonl`, and the
 LaunchDaemon passes the resolved absolute artifact path. The post-approval
 capture records ledger permissions and contents when readable without
