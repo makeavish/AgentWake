@@ -10,7 +10,7 @@ three evidence issues:
 | Issue | Current local state | Next operator action |
 |---|---|---|
 | [#29](https://github.com/makeavish/ClawShell/issues/29) primitive matrix | Real hardware `pmset disablesleep` matrix evidence is still missing. | Run the primitive matrix on target hardware, fill `manual-result.md`, verify the manifest, and attach pass/fail/inconclusive evidence. |
-| [#27](https://github.com/makeavish/ClawShell/issues/27) no-membership helper prototype | `.build/helper-service-readiness/recheck-20260512T105510Z` records full Xcode/tooling available, Developer ID Application identities = 0, Developer ID Installer identities = 0, and `signedPrototypeReady=false`. `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z` records a fresh ad-hoc `SMAppService` helper reaching enabled status, launchd `runs = 1`, root helper stdout with `uid=0`/`euid=0`, mirrored `bagModeHelperLedgerSample` JSON, root ledger `0600`, and unregister cleanup to status raw `0` / launchctl service-not-found. Reviewed fixed-command API artifacts now cover approved dry-run dispatch for `status`, `enableBagMode`, `disableBagMode`, `repair`, and `uninstall`; each recorded root execution, emitted mirrored ledger JSON, and unregistered cleanly. Developer ID membership is intentionally deferred. | Complete the remaining #27 verifier proof: admin approval/password flow, post-approval row promotion, root-ledger schema/ownership promotion, reboot, update, production repair/uninstall behavior, CLI helper commands, failure cases, and helper-owned Bag Mode state cleanup before deciding whether fallback LaunchDaemon evidence is needed. |
+| [#27](https://github.com/makeavish/ClawShell/issues/27) no-membership helper prototype | `.build/helper-service-readiness/recheck-20260512T105510Z` records full Xcode/tooling available, Developer ID Application identities = 0, Developer ID Installer identities = 0, and `signedPrototypeReady=false`. `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z` records a fresh ad-hoc `SMAppService` helper reaching enabled status, launchd `runs = 1`, root helper stdout with `uid=0`/`euid=0`, mirrored `bagModeHelperLedgerSample` JSON, root ledger `0600`, and unregister cleanup to status raw `0` / launchctl service-not-found. Reviewed fixed-command API artifacts now cover approved dry-run dispatch for `status`, `enableBagMode`, `disableBagMode`, `repair`, and `uninstall`; each recorded root execution, emitted mirrored ledger JSON, and unregistered cleanly. Post-approval status, launchctl, stdout-log, and unified-log evidence is reviewed for the local bootstrap boundary. Developer ID membership is intentionally deferred. | Complete the remaining #27 verifier proof: admin approval/password flow, root-ledger schema/ownership promotion, reboot, update, production repair/uninstall behavior, CLI helper commands, failure cases, and helper-owned Bag Mode state cleanup before deciding whether fallback LaunchDaemon evidence is needed. |
 | [#25](https://github.com/makeavish/ClawShell/issues/25) thermal provider proof | The unique no-membership `SMAppService` helper artifacts provide root-runtime evidence after approval, but are not verifier-accepted provider proof. `powermetrics --samplers thermal` captured only thermal pressure before timing out, `--samplers all` timed out at 1s, and the 5s `all` diagnostic has no trustworthy numeric temperature when interpreted with the hardened detector. The bounded `ioreg-smc` helper now runs as root through SMAppService without timing out, but the visible numeric candidates are under `AppleSmartBattery` and are rejected as production cutoff candidates. The refreshed alternate-source probe has no accepted non-battery numeric candidate. | Find a better helper-owned source, then capture provider freshness, cadence, timeout, coverage, and fail-closed evidence. |
 
 Readiness harnesses, scaffolds, and verifier success are support gates only.
@@ -131,10 +131,12 @@ for approval propagation, follow-up artifacts for `disableBagMode`, `repair`,
 and `uninstall` also reached enabled status, ran once as root in dry-run mode,
 emitted mirrored ledger JSON, and unregistered cleanly back to raw `0`. The
 reviewed command set now covers the fixed-command API row boundary for dry-run
-dispatch only. The required #27 prototype still needs the rest of the lifecycle
-evidence rather than another bootstrap-only, dry-run-command, or unregister-only
-capture, including admin approval/password flow evidence because these artifacts
-do not prove which System Settings UI was shown before enablement.
+dispatch only. The status, launchctl, stdout-log, and unified-log captures also
+cover the local post-approval bootstrap boundary. The required #27 prototype
+still needs the rest of the lifecycle evidence rather than another
+bootstrap-only, dry-run-command, or unregister-only capture, including admin
+approval/password flow evidence because these artifacts do not prove which
+System Settings UI was shown before enablement.
 
 Before attaching a helper prototype package, run:
 
@@ -146,7 +148,7 @@ scripts/helper-service-prototype-verify.sh \
 This verifies evidence structure only. The prototype still requires a real
 app/helper bundle or fallback helper install package, admin approval or password
 flow, root-owned ledger, production repair/uninstall behavior, CLI helper
-commands, helper bootstrap, reboot, update, failure-case, `launchctl`, log, and
+commands, reboot, update, failure-case, helper-owned Bag Mode state cleanup, and
 optional cask/package evidence.
 
 Required notes:

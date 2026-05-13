@@ -345,9 +345,10 @@ and a mirrored `bagModeHelperLedgerSample` JSON event. A later
 `launchctl` service-not-found. Treat this as local SMAppService root-bootstrap
 and unregister evidence, not complete #27 evidence. The manifest still needs
 deliberate promotion only after reviewing admin-approval/password-flow,
-post-approval status/bootstrap/log/launchctl, root-ledger schema/ownership,
-reboot, update, production repair/uninstall behavior, CLI command, failure-case,
-and helper-owned Bag Mode state cleanup captures.
+root-ledger schema/ownership, reboot, update, production repair/uninstall
+behavior, CLI command, failure-case, and helper-owned Bag Mode state cleanup
+captures. The local post-approval status/bootstrap/launchctl/stdout-log/unified-log
+boundary is reviewed through the current SMAppService artifacts.
 The reviewed fixed-command API artifacts are recorded at:
 
 - `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z`

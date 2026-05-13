@@ -89,8 +89,7 @@ dry-run dispatch evidence for `status`, `enableBagMode`, `disableBagMode`,
 `repair`, and `uninstall`; each recorded root execution and unregistered cleanly
 after a post-approval wait of at least 15 seconds where applicable. #7 still cannot
 claim the helper path is complete: #27 still needs admin-approval/password-flow
-evidence, post-approval status/bootstrap/log and launchctl row promotion,
-root-ledger schema/ownership promotion, reboot, update, production
+evidence, root-ledger schema/ownership promotion, reboot, update, production
 repair/uninstall behavior, CLI, failure-case, and helper-owned Bag Mode state
 cleanup evidence before production Bag Mode can depend on it.
 
@@ -235,9 +234,10 @@ launchctl no longer finds the daemon. The artifact does not prove which System
 Settings UI, if any, was shown before the status became enabled; it only proves
 the observed `requiresApproval`/`enabled`/`notRegistered` state transitions,
 root runtime behavior, and ServiceManagement cleanup. Treat this as successful
-local bootstrap and unregister evidence, not a complete #27 proof: the verifier
-still fails until the remaining admin-approval/password-flow, post-approval
-status/bootstrap/log/launchctl, root-ledger schema/ownership, reboot, update,
+local bootstrap and unregister evidence, not a complete #27 proof: the status,
+launchctl, stdout-log, and unified-log captures cover the local post-approval
+bootstrap boundary, while the verifier still fails until the remaining
+admin-approval/password-flow, root-ledger schema/ownership, reboot, update,
 production repair/uninstall behavior, CLI helper command, failure case, and
 helper-owned Bag Mode state cleanup rows are completed and reviewed.
 
@@ -316,6 +316,20 @@ command set:
 
 This still does not prove production Bag Mode state mutation, production
 repair/uninstall behavior, or the admin approval/password UI flow.
+
+The post-approval bootstrap evidence is reviewed through the readable capture
+surfaces in `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z`:
+
+```text
+helper-status-after-approval: exitCode=0, statusBeforeRaw=1, statusAfterRaw=1
+launchctl-status: exitCode=0, managed_by=com.apple.xpc.ServiceManagement, runs=1, last exit code=0
+helper-stdout-after-approval: exitCode=0, uid=0, euid=0, commandJson="status", bagModeHelperLedgerSample
+log-evidence: exitCode=0, backgroundtaskmanagementd/ServiceManagement records for the helper label
+```
+
+`runtime/helper.log` and `runtime/helper-ledger.jsonl` are root-owned and not
+readable to the normal user in this artifact, so root-ledger schema/ownership
+promotion remains a separate #27 row.
 
 By default, the approved LaunchDaemon runs the fixed `status` command in
 dry-run mode. To prepare one artifact for a different approved-helper dry-run
@@ -516,11 +530,11 @@ The current no-membership `SMAppService` helper shape reached enabled status,
 bootstrapped as root with readable stdout ledger evidence, dispatched the
 current approved dry-run command set, and unregistered so launchctl no longer
 finds the service. The fixed-command API boundary is reviewed for dry-run
-dispatch, not production state mutation. The local ad-hoc SMAppService path
-remains viable before Developer ID funding. Bag Mode still remains blocked until
-#27 records the rest of the verifier-required helper proof: admin
-approval/password flow, post-approval status/bootstrap/log/launchctl promotion,
-root-ledger schema/ownership, reboot, update, production repair/uninstall
-behavior, CLI helper commands, failure cases, and helper-owned Bag Mode state
-cleanup. Developer ID signing remains a later
+dispatch, and the post-approval status/bootstrap/launchctl/stdout-log/unified-log
+boundary is reviewed for the local SMAppService bootstrap path. The local ad-hoc
+SMAppService path remains viable before Developer ID funding. Bag Mode still
+remains blocked until #27 records the rest of the verifier-required helper proof:
+admin approval/password flow, root-ledger schema/ownership, reboot, update,
+production repair/uninstall behavior, CLI helper commands, failure cases, and
+helper-owned Bag Mode state cleanup. Developer ID signing remains a later
 distribution/trust milestone.
