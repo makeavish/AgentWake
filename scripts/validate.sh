@@ -5130,6 +5130,165 @@ if ! grep -q "Provide at least one --command-artifact" "$bag_mode_smoke_error"; 
     exit 1
 fi
 
+echo "==> helper service prototype update review smoke"
+helper_update_review_root="$bag_mode_smoke_dir/helper-update-review"
+helper_update_old="$helper_update_review_root/old"
+helper_update_new="$helper_update_review_root/new"
+mkdir -p "$helper_update_old/evidence" "$helper_update_new/evidence"
+write_update_review_artifact() {
+    local artifact="$1"
+    local generation="$2"
+    local label="com.example.ClawShell.HelperPrototype.hupdate.daemon"
+    cat >"$artifact/validation-config.txt" <<EOF
+evidenceFormat=helper-prototype-v1
+helperInstallPath=smappservice
+identitySuffix=hupdate
+appBundleIdentifier=com.example.ClawShell.HelperPrototype.hupdate
+helperLabel=$label
+helperGeneration=$generation
+EOF
+    cat >"$artifact/evidence/helper-status-after-approval.txt" <<'EOF'
+$ helper status
+statusBeforeRaw=1
+statusAfterRaw=1
+EOF
+    printf 'exitCode=0\n' >"$artifact/evidence/helper-status-after-approval.status"
+    cat >"$artifact/evidence/helper-stdout-after-approval.txt" <<EOF
+$ helper stdout
+uid=0
+euid=0
+allowed=true
+{"schemaVersion":1,"event":"bagModeHelperLedgerSample","ownerTokenHash":"hash","helperGeneration":$generation,"effect":"dry-run"}
+EOF
+    printf 'exitCode=0\n' >"$artifact/evidence/helper-stdout-after-approval.status"
+    cat >"$artifact/evidence/launchctl-status.txt" <<EOF
+$ launchctl print system/$label
+system/$label = {
+managed_by = com.apple.xpc.ServiceManagement
+program = $artifact/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon
+runs = 1
+last exit code = 0
+}
+EOF
+    printf 'exitCode=0\n' >"$artifact/evidence/launchctl-status.status"
+}
+write_update_review_artifact "$helper_update_old" 1
+write_update_review_artifact "$helper_update_new" 2
+rebase_update_review_fixture() {
+    local fixture_root="$1"
+    sed -i '' \
+        -e "s|$helper_update_old|$fixture_root/old|g" \
+        -e "s|$helper_update_new|$fixture_root/new|g" \
+        "$fixture_root/old/evidence/launchctl-status.txt" \
+        "$fixture_root/new/evidence/launchctl-status.txt"
+}
+helper_update_review_report="$helper_update_review_root/update-review.tsv"
+scripts/helper-service-prototype-review-update.sh \
+    --old-artifact "$helper_update_old" \
+    --new-artifact "$helper_update_new" \
+    --output "$helper_update_review_report"
+if ! awk -F '\t' '$1 == "helper-update-old-inactive" && $2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_update_review_report"; then
+    echo "Update review did not promote old-helper-inactive for complete generation evidence" >&2
+    cat "$helper_update_review_report" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "helper-update-ledger-compatibility" && $2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_update_review_report"; then
+    echo "Update review did not promote ledger compatibility for complete generation evidence" >&2
+    cat "$helper_update_review_report" >&2
+    exit 1
+fi
+helper_update_review_bad_identity="$bag_mode_smoke_dir/helper-update-review-bad-identity"
+cp -R "$helper_update_review_root" "$helper_update_review_bad_identity"
+rebase_update_review_fixture "$helper_update_review_bad_identity"
+sed -i '' 's/identitySuffix=hupdate/identitySuffix=hother/' "$helper_update_review_bad_identity/new/validation-config.txt"
+scripts/helper-service-prototype-review-update.sh \
+    --old-artifact "$helper_update_review_bad_identity/old" \
+    --new-artifact "$helper_update_review_bad_identity/new" \
+    --output "$helper_update_review_bad_identity/update-review.tsv"
+if awk -F '\t' '$2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_update_review_bad_identity/update-review.tsv"; then
+    echo "Update review over-promoted mismatched SMAppService identity" >&2
+    cat "$helper_update_review_bad_identity/update-review.tsv" >&2
+    exit 1
+fi
+helper_update_review_bad_generation="$bag_mode_smoke_dir/helper-update-review-bad-generation"
+cp -R "$helper_update_review_root" "$helper_update_review_bad_generation"
+rebase_update_review_fixture "$helper_update_review_bad_generation"
+sed -i '' 's/helperGeneration=2/helperGeneration=1/' "$helper_update_review_bad_generation/new/validation-config.txt"
+scripts/helper-service-prototype-review-update.sh \
+    --old-artifact "$helper_update_review_bad_generation/old" \
+    --new-artifact "$helper_update_review_bad_generation/new" \
+    --output "$helper_update_review_bad_generation/update-review.tsv"
+if awk -F '\t' '$2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_update_review_bad_generation/update-review.tsv"; then
+    echo "Update review over-promoted non-increasing helper generation" >&2
+    cat "$helper_update_review_bad_generation/update-review.tsv" >&2
+    exit 1
+fi
+helper_update_review_bad_launchctl="$bag_mode_smoke_dir/helper-update-review-bad-launchctl"
+cp -R "$helper_update_review_root" "$helper_update_review_bad_launchctl"
+rebase_update_review_fixture "$helper_update_review_bad_launchctl"
+sed -i '' "s|$helper_update_review_bad_launchctl/new/ClawShellHelperPrototype.app|$helper_update_review_bad_launchctl/old/ClawShellHelperPrototype.app|" "$helper_update_review_bad_launchctl/new/evidence/launchctl-status.txt"
+scripts/helper-service-prototype-review-update.sh \
+    --old-artifact "$helper_update_review_bad_launchctl/old" \
+    --new-artifact "$helper_update_review_bad_launchctl/new" \
+    --output "$helper_update_review_bad_launchctl/update-review.tsv"
+if awk -F '\t' '$1 == "helper-update-old-inactive" && $2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_update_review_bad_launchctl/update-review.tsv"; then
+    echo "Update review over-promoted launchctl evidence pointing at the old helper" >&2
+    cat "$helper_update_review_bad_launchctl/update-review.tsv" >&2
+    exit 1
+fi
+helper_update_review_bad_label="$bag_mode_smoke_dir/helper-update-review-bad-label"
+cp -R "$helper_update_review_root" "$helper_update_review_bad_label"
+rebase_update_review_fixture "$helper_update_review_bad_label"
+sed -i '' 's|^system/com.example.ClawShell.HelperPrototype.hupdate.daemon = {|system/com.example.Other.Helper.daemon = {|' "$helper_update_review_bad_label/new/evidence/launchctl-status.txt"
+scripts/helper-service-prototype-review-update.sh \
+    --old-artifact "$helper_update_review_bad_label/old" \
+    --new-artifact "$helper_update_review_bad_label/new" \
+    --output "$helper_update_review_bad_label/update-review.tsv"
+if awk -F '\t' '$2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_update_review_bad_label/update-review.tsv"; then
+    echo "Update review over-promoted launchctl evidence for a mismatched helper label" >&2
+    cat "$helper_update_review_bad_label/update-review.tsv" >&2
+    exit 1
+fi
+helper_update_review_bad_stdout="$bag_mode_smoke_dir/helper-update-review-bad-stdout"
+cp -R "$helper_update_review_root" "$helper_update_review_bad_stdout"
+rebase_update_review_fixture "$helper_update_review_bad_stdout"
+printf 'exitCode=1\n' >"$helper_update_review_bad_stdout/new/evidence/helper-stdout-after-approval.status"
+scripts/helper-service-prototype-review-update.sh \
+    --old-artifact "$helper_update_review_bad_stdout/old" \
+    --new-artifact "$helper_update_review_bad_stdout/new" \
+    --output "$helper_update_review_bad_stdout/update-review.tsv"
+if awk -F '\t' '$2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_update_review_bad_stdout/update-review.tsv"; then
+    echo "Update review over-promoted failed new helper stdout capture" >&2
+    cat "$helper_update_review_bad_stdout/update-review.tsv" >&2
+    exit 1
+fi
+helper_update_review_bad_owner="$bag_mode_smoke_dir/helper-update-review-bad-owner"
+cp -R "$helper_update_review_root" "$helper_update_review_bad_owner"
+rebase_update_review_fixture "$helper_update_review_bad_owner"
+sed -i '' 's/"ownerTokenHash":"hash"/"ownerTokenHash":"otherhash"/' "$helper_update_review_bad_owner/new/evidence/helper-stdout-after-approval.txt"
+scripts/helper-service-prototype-review-update.sh \
+    --old-artifact "$helper_update_review_bad_owner/old" \
+    --new-artifact "$helper_update_review_bad_owner/new" \
+    --output "$helper_update_review_bad_owner/update-review.tsv"
+if awk -F '\t' '$1 == "helper-update-ledger-compatibility" && $2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_update_review_bad_owner/update-review.tsv"; then
+    echo "Update review over-promoted mismatched ledger owner token" >&2
+    cat "$helper_update_review_bad_owner/update-review.tsv" >&2
+    exit 1
+fi
+if awk -F '\t' '$1 == "helper-update-old-inactive" && $2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_update_review_bad_owner/update-review.tsv"; then
+    echo "Update review over-promoted old-helper inactive with a mismatched ledger owner token" >&2
+    cat "$helper_update_review_bad_owner/update-review.tsv" >&2
+    exit 1
+fi
+if scripts/helper-service-prototype-review-update.sh --old-artifact "$helper_update_old" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Update review accepted a run without new artifact" >&2
+    exit 1
+fi
+if ! grep -q "Provide --old-artifact and --new-artifact" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
 echo "==> helper service CLI outcome proof smoke"
 helper_cli_proof_bin="$bag_mode_smoke_dir/helper-cli-proof-bin"
 helper_cli_proof_developer_dir="$bag_mode_smoke_dir/helper-cli-proof-xcode"

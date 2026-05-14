@@ -450,6 +450,20 @@ an artifact when preparing generation N/N+1 helper-update evidence. The
 generation is recorded in `validation-config.txt`, helper stdout, and the
 mirrored dry-run ledger JSON; update verifier rows still require real installed
 helper update evidence.
+
+After capturing generation N and generation N+1 artifacts with the same
+deterministic identity suffix, compare them with:
+
+```sh
+scripts/helper-service-prototype-review-update.sh \
+  --old-artifact .build/helper-service-prototype/<generation-N-artifact> \
+  --new-artifact .build/helper-service-prototype/<generation-N-plus-1-artifact> \
+  --output .build/helper-service-prototype/helper-update-review-$(date -u +%Y%m%dT%H%M%SZ).tsv
+```
+
+The report only promotes update rows when the same SMAppService identity moved
+to a newer helper generation, `launchctl` points at the new artifact binary, and
+both generations emit mirrored ledger samples with the same owner token hash.
 The config records `rootLedgerPath=runtime/helper-ledger.jsonl`, and the
 LaunchDaemon passes the resolved absolute artifact path. The post-approval
 capture records ledger permissions and contents when readable without

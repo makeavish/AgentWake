@@ -393,6 +393,24 @@ artifact. The generation is written to `validation-config.txt`, the helper
 stdout payload, and the mirrored `bagModeHelperLedgerSample`. This only makes
 generation N/N+1 artifacts auditable; it does not prove update behavior until
 an installed helper update is exercised and reviewed.
+
+After generation N and generation N+1 artifacts are captured with the same
+`CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX`, compare them with:
+
+```bash
+scripts/helper-service-prototype-review-update.sh \
+  --old-artifact .build/helper-service-prototype/<generation-N-artifact> \
+  --new-artifact .build/helper-service-prototype/<generation-N-plus-1-artifact> \
+  --output .build/helper-service-prototype/helper-update-review-$(date -u +%Y%m%dT%H%M%SZ).tsv
+```
+
+The update report is advisory. It only marks update rows as promotion
+candidates when both artifacts share the same SMAppService identity, the helper
+generation increases, the old helper had approved root stdout evidence, the new
+`launchctl` state points at the new artifact path instead of the old helper
+binary, and both generations emit mirrored ledger samples with the same owner
+token hash.
+
 The config records `rootLedgerPath=runtime/helper-ledger.jsonl`, and the
 LaunchDaemon receives the resolved absolute artifact path. After approval,
 post-approval capture records ledger permissions and contents when readable.
