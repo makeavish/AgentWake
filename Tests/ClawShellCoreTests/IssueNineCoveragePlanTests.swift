@@ -150,7 +150,7 @@ private let issueNineCoveragePlan: [CoverageRequirement] = [
     CoverageRequirement(id: "cli-command-behavior", area: .contract, status: .automated),
     CoverageRequirement(id: "pmset-assertions-snapshot", area: .powerSnapshot, status: .automated),
     CoverageRequirement(id: "pmset-custom-snapshot", area: .powerSnapshot, status: .automated),
-    CoverageRequirement(id: "helper-auth-failure-artifacts", area: .powerSnapshot, status: .pendingImplementation),
+    CoverageRequirement(id: "helper-auth-failure-artifacts", area: .powerSnapshot, status: .automated),
     CoverageRequirement(id: "helper-app-disagreement-reconciliation", area: .powerSnapshot, status: .pendingImplementation),
     CoverageRequirement(id: "ac-lid-close", area: .manualHardware, status: .manualChecklist),
     CoverageRequirement(id: "battery-lid-close", area: .manualHardware, status: .manualChecklist),
