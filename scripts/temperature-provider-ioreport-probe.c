@@ -45,6 +45,26 @@ static int is_temperature_channel(CFStringRef value) {
     return CFStringFindWithOptions(value, CFSTR("Temp"), range, kCFCompareCaseInsensitive, NULL);
 }
 
+static int channel_info_unit(CFDictionaryRef sample, uint64_t *unit) {
+    CFTypeRef channel_info = CFDictionaryGetValue(sample, CFSTR("IOReportChannelInfo"));
+    if (!channel_info || CFGetTypeID(channel_info) != CFDictionaryGetTypeID()) {
+        return 0;
+    }
+
+    CFTypeRef raw_unit = CFDictionaryGetValue((CFDictionaryRef)channel_info, CFSTR("IOReportChannelUnit"));
+    if (!raw_unit || CFGetTypeID(raw_unit) != CFNumberGetTypeID()) {
+        return 0;
+    }
+
+    int64_t signed_unit = 0;
+    if (!CFNumberGetValue((CFNumberRef)raw_unit, kCFNumberSInt64Type, &signed_unit)) {
+        return 0;
+    }
+
+    *unit = (uint64_t)signed_unit;
+    return 1;
+}
+
 static struct ProbeResult probe(CFStringRef group, CFStringRef subgroup) {
     struct ProbeResult result = {0, 0};
     CFMutableDictionaryRef channels = IOReportCopyChannelsInGroup(group, subgroup, 0, 0, 0);
@@ -93,6 +113,8 @@ static struct ProbeResult probe(CFStringRef group, CFStringRef subgroup) {
         CFStringRef channel_name = IOReportChannelGetChannelName(sample);
         int64_t value = IOReportSimpleGetIntegerValue(sample, 0);
         uint64_t unit = IOReportChannelGetUnit(sample);
+        uint64_t raw_unit = 0;
+        int raw_unit_present = channel_info_unit(sample, &raw_unit);
         uint64_t unit_quantity = CLAWSHELL_IOREPORT_GETUNIT_QUANTITY(unit);
         uint64_t unit_scale = CLAWSHELL_IOREPORT_GETUNIT_SCALE(unit);
         int scale_verified = unit_quantity == CLAWSHELL_IOREPORT_QUANTITY_TEMPERATURE &&
@@ -104,7 +126,11 @@ static struct ProbeResult probe(CFStringRef group, CFStringRef subgroup) {
             print_cf_string(IOReportChannelGetSubGroup(sample));
             printf(" channel=");
             print_cf_string(channel_name);
-            printf(" unitQuantity=%llu unitScale=0x%llx unitLabel=", (unsigned long long)unit_quantity, (unsigned long long)unit_scale);
+            printf(" unitFieldPresent=%s unitRaw=0x%llx unitQuantity=%llu unitScale=0x%llx unitLabel=",
+                raw_unit_present ? "true" : "false",
+                (unsigned long long)raw_unit,
+                (unsigned long long)unit_quantity,
+                (unsigned long long)unit_scale);
             print_cf_string(IOReportChannelGetUnitLabel(sample));
             printf(" accepted=false source=libIOReport\n");
             return 0;
@@ -119,7 +145,11 @@ static struct ProbeResult probe(CFStringRef group, CFStringRef subgroup) {
         print_cf_string(IOReportChannelGetSubGroup(sample));
         printf(" channel=");
         print_cf_string(channel_name);
-        printf(" unitQuantity=%llu unitScale=0x%llx unitLabel=", (unsigned long long)unit_quantity, (unsigned long long)unit_scale);
+        printf(" unitFieldPresent=%s unitRaw=0x%llx unitQuantity=%llu unitScale=0x%llx unitLabel=",
+            raw_unit_present ? "true" : "false",
+            (unsigned long long)raw_unit,
+            (unsigned long long)unit_quantity,
+            (unsigned long long)unit_scale);
         print_cf_string(IOReportChannelGetUnitLabel(sample));
         printf(" scale=%s scaleVerified=%s source=libIOReport\n", scale_verified ? "celsius" : "unverified", scale_verified ? "true" : "false");
         return 0;

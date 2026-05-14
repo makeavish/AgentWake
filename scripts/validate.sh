@@ -1321,6 +1321,13 @@ if [[ "$(uname -s)" == "Darwin" && -n "$(command -v clang 2>/dev/null || true)" 
         cat "$temperature_alt_source_dir/evidence/ioreport-temperature-samples.txt" >&2
         exit 1
     fi
+    if grep -q '^temperature=' "$temperature_alt_source_dir/evidence/ioreport-temperature-samples.txt" &&
+        { ! grep -q 'unitFieldPresent=' "$temperature_alt_source_dir/evidence/ioreport-temperature-samples.txt" || \
+            ! grep -q 'unitRaw=0x' "$temperature_alt_source_dir/evidence/ioreport-temperature-samples.txt"; }; then
+        echo "Temperature alternate source native IOReport probe did not record raw unit field metadata" >&2
+        cat "$temperature_alt_source_dir/evidence/ioreport-temperature-samples.txt" >&2
+        exit 1
+    fi
 fi
 if ! awk -F '\t' '$1 == "numeric-cutoff-source" && $2 == "TODO" { found = 1 } END { exit !found }' "$temperature_alt_source_dir/source-probe-manifest.tsv"; then
     echo "Temperature alternate source probe should leave numeric cutoff source as TODO" >&2
@@ -1506,8 +1513,8 @@ cat >"$temperature_alt_source_fake_bin/ioreport-probe" <<'EOF'
 #!/usr/bin/env bash
 cat <<'PROBE'
 ioreportTemperatureProbeFormat=ioreport-temperature-probe-v1
-temperature=34 group=ANS2 subgroup=MSP0 channel=Temperature(0) unitQuantity=10 unitScale=0x0 unitLabel=C scale=celsius scaleVerified=true source=libIOReport
-temperature=35 group=ANS2 subgroup=MSP1 channel=Temperature(0) unitQuantity=10 unitScale=0x0 unitLabel=C scale=celsius scaleVerified=true source=libIOReport
+temperature=34 group=ANS2 subgroup=MSP0 channel=Temperature(0) unitFieldPresent=true unitRaw=0xa00000000000000 unitQuantity=10 unitScale=0x0 unitLabel=C scale=celsius scaleVerified=true source=libIOReport
+temperature=35 group=ANS2 subgroup=MSP1 channel=Temperature(0) unitFieldPresent=true unitRaw=0xa00000000000000 unitQuantity=10 unitScale=0x0 unitLabel=C scale=celsius scaleVerified=true source=libIOReport
 temperatureScaleVerified=true
 temperatureScaleValidationSource=IOReportChannelGetUnit
 temperatureSampleCount=2
@@ -1723,7 +1730,7 @@ cat >"$temperature_alt_source_failed_ioreport_bin/ioreport-probe-failed" <<'EOF'
 cat <<'PROBE'
 ioreportTemperatureProbeFormat=ioreport-temperature-probe-v1
 temperatureScaleVerified=false
-temperature=99 group=ANS2 subgroup=MSP0 channel=Temperature(0) unitQuantity=0 unitScale=0x0 unitLabel= scale=unverified scaleVerified=false source=libIOReport
+temperature=99 group=ANS2 subgroup=MSP0 channel=Temperature(0) unitFieldPresent=true unitRaw=0x0 unitQuantity=0 unitScale=0x0 unitLabel= scale=unverified scaleVerified=false source=libIOReport
 temperatureSampleCount=1
 temperatureScaleVerifiedCount=0
 numericTemperatureCandidateCount=1
@@ -1763,8 +1770,8 @@ cat >"$temperature_alt_source_bad_scale_bin/ioreport-probe-bad-scale" <<'EOF'
 #!/usr/bin/env bash
 cat <<'PROBE'
 ioreportTemperatureProbeFormat=ioreport-temperature-probe-v1
-temperature=34 group=ANS2 subgroup=MSP0 channel=Temperature(0) unitQuantity=10 unitScale=0x0 unitLabel=C scale=celsius scaleVerified=true source=libIOReport
-temperature=35 group=ANS2 subgroup=MSP1 channel=Temperature(0) unitQuantity=0 unitScale=0x0 unitLabel= scale=unverified scaleVerified=false source=libIOReport
+temperature=34 group=ANS2 subgroup=MSP0 channel=Temperature(0) unitFieldPresent=true unitRaw=0xa00000000000000 unitQuantity=10 unitScale=0x0 unitLabel=C scale=celsius scaleVerified=true source=libIOReport
+temperature=35 group=ANS2 subgroup=MSP1 channel=Temperature(0) unitFieldPresent=true unitRaw=0x0 unitQuantity=0 unitScale=0x0 unitLabel= scale=unverified scaleVerified=false source=libIOReport
 temperatureScaleVerified=true
 temperatureScaleValidationSource=IOReportChannelGetUnit
 temperatureSampleCount=2
@@ -1801,8 +1808,8 @@ cat >"$temperature_alt_source_line_disagree_bin/ioreport-probe-line-disagree" <<
 #!/usr/bin/env bash
 cat <<'PROBE'
 ioreportTemperatureProbeFormat=ioreport-temperature-probe-v1
-temperature=34 group=ANS2 subgroup=MSP0 channel=Temperature(0) unitQuantity=10 unitScale=0x0 unitLabel=C scale=celsius scaleVerified=true source=libIOReport
-temperature=35 group=ANS2 subgroup=MSP1 channel=Temperature(0) unitQuantity=0 unitScale=0x0 unitLabel= scale=unverified scaleVerified=false source=libIOReport
+temperature=34 group=ANS2 subgroup=MSP0 channel=Temperature(0) unitFieldPresent=true unitRaw=0xa00000000000000 unitQuantity=10 unitScale=0x0 unitLabel=C scale=celsius scaleVerified=true source=libIOReport
+temperature=35 group=ANS2 subgroup=MSP1 channel=Temperature(0) unitFieldPresent=true unitRaw=0x0 unitQuantity=0 unitScale=0x0 unitLabel= scale=unverified scaleVerified=false source=libIOReport
 temperatureScaleVerified=true
 temperatureScaleValidationSource=IOReportChannelGetUnit
 temperatureSampleCount=2

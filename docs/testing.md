@@ -216,7 +216,7 @@ scripts/temperature-provider-alt-source-probe.sh \
 
 This records local SMC, PMU temperature sensor, NVMe temperature sensor, die
 temperature controller, HID service, native IOHID service properties, and
-native IOReport samples with decoded unit/scale metadata. It also writes
+native IOReport samples with raw and decoded unit/scale metadata. It also writes
 `evidence/numeric-temperature-candidates.txt` so reviewers can see the exact
 labeled numeric temperature-like lines without promoting generic `die-id` or
 `*-temp` identifiers, and `evidence/rejected-temperature-candidates.txt` for
@@ -266,9 +266,9 @@ Set `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreport-ans2` to bundle and run the
 native `ClawShellIOReportTemperatureProbe` from the approved helper. Current
 local evidence captures helper-owned numeric ANS2/MSP samples under the 1s
 deadline, but the refreshed direct probe reports undefined IOReport unit
-metadata for those channels. Scale, freshness/cadence, coverage, and
-fail-closed proof remain required before promoting it to production provider
-proof.
+metadata for those channels (`IOReportChannelUnit=0`). Scale,
+freshness/cadence, coverage, and fail-closed proof remain required before
+promoting it to production provider proof.
 The helper writes provider stdout/stderr to temporary files and reads back at
 most 2,000,000 bytes per stream so large I/O Registry output cannot block the
 child process on a full pipe. That mode is candidate-source evidence only until it has bounded
