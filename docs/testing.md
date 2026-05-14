@@ -647,6 +647,8 @@ generation, and denied/revoked approval state. These populate the corresponding
 failure-case manifest rows with dry-run evidence from the generated helper. They
 are local auth-model evidence only; production installed-helper and fallback
 failure behavior still need separate lifecycle proof.
+This covers the registered issue #9 `helper-auth-failure-artifacts` power
+snapshot row; it does not cover installed-helper/fallback runtime failures.
 
 After any required System Settings approval, append non-mutating status evidence
 to the same artifact directory:
