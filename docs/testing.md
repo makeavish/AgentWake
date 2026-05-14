@@ -633,6 +633,10 @@ The summary marks rows as `ready`, `needs-review`, `missing`, or
 `prototype-manifest.tsv` or `manual-result.md`, and `missing` rows still require
 new lifecycle evidence in final app E2E issue
 [#120](https://github.com/makeavish/ClawShell/issues/120).
+The validation gate covers app/helper disagreement reconciliation by requiring
+helper-side readiness alone to leave the app/CLI helper outcome row `missing`;
+`cli-helper-status-repair-uninstall` becomes ready only with a current CLI proof
+artifact.
 The config records `rootLedgerPath=runtime/helper-ledger.jsonl`, and the
 LaunchDaemon passes the resolved absolute artifact path. The post-approval
 capture records ledger permissions and contents when readable without

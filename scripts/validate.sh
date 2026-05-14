@@ -6210,6 +6210,11 @@ if ! awk -F '\t' '$1 == "admin-approval-or-password-flow" && $2 == "needs-review
     cat "$helper_review_summary_unconfirmed" >&2
     exit 1
 fi
+if ! awk -F '\t' '$1 == "cli-helper-status-repair-uninstall" && $2 == "missing" && $4 == "" && $5 == "requires attached CLI helper status/enable/disable/repair/uninstall outcome evidence" { found = 1 } END { exit !found }' "$helper_review_summary_unconfirmed"; then
+    echo "Helper review summary did not keep app/CLI helper reconciliation missing without a CLI proof artifact" >&2
+    cat "$helper_review_summary_unconfirmed" >&2
+    exit 1
+fi
 if ! awk -F '\t' '$1 == "fixed-command-api" && $2 == "missing" { found = 1 } END { exit !found }' "$helper_review_summary_unconfirmed"; then
     echo "Helper review summary should keep fixed-command-api missing without its aggregate report" >&2
     cat "$helper_review_summary_unconfirmed" >&2
