@@ -477,6 +477,9 @@ scripts/helper-service-prototype-review-update.sh \
 The report only promotes update rows when the same SMAppService identity moved
 to a newer helper generation, `launchctl` points at the new artifact binary, and
 both generations emit mirrored ledger samples with the same owner token hash.
+If same-label `register()` leaves `launchctl` pointing at the old artifact, or
+an unregister/register replacement reaches the new path but fails to spawn, keep
+the update rows as `keep-todo`.
 The config records `rootLedgerPath=runtime/helper-ledger.jsonl`, and the
 LaunchDaemon passes the resolved absolute artifact path. The post-approval
 capture records ledger permissions and contents when readable without

@@ -1,6 +1,6 @@
 # Helper Service Readiness
 
-Check date: May 13, 2026
+Check date: May 14, 2026
 
 Issue: [#7](https://github.com/makeavish/ClawShell/issues/7)
 
@@ -13,6 +13,15 @@ Latest SMAppService register artifact:
 
 Reviewed SMAppService post-reboot append-capture artifact:
 `.build/helper-service-prototype/smappservice-reboot-20260513T134512Z`
+
+Reviewed helper-update attempt artifacts:
+
+- Generation 1 approved baseline: `.build/helper-service-prototype/smappservice-update-gen1-hupdate20260514042913`
+- Generation 2 same-label register attempt: `.build/helper-service-prototype/smappservice-update-gen2-hupdate20260514042913`
+- Generation 2 unregister/register replacement attempt: `.build/helper-service-prototype/smappservice-update-gen2-reinstall-hupdate20260514042913`
+- Advisory update reports:
+  - `.build/helper-service-prototype/helper-update-review-hupdate20260514042913.tsv`
+  - `.build/helper-service-prototype/helper-update-review-hupdate20260514042913-reinstall.tsv`
 
 Reviewed fixed-command API artifacts:
 
@@ -94,8 +103,21 @@ after a post-approval wait of at least 15 seconds where applicable. The reviewed
 post-reboot append capture records the same approved helper remaining enabled
 after reboot, with launchd still managing the ServiceManagement daemon and root
 stdout showing the dry-run `status` command plus mirrored ledger JSON. That
-capture has not been promoted into a verifier-accepted package by itself. #7
-still cannot claim the helper path is complete: #27 still needs
+capture has not been promoted into a verifier-accepted package by itself.
+
+The May 14, 2026 helper-update attempt is negative evidence. Generation 1
+(`smappservice-update-gen1-hupdate20260514042913`) captured approved root
+stdout and mirrored ledger JSON. A generation 2 artifact with the same
+SMAppService identity (`smappservice-update-gen2-hupdate20260514042913`) called
+`register()` successfully, but `launchctl` still pointed at the generation 1
+binary, so the advisory update review kept both update rows as `keep-todo`. An
+unregister/register replacement artifact
+(`smappservice-update-gen2-reinstall-hupdate20260514042913`) moved `launchctl`
+to the generation 2 binary, but the daemon failed to spawn with
+`last exit reason = OS_REASON_CODESIGNING` and produced no root stdout or
+ledger sample. Cleanup returned the helper label to raw status `0`.
+
+#7 still cannot claim the helper path is complete: #27 still needs
 admin-approval/password-flow evidence, final manifest/manual promotion of
 remaining rows, update, production restore conflict behavior, production
 repair/uninstall behavior, installed-helper/fallback failure behavior, and
@@ -410,6 +432,11 @@ generation increases, the old helper had approved root stdout evidence, the new
 `launchctl` state points at the new artifact path instead of the old helper
 binary, and both generations emit mirrored ledger samples with the same owner
 token hash.
+
+For the current May 14 update attempts, the report intentionally keeps both
+rows as `keep-todo`. Same-label `register()` did not replace the launchd path,
+while unregister/register replacement changed the path but failed code-signing
+at spawn time. Do not promote the update rows from these artifacts.
 
 The config records `rootLedgerPath=runtime/helper-ledger.jsonl`, and the
 LaunchDaemon receives the resolved absolute artifact path. After approval,
