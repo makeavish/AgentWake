@@ -199,8 +199,14 @@ public final class ClawShellServices {
                 return "Integration event accepted: \(event.agent.rawValue) \(event.event.rawValue)"
             }, helperStatusProvider: {
                 "Helper status unavailable: no helper is installed"
+            }, helperEnableBagModeHandler: { _ in
+                "Helper enable unavailable: no helper is installed"
+            }, helperDisableBagModeHandler: { _ in
+                "Helper disable unavailable: no helper is installed"
             }, helperRepairHandler: { _ in
                 "Helper repair unavailable: no helper is installed"
+            }, helperUninstallHandler: { _ in
+                "Helper uninstall unavailable: no helper is installed"
             }, uninstallHandler: { removeHelper, removeIntegrations, receivedAt in
                 var outcomes = ["Uninstall requested"]
                 if removeIntegrations {

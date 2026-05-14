@@ -154,7 +154,7 @@ Final app E2E issue [#120](https://github.com/makeavish/ClawShell/issues/120) mu
 - uninstall behavior via `unregister()` or fallback `launchctl bootout` plus helper-owned Bag Mode cleanup
 - fixed command API evidence for `status`, `enableBagMode`, `disableBagMode`, `repair`, and `uninstall`
 - reviewed dry-run ledger schema, file ownership/mode, and sample owner token/generation/boot state; production restore conflict behavior and repair output remain open
-- CLI evidence for `clawshell helper status`, `clawshell helper repair`, and `clawshell uninstall --remove-helper --remove-integrations`
+- CLI evidence for `clawshell helper status`, `clawshell helper enable`, `clawshell helper disable`, `clawshell helper repair`, `clawshell helper uninstall`, and `clawshell uninstall --remove-helper --remove-integrations`
 - local dry-run failure cases for unpaired caller, wrong bundle id, wrong label/plist path, wrong user, stale app version, denied approval, and revoked approval; production/fallback failure behavior remains open until exercised through the installed helper path
 - Homebrew cask behavior if the prototype is exercised through `brew install --cask`, `brew upgrade --cask`, or `brew uninstall --cask`; otherwise track cask semantics separately from the helper prototype
 
@@ -559,15 +559,16 @@ cleanup is exercised, then run the verifier.
 
 The CLI helper-command outcome boundary is automated in
 `ClawShellCoreChecks` and
+`ControlServerTests.cliParsesCommandsAndSendsThroughClient` plus
 `ControlServerTests.controlRouterSurfacesHelperCommandOutcomes`. The CLI parses
-`clawshell helper status`, `clawshell helper repair`, and
+`clawshell helper status`, `clawshell helper enable`, `clawshell helper
+disable`, `clawshell helper repair`, `clawshell helper uninstall`, and
 `clawshell uninstall --remove-helper --remove-integrations`, sends them through
-`ControlServer`, and the router surfaces explicit helper status, repair, and
-uninstall messages. The current app reports helper status and repair as
-unavailable because no production helper is installed yet; this proves CLI and
-control-routing behavior only. Production helper-backed repair, uninstall,
-restore conflict handling, and helper-owned Bag Mode cleanup remain separate
-#120 evidence rows.
+`ControlServer`, and the router surfaces explicit helper unavailable messages.
+The current app reports helper commands as unavailable because no production
+helper is installed yet; this proves CLI and control-routing behavior only.
+Production helper-backed enable, disable, repair, uninstall, restore conflict
+handling, and helper-owned Bag Mode cleanup remain separate #120 evidence rows.
 
 The CLI outcome proof harness captures that boundary in an attachable package:
 
@@ -576,9 +577,10 @@ scripts/helper-service-cli-outcome-proof.sh \
   --output-dir .build/helper-service-prototype/cli-outcome-proof-$(date -u +%Y%m%dT%H%M%SZ)
 ```
 
-It runs `swift test --filter controlRouterSurfacesHelperCommandOutcomes` with
-the full Xcode developer directory and records
-`helperCliOutcomeProofReady=true` only when the focused CLI-routing test passes.
+It runs `swift test --filter cliParsesCommandsAndSendsThroughClient` and
+`swift test --filter controlRouterSurfacesHelperCommandOutcomes` with the full
+Xcode developer directory, and records `helperCliOutcomeProofReady=true` only
+when both CLI parsing and router outcome tests pass.
 
 New prepare artifacts also include local helper-auth failure probes. The
 generated helper accepts optional expected/actual values for pairing token,

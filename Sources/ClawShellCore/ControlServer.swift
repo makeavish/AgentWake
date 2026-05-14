@@ -38,7 +38,10 @@ public enum ControlCommand: Equatable, Sendable, Codable {
     case integrationsEnableAuto(agentID: String)
     case integrationEvent(HookAdapterEvent)
     case helperStatus
+    case helperEnableBagMode
+    case helperDisableBagMode
     case helperRepair
+    case helperUninstall
     case uninstall(removeHelper: Bool, removeIntegrations: Bool)
 
     private enum CodingKeys: String, CodingKey {
@@ -78,8 +81,14 @@ public enum ControlCommand: Equatable, Sendable, Codable {
             self = .integrationEvent(try container.decode(HookAdapterEvent.self, forKey: .event))
         case "helperStatus":
             self = .helperStatus
+        case "helperEnableBagMode":
+            self = .helperEnableBagMode
+        case "helperDisableBagMode":
+            self = .helperDisableBagMode
         case "helperRepair":
             self = .helperRepair
+        case "helperUninstall":
+            self = .helperUninstall
         case "uninstall":
             self = .uninstall(
                 removeHelper: try container.decode(Bool.self, forKey: .removeHelper),
@@ -125,8 +134,14 @@ public enum ControlCommand: Equatable, Sendable, Codable {
             try container.encode(event, forKey: .event)
         case .helperStatus:
             try container.encode("helperStatus", forKey: .name)
+        case .helperEnableBagMode:
+            try container.encode("helperEnableBagMode", forKey: .name)
+        case .helperDisableBagMode:
+            try container.encode("helperDisableBagMode", forKey: .name)
         case .helperRepair:
             try container.encode("helperRepair", forKey: .name)
+        case .helperUninstall:
+            try container.encode("helperUninstall", forKey: .name)
         case .uninstall(let removeHelper, let removeIntegrations):
             try container.encode("uninstall", forKey: .name)
             try container.encode(removeHelper, forKey: .removeHelper)
@@ -310,7 +325,10 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
     public var integrationEnableAutoHandler: (String, Date) throws -> String
     public var integrationEventHandler: (HookAdapterEvent, Date) -> String
     public var helperStatusProvider: () -> String
+    public var helperEnableBagModeHandler: (Date) throws -> String
+    public var helperDisableBagModeHandler: (Date) throws -> String
     public var helperRepairHandler: (Date) throws -> String
+    public var helperUninstallHandler: (Date) throws -> String
     public var uninstallHandler: (Bool, Bool, Date) throws -> String
 
     public init(
@@ -323,7 +341,10 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         integrationEnableAutoHandler: @escaping (String, Date) throws -> String = { agentID, _ in "Auto-integration enabled: \(agentID)" },
         integrationEventHandler: @escaping (HookAdapterEvent, Date) -> String = { event, _ in "Integration event accepted: \(event.agent.rawValue) \(event.event.rawValue)" },
         helperStatusProvider: @escaping () -> String = { "Helper status unavailable: no helper is installed" },
+        helperEnableBagModeHandler: @escaping (Date) throws -> String = { _ in "Helper enable unavailable: no helper is installed" },
+        helperDisableBagModeHandler: @escaping (Date) throws -> String = { _ in "Helper disable unavailable: no helper is installed" },
         helperRepairHandler: @escaping (Date) throws -> String = { _ in "Helper repair unavailable: no helper is installed" },
+        helperUninstallHandler: @escaping (Date) throws -> String = { _ in "Helper uninstall unavailable: no helper is installed" },
         uninstallHandler: @escaping (Bool, Bool, Date) throws -> String = { removeHelper, removeIntegrations, _ in
             "Uninstall requested removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations)"
         }
@@ -337,7 +358,10 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         self.integrationEnableAutoHandler = integrationEnableAutoHandler
         self.integrationEventHandler = integrationEventHandler
         self.helperStatusProvider = helperStatusProvider
+        self.helperEnableBagModeHandler = helperEnableBagModeHandler
+        self.helperDisableBagModeHandler = helperDisableBagModeHandler
         self.helperRepairHandler = helperRepairHandler
+        self.helperUninstallHandler = helperUninstallHandler
         self.uninstallHandler = uninstallHandler
     }
 
@@ -367,8 +391,14 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
             return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: integrationEventHandler(event, receivedAt))
         case .helperStatus:
             return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: helperStatusProvider())
+        case .helperEnableBagMode:
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: try helperEnableBagModeHandler(receivedAt))
+        case .helperDisableBagMode:
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: try helperDisableBagModeHandler(receivedAt))
         case .helperRepair:
             return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: try helperRepairHandler(receivedAt))
+        case .helperUninstall:
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: try helperUninstallHandler(receivedAt))
         case .uninstall(let removeHelper, let removeIntegrations):
             return ControlResponse(
                 accepted: true,

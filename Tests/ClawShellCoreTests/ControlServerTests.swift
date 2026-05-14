@@ -260,8 +260,14 @@ private func runCLIParsesCommandsAndSendsThroughClient() throws {
     try check(client.commands.last == .integrationsEnableAuto(agentID: "claude-code"), "Expected integrations enable-auto command")
     _ = try cli.run(arguments: ["clawshell", "helper", "status"])
     try check(client.commands.last == .helperStatus, "Expected helper status command")
+    _ = try cli.run(arguments: ["clawshell", "helper", "enable"])
+    try check(client.commands.last == .helperEnableBagMode, "Expected helper enable command")
+    _ = try cli.run(arguments: ["clawshell", "helper", "disable"])
+    try check(client.commands.last == .helperDisableBagMode, "Expected helper disable command")
     _ = try cli.run(arguments: ["clawshell", "helper", "repair"])
     try check(client.commands.last == .helperRepair, "Expected helper repair command")
+    _ = try cli.run(arguments: ["clawshell", "helper", "uninstall"])
+    try check(client.commands.last == .helperUninstall, "Expected helper uninstall command")
     _ = try cli.run(arguments: ["clawshell", "uninstall", "--remove-helper", "--remove-integrations"])
     try check(
         client.commands.last == .uninstall(removeHelper: true, removeIntegrations: true),
@@ -284,6 +290,9 @@ private func runCLIRejectsExtraArgumentsAndUnknownFlags() throws {
     try expectThrows(ControlServerError.invalidRequest("helper status takes no arguments")) {
         _ = try cli.parse(arguments: ["helper", "status", "--json"])
     }
+    try expectThrows(ControlServerError.invalidRequest("helper uninstall takes no arguments")) {
+        _ = try cli.parse(arguments: ["helper", "uninstall", "--force"])
+    }
     try expectThrows(ControlServerError.invalidRequest("unknown uninstall flag: --everything")) {
         _ = try cli.parse(arguments: ["uninstall", "--everything"])
     }
@@ -293,17 +302,32 @@ private func runControlRouterSurfacesHelperCommandOutcomes() throws {
     let receivedAt = Date(timeIntervalSince1970: 9_000)
     let defaultRouter = DefaultControlCommandRouter()
     let defaultStatus = try defaultRouter.route(.helperStatus, receivedAt: receivedAt)
+    let defaultEnable = try defaultRouter.route(.helperEnableBagMode, receivedAt: receivedAt)
+    let defaultDisable = try defaultRouter.route(.helperDisableBagMode, receivedAt: receivedAt)
     let defaultRepair = try defaultRouter.route(.helperRepair, receivedAt: receivedAt)
+    let defaultUninstall = try defaultRouter.route(.helperUninstall, receivedAt: receivedAt)
 
     try check(defaultStatus.message == "Helper status unavailable: no helper is installed", "Expected default helper status outcome")
+    try check(defaultEnable.message == "Helper enable unavailable: no helper is installed", "Expected default helper enable outcome")
+    try check(defaultDisable.message == "Helper disable unavailable: no helper is installed", "Expected default helper disable outcome")
     try check(defaultRepair.message == "Helper repair unavailable: no helper is installed", "Expected default helper repair outcome")
+    try check(defaultUninstall.message == "Helper uninstall unavailable: no helper is installed", "Expected default helper uninstall outcome")
 
     let router = DefaultControlCommandRouter(
         helperStatusProvider: {
             "Helper installed generation=7 state=ready"
         },
+        helperEnableBagModeHandler: { receivedAt in
+            "Helper enable checked at \(Int(receivedAt.timeIntervalSince1970))"
+        },
+        helperDisableBagModeHandler: { receivedAt in
+            "Helper disable checked at \(Int(receivedAt.timeIntervalSince1970))"
+        },
         helperRepairHandler: { receivedAt in
             "Helper repair checked at \(Int(receivedAt.timeIntervalSince1970))"
+        },
+        helperUninstallHandler: { receivedAt in
+            "Helper uninstall checked at \(Int(receivedAt.timeIntervalSince1970))"
         },
         uninstallHandler: { removeHelper, removeIntegrations, receivedAt in
             "Uninstall removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations) at \(Int(receivedAt.timeIntervalSince1970))"
@@ -311,12 +335,18 @@ private func runControlRouterSurfacesHelperCommandOutcomes() throws {
     )
 
     let status = try router.route(.helperStatus, receivedAt: receivedAt)
+    let enable = try router.route(.helperEnableBagMode, receivedAt: receivedAt)
+    let disable = try router.route(.helperDisableBagMode, receivedAt: receivedAt)
     let repair = try router.route(.helperRepair, receivedAt: receivedAt)
+    let helperUninstall = try router.route(.helperUninstall, receivedAt: receivedAt)
     let uninstall = try router.route(.uninstall(removeHelper: true, removeIntegrations: true), receivedAt: receivedAt)
 
     try check(status.accepted, "Expected helper status to be accepted")
     try check(status.message == "Helper installed generation=7 state=ready", "Expected helper status provider output")
+    try check(enable.message == "Helper enable checked at 9000", "Expected helper enable handler output")
+    try check(disable.message == "Helper disable checked at 9000", "Expected helper disable handler output")
     try check(repair.message == "Helper repair checked at 9000", "Expected helper repair handler output")
+    try check(helperUninstall.message == "Helper uninstall checked at 9000", "Expected helper uninstall handler output")
     try check(
         uninstall.message == "Uninstall removeHelper=true removeIntegrations=true at 9000",
         "Expected uninstall handler output"

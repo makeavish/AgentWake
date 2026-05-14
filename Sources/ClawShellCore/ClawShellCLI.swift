@@ -109,9 +109,18 @@ public struct ClawShellCLI {
         case "status":
             try requireArgumentCount(arguments, 1, usage: "helper status takes no arguments")
             return .helperStatus
+        case "enable":
+            try requireArgumentCount(arguments, 1, usage: "helper enable takes no arguments")
+            return .helperEnableBagMode
+        case "disable":
+            try requireArgumentCount(arguments, 1, usage: "helper disable takes no arguments")
+            return .helperDisableBagMode
         case "repair":
             try requireArgumentCount(arguments, 1, usage: "helper repair takes no arguments")
             return .helperRepair
+        case "uninstall":
+            try requireArgumentCount(arguments, 1, usage: "helper uninstall takes no arguments")
+            return .helperUninstall
         default:
             throw ControlServerError.invalidRequest("unknown helper subcommand: \(first)")
         }

@@ -269,7 +269,7 @@ review_remaining_rows() {
     row helper-update-old-inactive keep-todo "" "requires real generation N to N+1 installed-helper update evidence"
     row helper-update-ledger-compatibility keep-todo "" "requires real update ledger compatibility or repair evidence"
     row helper-repair-conflict keep-todo "" "requires production restore conflict and repair behavior evidence"
-    row cli-helper-status-repair-uninstall keep-todo "" "requires attached CLI helper status/repair/uninstall outcome evidence"
+    row cli-helper-status-repair-uninstall keep-todo "" "requires attached CLI helper status/enable/disable/repair/uninstall outcome evidence"
     review_failure_case failure-unpaired-caller "unpaired-caller"
     review_failure_case failure-wrong-bundle-id-or-label "wrong-bundle-id" "wrong-helper-label"
     review_failure_case failure-wrong-user "wrong-user"

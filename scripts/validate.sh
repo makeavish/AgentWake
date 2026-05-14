@@ -5660,11 +5660,20 @@ mkdir -p "$helper_cli_proof_bin" "$helper_cli_proof_developer_dir"
 cat >"$helper_cli_proof_bin/swift" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "$*" != "test --filter controlRouterSurfacesHelperCommandOutcomes" ]]; then
-    echo "unexpected swift arguments: $*" >&2
-    exit 64
-fi
-cat <<'OUT'
+case "$*" in
+    "test --filter cliParsesCommandsAndSendsThroughClient")
+        cat <<'OUT'
+◇ Test run started.
+/Users/alice/local/clawshell/Tests/ClawShellCoreTests/ControlServerTests.swift:12: note: fixture path
+◇ Suite ControlServerTests started.
+◇ Test cliParsesCommandsAndSendsThroughClient() started.
+✔ Test cliParsesCommandsAndSendsThroughClient() passed after 0.001 seconds.
+✔ Suite ControlServerTests passed after 0.001 seconds.
+✔ Test run with 1 test in 1 suite passed after 0.001 seconds.
+OUT
+        ;;
+    "test --filter controlRouterSurfacesHelperCommandOutcomes")
+        cat <<'OUT'
 ◇ Test run started.
 /Users/alice/local/clawshell/Tests/ClawShellCoreTests/ControlServerTests.swift:12: note: fixture path
 ◇ Suite ControlServerTests started.
@@ -5673,6 +5682,12 @@ cat <<'OUT'
 ✔ Suite ControlServerTests passed after 0.001 seconds.
 ✔ Test run with 1 test in 1 suite passed after 0.001 seconds.
 OUT
+        ;;
+    *)
+        echo "unexpected swift arguments: $*" >&2
+        exit 64
+        ;;
+esac
 EOF
 chmod +x "$helper_cli_proof_bin/swift"
 helper_cli_proof_dir="$bag_mode_smoke_dir/helper-cli-proof"
@@ -5684,8 +5699,18 @@ if ! grep -q '^helperCliOutcomeProofReady=true$' "$helper_cli_proof_dir/validati
     cat "$helper_cli_proof_dir/validation-config.txt" >&2
     exit 1
 fi
+if ! grep -q '^cliHelperStatusEnableDisableRepairUninstallCovered=true$' "$helper_cli_proof_dir/validation-config.txt"; then
+    echo "Helper CLI outcome proof did not mark the expanded helper command boundary as covered" >&2
+    cat "$helper_cli_proof_dir/validation-config.txt" >&2
+    exit 1
+fi
 if ! grep -q 'Test controlRouterSurfacesHelperCommandOutcomes() passed' "$helper_cli_proof_dir/evidence/cli-helper-status-repair-uninstall.txt"; then
     echo "Helper CLI outcome proof did not capture focused test output" >&2
+    cat "$helper_cli_proof_dir/evidence/cli-helper-status-repair-uninstall.txt" >&2
+    exit 1
+fi
+if ! grep -q 'Test cliParsesCommandsAndSendsThroughClient() passed' "$helper_cli_proof_dir/evidence/cli-helper-status-repair-uninstall.txt"; then
+    echo "Helper CLI outcome proof did not capture CLI parser test output" >&2
     cat "$helper_cli_proof_dir/evidence/cli-helper-status-repair-uninstall.txt" >&2
     exit 1
 fi
@@ -5772,6 +5797,23 @@ do
         exit 1
     fi
 done
+helper_cli_proof_legacy="$bag_mode_smoke_dir/helper-cli-proof-legacy-marker"
+cp -R "$helper_cli_proof_dir" "$helper_cli_proof_legacy"
+grep -v '^cliHelperStatusEnableDisableRepairUninstallCovered=' \
+    "$helper_cli_proof_legacy/validation-config.txt" >"$helper_cli_proof_legacy/validation-config.tmp"
+mv "$helper_cli_proof_legacy/validation-config.tmp" "$helper_cli_proof_legacy/validation-config.txt"
+helper_review_summary_legacy="$bag_mode_smoke_dir/helper-review-summary-legacy-cli.tsv"
+scripts/helper-service-prototype-review-summary.sh \
+    --capture-review "$helper_prototype_review_confirmed" \
+    --fixed-command-review "$helper_fixed_command_report" \
+    --update-review "$helper_update_review_report" \
+    --cli-proof "$helper_cli_proof_legacy" \
+    --output "$helper_review_summary_legacy"
+if awk -F '\t' '$1 == "cli-helper-status-repair-uninstall" && $2 == "ready" { found = 1 } END { exit !found }' "$helper_review_summary_legacy"; then
+    echo "Helper review summary over-promoted legacy CLI proof without expanded helper command coverage" >&2
+    cat "$helper_review_summary_legacy" >&2
+    exit 1
+fi
 if ! awk -F '\t' '$1 == "helper-uninstall-state-cleanup" && $2 == "missing" { found = 1 } END { exit !found }' "$helper_review_summary"; then
     echo "Helper review summary over-promoted helper-owned Bag Mode state cleanup" >&2
     cat "$helper_review_summary" >&2

@@ -6,7 +6,8 @@ fi
 set -euo pipefail
 
 OUTPUT_DIR=""
-TEST_FILTER="controlRouterSurfacesHelperCommandOutcomes"
+CLI_PARSE_TEST_FILTER="cliParsesCommandsAndSendsThroughClient"
+ROUTER_TEST_FILTER="controlRouterSurfacesHelperCommandOutcomes"
 DEVELOPER_DIR_VALUE="${CLAWSHELL_HELPER_CLI_DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -36,11 +37,14 @@ usage() {
     cat <<'EOF'
 Usage: scripts/helper-service-cli-outcome-proof.sh --output-dir DIR
 
-Captures #27 CLI helper status/repair/uninstall routing evidence by running the
+Captures #27 CLI helper command routing evidence by running the
 focused ControlServer Swift test that exercises:
 - clawshell helper status
+- clawshell helper enable
+- clawshell helper disable
 - clawshell helper repair
-- clawshell uninstall --remove-helper --remove-integrations
+- clawshell helper uninstall
+- clawshell uninstall --remove-helper --remove-integrations cleanup flags
 
 The harness writes validation-config.txt plus evidence/ files. It does not
 install, register, approve, unregister, or contact a production helper.
@@ -113,25 +117,33 @@ test_exit=0
 start_epoch="$(date -u +%s)"
 command_output_raw="$(mktemp "$EVIDENCE_DIR/.cli-helper-status-repair-uninstall.XXXXXX")"
 {
-    printf '$ DEVELOPER_DIR=%q swift test --filter %q\n' "$display_developer_dir" "$TEST_FILTER"
-    DEVELOPER_DIR="$DEVELOPER_DIR_VALUE" swift test --filter "$TEST_FILTER"
-} >"$command_output_raw" 2>&1 || test_exit=$?
+    printf '$ DEVELOPER_DIR=%q swift test --filter %q\n' "$display_developer_dir" "$CLI_PARSE_TEST_FILTER"
+    DEVELOPER_DIR="$DEVELOPER_DIR_VALUE" swift test --filter "$CLI_PARSE_TEST_FILTER" || test_exit=$?
+    printf '\n$ DEVELOPER_DIR=%q swift test --filter %q\n' "$display_developer_dir" "$ROUTER_TEST_FILTER"
+    DEVELOPER_DIR="$DEVELOPER_DIR_VALUE" swift test --filter "$ROUTER_TEST_FILTER" || test_exit=$?
+} >"$command_output_raw" 2>&1
 redact_metadata <"$command_output_raw" >"$command_output_file"
 rm -f "$command_output_raw"
 end_epoch="$(date -u +%s)"
 duration_seconds=$((end_epoch - start_epoch))
 
 {
-    printf 'command=DEVELOPER_DIR=%s swift test --filter %s\n' "$display_developer_dir" "$TEST_FILTER"
+    printf 'commands=DEVELOPER_DIR=%s swift test --filter %s; DEVELOPER_DIR=%s swift test --filter %s\n' \
+        "$display_developer_dir" \
+        "$CLI_PARSE_TEST_FILTER" \
+        "$display_developer_dir" \
+        "$ROUTER_TEST_FILTER"
     printf 'exitCode=%s\n' "$test_exit"
     printf 'durationSeconds=%s\n' "$duration_seconds"
     printf 'developerDir=%s\n' "$display_developer_dir"
+    printf 'cliParseTestFilter=%s\n' "$CLI_PARSE_TEST_FILTER"
+    printf 'routerTestFilter=%s\n' "$ROUTER_TEST_FILTER"
 } >"$command_status_file"
 
 source_reference_raw="$(mktemp "$EVIDENCE_DIR/.cli-helper-source-reference.XXXXXX")"
 {
-    printf '$ rg -n %q Tests/ClawShellCoreTests/ControlServerTests.swift Sources/ClawShellCore\n' "$TEST_FILTER"
-    rg -n "$TEST_FILTER|helper status|helper repair|remove-helper|removeIntegrations|uninstall\\(" \
+    printf '$ rg -n %q Tests/ClawShellCoreTests/ControlServerTests.swift Sources/ClawShellCore\n' "$CLI_PARSE_TEST_FILTER|$ROUTER_TEST_FILTER"
+    rg -n "$CLI_PARSE_TEST_FILTER|$ROUTER_TEST_FILTER|helper status|helper enable|helper disable|helper repair|helper uninstall|remove-helper|removeIntegrations|uninstall\\(" \
         Tests/ClawShellCoreTests/ControlServerTests.swift \
         Sources/ClawShellCore || true
 } >"$source_reference_raw" 2>&1
@@ -141,6 +153,7 @@ rm -f "$source_reference_raw"
 proof_ready=false
 test_passed=false
 if [[ "$test_exit" == "0" ]] &&
+   grep -Fq 'Test cliParsesCommandsAndSendsThroughClient() passed' "$command_output_file" &&
    grep -Fq 'Test controlRouterSurfacesHelperCommandOutcomes() passed' "$command_output_file" &&
    grep -Eq 'Test run with 1 test in 1 suite passed|Test run with 1 test .* passed' "$command_output_file"; then
     test_passed=true
@@ -151,8 +164,10 @@ cat >"$OUTPUT_DIR/validation-config.txt" <<EOF
 evidenceFormat=helper-cli-outcome-proof-v1
 metadataRedacted=true
 developerDir=$display_developer_dir
-testFilter=$TEST_FILTER
+cliParseTestFilter=$CLI_PARSE_TEST_FILTER
+routerTestFilter=$ROUTER_TEST_FILTER
 testPassed=$test_passed
+cliHelperStatusEnableDisableRepairUninstallCovered=$test_passed
 cliHelperStatusRepairUninstallCovered=$test_passed
 helperCliOutcomeProofReady=$proof_ready
 result=$([[ "$proof_ready" == true ]] && printf 'pass' || printf 'fail')
@@ -166,7 +181,8 @@ This package captures focused CLI routing evidence for #27.
 It runs:
 
 \`\`\`sh
-DEVELOPER_DIR=$display_developer_dir swift test --filter $TEST_FILTER
+DEVELOPER_DIR=$display_developer_dir swift test --filter $CLI_PARSE_TEST_FILTER
+DEVELOPER_DIR=$display_developer_dir swift test --filter $ROUTER_TEST_FILTER
 \`\`\`
 
 Evidence files:
@@ -176,8 +192,9 @@ Evidence files:
 - \`evidence/cli-helper-source-reference.txt\`
 
 Boundary: this proves CLI parse/routing and ControlServer outcome messages for
-helper status, helper repair, and uninstall flags. It does not prove a
-production helper is installed, repaired, uninstalled, or cleaned up.
+helper status, enable, disable, repair, uninstall, and top-level cleanup flags.
+It does not prove a production helper is installed, repaired, uninstalled, or
+cleaned up.
 EOF
 
 echo "Helper CLI outcome proof written to $OUTPUT_DIR"

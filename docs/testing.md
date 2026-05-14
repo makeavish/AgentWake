@@ -458,11 +458,13 @@ post-approval helper stdout capture, root `uid=0`/`euid=0`, the expected
 `commandJson`, mirrored ledger JSON for that command, successful unregister,
 and service-not-found cleanup evidence. It does not edit any verifier package.
 `ClawShellCoreChecks` and
+`ControlServerTests.cliParsesCommandsAndSendsThroughClient` plus
 `ControlServerTests.controlRouterSurfacesHelperCommandOutcomes` cover the CLI
 helper-command outcome boundary: `clawshell helper status`, `clawshell helper
-repair`, and `clawshell uninstall --remove-helper --remove-integrations` parse
-and route through `ControlServer` with explicit status/repair/uninstall
-messages. The current app-level helper status and repair responses remain
+enable`, `clawshell helper disable`, `clawshell helper repair`, `clawshell
+helper uninstall`, and `clawshell uninstall --remove-helper
+--remove-integrations` parse and route through `ControlServer` with explicit
+helper unavailable messages. The current app-level helper responses remain
 unavailable because no production helper is installed yet, so this is CLI and
 control-routing evidence only.
 
@@ -474,10 +476,12 @@ scripts/helper-service-cli-outcome-proof.sh \
 ```
 
 The harness uses the full Xcode developer directory at
-`/Applications/Xcode.app/Contents/Developer` by default and runs
+`/Applications/Xcode.app/Contents/Developer` by default and runs both
+`swift test --filter cliParsesCommandsAndSendsThroughClient` and
 `swift test --filter controlRouterSurfacesHelperCommandOutcomes`. The resulting
 package records the focused test output, a status file, source references, and
-`helperCliOutcomeProofReady=true` only when that one CLI-routing test passes.
+`helperCliOutcomeProofReady=true` only when both CLI parsing and router outcome
+tests pass.
 New artifacts derive a unique SMAppService bundle/helper identity from the
 output path, and write it to `appBundleIdentifier`, `helperLabel`, and
 `identitySuffix` in `validation-config.txt`. Set

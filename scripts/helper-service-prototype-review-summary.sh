@@ -266,12 +266,15 @@ append_cli_proof() {
     require_file "$config" "CLI proof validation-config.txt"
 
     local ready
+    local expanded_coverage
     ready="$(value_for_key helperCliOutcomeProofReady "$config" 2>/dev/null || true)"
+    expanded_coverage="$(value_for_key cliHelperStatusEnableDisableRepairUninstallCovered "$config" 2>/dev/null || true)"
     if [[ "$ready" == "true" &&
+          "$expanded_coverage" == "true" &&
           -s "$evidence" &&
           -s "$status_file" &&
           "$(value_for_key exitCode "$status_file" 2>/dev/null || true)" == "0" ]]; then
-        append_candidate cli-helper-status-repair-uninstall ready "$artifact_dir" evidence/cli-helper-status-repair-uninstall.txt "focused CLI helper status/repair/uninstall routing proof is ready"
+        append_candidate cli-helper-status-repair-uninstall ready "$artifact_dir" evidence/cli-helper-status-repair-uninstall.txt "focused CLI helper status/enable/disable/repair/uninstall routing proof is ready"
     else
         append_candidate cli-helper-status-repair-uninstall missing "$artifact_dir" "" "CLI helper outcome proof is missing or not ready"
     fi
