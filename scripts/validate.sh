@@ -4915,6 +4915,56 @@ if ! awk -F '\t' '$1 == "homebrew-cask-semantics" && $2 == "not-applicable" { fo
     cat "$helper_prototype_review_report" >&2
     exit 1
 fi
+helper_prototype_review_confirmed="$bag_mode_smoke_dir/helper-prototype-review-confirmed"
+scripts/helper-service-prototype-review-captures.sh \
+    --artifact-dir "$helper_prototype_review_dir" \
+    --i-reviewed-operator-approval-flow \
+    --i-reviewed-root-ledger-evidence \
+    --output "$helper_prototype_review_confirmed"
+if ! awk -F '\t' '$1 == "admin-approval-or-password-flow" && $2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_prototype_review_confirmed"; then
+    echo "Helper prototype review did not promote approval flow after explicit review confirmation" >&2
+    cat "$helper_prototype_review_confirmed" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "root-ledger-schema-and-permissions" && $2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_prototype_review_confirmed"; then
+    echo "Helper prototype review did not promote root-ledger schema after explicit review confirmation" >&2
+    cat "$helper_prototype_review_confirmed" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "root-ledger-ownership-sample" && $2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_prototype_review_confirmed"; then
+    echo "Helper prototype review did not promote root-ledger ownership after explicit review confirmation" >&2
+    cat "$helper_prototype_review_confirmed" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "helper-uninstall-state-cleanup" && $2 == "keep-todo" { found = 1 } END { exit !found }' "$helper_prototype_review_confirmed"; then
+    echo "Helper prototype review confirmation over-promoted helper-owned Bag Mode state cleanup" >&2
+    cat "$helper_prototype_review_confirmed" >&2
+    exit 1
+fi
+helper_prototype_review_failed_status="$bag_mode_smoke_dir/helper-prototype-review-failed-status"
+cp -R "$helper_prototype_review_dir" "$helper_prototype_review_failed_status"
+printf 'exitCode=1\n' >"$helper_prototype_review_failed_status/evidence/helper-status-after-approval.status"
+scripts/helper-service-prototype-review-captures.sh \
+    --artifact-dir "$helper_prototype_review_failed_status" \
+    --i-reviewed-operator-approval-flow \
+    --output "$helper_prototype_review_failed_status/review-candidates.tsv"
+if awk -F '\t' '$1 == "admin-approval-or-password-flow" && $2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_prototype_review_failed_status/review-candidates.tsv"; then
+    echo "Helper prototype review over-promoted approval flow after failed status capture" >&2
+    cat "$helper_prototype_review_failed_status/review-candidates.tsv" >&2
+    exit 1
+fi
+helper_prototype_review_failed_stdout="$bag_mode_smoke_dir/helper-prototype-review-failed-stdout"
+cp -R "$helper_prototype_review_dir" "$helper_prototype_review_failed_stdout"
+printf 'exitCode=1\n' >"$helper_prototype_review_failed_stdout/evidence/helper-stdout-after-approval.status"
+scripts/helper-service-prototype-review-captures.sh \
+    --artifact-dir "$helper_prototype_review_failed_stdout" \
+    --i-reviewed-root-ledger-evidence \
+    --output "$helper_prototype_review_failed_stdout/review-candidates.tsv"
+if awk -F '\t' '$1 ~ /^root-ledger-/ && $2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_prototype_review_failed_stdout/review-candidates.tsv"; then
+    echo "Helper prototype review over-promoted root ledger after failed helper stdout capture" >&2
+    cat "$helper_prototype_review_failed_stdout/review-candidates.tsv" >&2
+    exit 1
+fi
 helper_prototype_review_failed_failure="$bag_mode_smoke_dir/helper-prototype-review-failed-failure"
 cp -R "$helper_prototype_review_dir" "$helper_prototype_review_failed_failure"
 printf 'exitCode=1\n' >"$helper_prototype_review_failed_failure/evidence/failure-unpaired-caller.status"

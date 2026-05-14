@@ -440,6 +440,23 @@ evidence exists but still needs an operator judgment such as confirming the
 approval/password flow, `keep-todo` means the row is not proven by the artifact,
 and `not-applicable` marks unused optional rows.
 
+After human review is complete for the operator approval/password flow and
+root-owned ledger evidence, rerun the report with explicit review flags instead
+of hand-editing the recommendation:
+
+```bash
+scripts/helper-service-prototype-review-captures.sh \
+  --artifact-dir .build/helper-service-prototype/smappservice-reboot-20260513T134512Z \
+  --i-reviewed-operator-approval-flow \
+  --i-reviewed-root-ledger-evidence \
+  --output .build/helper-service-prototype/smappservice-reboot-20260513T134512Z/review-candidates-reviewed.tsv
+```
+
+Those flags only promote the approval/password-flow and root-ledger rows when
+the underlying status, root-owned ledger mode, and mirrored ledger schema
+evidence are still present. Update, repair/conflict, CLI attachment, and
+helper-owned Bag Mode cleanup rows remain separate proof work.
+
 After rebooting the machine with the same helper approval state, append
 non-mutating reboot-lifecycle evidence to that same artifact:
 

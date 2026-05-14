@@ -367,6 +367,20 @@ captures. The local post-approval
 status/bootstrap/launchctl/stdout-log/unified-log boundary and dry-run
 root-ledger schema/ownership boundary are reviewed through the current
 SMAppService artifacts.
+
+To make the human-reviewed approval/password-flow and root-ledger decision
+repeatable, rerun the capture-review report with explicit review flags:
+
+```sh
+scripts/helper-service-prototype-review-captures.sh \
+  --artifact-dir .build/helper-service-prototype/smappservice-reboot-20260513T134512Z \
+  --i-reviewed-operator-approval-flow \
+  --i-reviewed-root-ledger-evidence \
+  --output .build/helper-service-prototype/smappservice-reboot-20260513T134512Z/review-candidates-reviewed.tsv
+```
+
+Those flags do not affect update, repair/conflict, CLI attachment, production
+uninstall behavior, or helper-owned Bag Mode cleanup rows.
 The reviewed fixed-command API artifacts are recorded at:
 
 - `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z`

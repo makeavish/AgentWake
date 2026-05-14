@@ -7,15 +7,24 @@ set -euo pipefail
 
 ARTIFACT_DIR=""
 OUTPUT_FILE=""
+APPROVAL_FLOW_REVIEWED=false
+ROOT_LEDGER_REVIEWED=false
 
 usage() {
     cat <<'EOF'
 Usage: scripts/helper-service-prototype-review-captures.sh --artifact-dir DIR [--output PATH]
+       [--i-reviewed-operator-approval-flow]
+       [--i-reviewed-root-ledger-evidence]
 
 Reviews captured SMAppService helper prototype evidence for #27 and writes a
 TSV report of manifest rows that look ready for manual promotion, rows that
 still need human review, and rows that must remain TODO. The script never edits
 manual-result.md or prototype-manifest.tsv.
+
+The two --i-reviewed-* flags are intentionally explicit. They allow a reviewer
+to promote rows whose mechanical evidence is present but whose meaning depends
+on human review of operator approval/password flow or root-owned ledger evidence
+that may be unreadable to the normal user by design.
 
 Report columns:
 
@@ -40,6 +49,14 @@ while [[ "$#" -gt 0 ]]; do
             fi
             OUTPUT_FILE="$2"
             shift 2
+            ;;
+        --i-reviewed-operator-approval-flow)
+            APPROVAL_FLOW_REVIEWED=true
+            shift
+            ;;
+        --i-reviewed-root-ledger-evidence)
+            ROOT_LEDGER_REVIEWED=true
+            shift
             ;;
         -h|--help)
             usage
@@ -153,9 +170,14 @@ review_helper_status_after_approval() {
 }
 
 review_admin_approval_flow() {
-    if has_all helper-install-or-register 'statusAfterRaw=2' &&
+    if has_exit_zero helper-status-after-approval &&
+       has_all helper-install-or-register 'statusAfterRaw=2' &&
        has_all helper-status-after-approval 'statusBeforeRaw=1' 'statusAfterRaw=1'; then
-        row admin-approval-or-password-flow review-needed evidence/helper-install-or-register.txt "requiresApproval to enabled transition is present; confirm operator approval/password flow before promotion"
+        if [[ "$APPROVAL_FLOW_REVIEWED" == true ]]; then
+            row admin-approval-or-password-flow promote-candidate evidence/helper-install-or-register.txt "reviewed requiresApproval to enabled transition and operator approval/password flow"
+        else
+            row admin-approval-or-password-flow review-needed evidence/helper-install-or-register.txt "requiresApproval to enabled transition is present; confirm operator approval/password flow before promotion"
+        fi
     else
         row admin-approval-or-password-flow keep-todo "" "requiresApproval to enabled transition not fully captured"
     fi
@@ -184,15 +206,25 @@ review_post_reboot_bootstrap() {
 
 review_root_ledger() {
     if has_all root-ledger-schema-and-permissions 'mode=-rw------- owner=root' &&
+       has_exit_zero helper-stdout-after-approval &&
        has_all helper-stdout-after-approval '"schemaVersion":1' '"event":"bagModeHelperLedgerSample"'; then
-        row root-ledger-schema-and-permissions review-needed evidence/root-ledger-schema-and-permissions.txt "root 0600 ledger permissions plus mirrored schema sample captured; content read may be permission denied by design"
+        if [[ "$ROOT_LEDGER_REVIEWED" == true ]]; then
+            row root-ledger-schema-and-permissions promote-candidate evidence/root-ledger-schema-and-permissions.txt "reviewed root 0600 ledger permissions and mirrored schema sample"
+        else
+            row root-ledger-schema-and-permissions review-needed evidence/root-ledger-schema-and-permissions.txt "root 0600 ledger permissions plus mirrored schema sample captured; content read may be permission denied by design"
+        fi
     else
         row root-ledger-schema-and-permissions keep-todo "" "missing root ledger permissions or mirrored ledger schema sample"
     fi
 
     if has_all root-ledger-ownership-sample 'mode=-rw------- owner=root' &&
+       has_exit_zero helper-stdout-after-approval &&
        has_all helper-stdout-after-approval '"ownerTokenHash"' '"helperGeneration"'; then
-        row root-ledger-ownership-sample review-needed evidence/root-ledger-ownership-sample.txt "root-owned ledger path and mirrored ownership fields captured; content read may be permission denied by design"
+        if [[ "$ROOT_LEDGER_REVIEWED" == true ]]; then
+            row root-ledger-ownership-sample promote-candidate evidence/root-ledger-ownership-sample.txt "reviewed root-owned ledger path and mirrored ownership fields"
+        else
+            row root-ledger-ownership-sample review-needed evidence/root-ledger-ownership-sample.txt "root-owned ledger path and mirrored ownership fields captured; content read may be permission denied by design"
+        fi
     else
         row root-ledger-ownership-sample keep-todo "" "missing root ledger ownership mode or mirrored ownership fields"
     fi
