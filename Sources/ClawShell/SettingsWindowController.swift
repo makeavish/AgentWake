@@ -12,11 +12,23 @@ final class SettingsWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
         window.tabbingMode = .disallowed
         super.init(window: window)
+        window.delegate = self
+    }
+
+    override func close() {
+        super.close()
+        NSApp.setActivationPolicy(.accessory)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         nil
+    }
+}
+
+extension SettingsWindowController: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
     }
 }
 
@@ -94,5 +106,6 @@ private final class SettingsViewController: NSViewController {
 
     @objc private func closeWindow() {
         view.window?.close()
+        NSApp.setActivationPolicy(.accessory)
     }
 }

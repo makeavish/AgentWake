@@ -89,9 +89,11 @@ scripts/app-ui-smoke.sh \
   --output-dir .build/app-ui-smoke/local-$(date -u +%Y%m%dT%H%M%SZ)
 ```
 
-The smoke opens the staged app bundle, verifies the CLI can reach it, and
-captures the `ClawShell` status item from the accessibility tree. This is still
-a local UI smoke, not a substitute for a human visual pass on the target display
+The smoke opens the staged app bundle, verifies the CLI can reach it, captures
+the `ClawShell` status item and menu copy from the accessibility tree, presses
+the `Settings...` menu item, and verifies that CoreGraphics reports an onscreen
+`ClawShell Settings` window for the staged app process. This is still a local UI
+smoke, not a substitute for a human visual pass on the target display
 configuration.
 
 For repeatable local evidence of app quit/relaunch, SIGTERM/relaunch, and

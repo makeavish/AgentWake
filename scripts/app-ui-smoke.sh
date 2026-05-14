@@ -9,8 +9,9 @@ usage() {
 Usage: scripts/app-ui-smoke.sh --output-dir DIR
 
 Builds and launches the staged ClawShell app bundle, then captures local
-accessibility evidence for the menu bar item. This is a live UI smoke: it opens
-ClawShell and may require Accessibility permission for System Events.
+accessibility evidence for the menu bar item and Settings flow. This is a live
+UI smoke: it opens ClawShell and may require Accessibility permission for System
+Events.
 EOF
 }
 
@@ -156,6 +157,8 @@ tell application "System Events"
             set outputLines to outputLines & {"visible=" & (visible as text)}
             set outputLines to outputLines & {"menuBarCount=" & ((count of menu bars) as text)}
             set statusItemFound to false
+            set settingsMenuItemFound to false
+            set settingsMenuPressed to false
             repeat with menuBarRef in menu bars
                 repeat with itemRef in menu bar items of menuBarRef
                     set itemName to ""
@@ -170,10 +173,28 @@ tell application "System Events"
                         set statusItemFound to true
                         set outputLines to outputLines & {"statusItemName=" & itemName}
                         set outputLines to outputLines & {"statusItemDescription=" & itemDescription}
+                        perform action "AXPress" of itemRef
+                        delay 0.3
+                        repeat with menuItemRef in menu items of menu 1 of itemRef
+                            set menuItemName to ""
+                            try
+                                set menuItemName to name of menuItemRef as text
+                            end try
+                            if menuItemName is not "" and menuItemName is not "missing value" then
+                                set outputLines to outputLines & {"menuItem=" & menuItemName}
+                            end if
+                            if menuItemName is "Settings..." then
+                                set settingsMenuItemFound to true
+                                perform action "AXPress" of menuItemRef
+                                set settingsMenuPressed to true
+                            end if
+                        end repeat
                     end if
                 end repeat
             end repeat
             set outputLines to outputLines & {"statusItemFound=" & (statusItemFound as text)}
+            set outputLines to outputLines & {"settingsMenuItemFound=" & (settingsMenuItemFound as text)}
+            set outputLines to outputLines & {"settingsMenuPressed=" & (settingsMenuPressed as text)}
         end tell
     end if
 end tell
@@ -193,6 +214,56 @@ if [[ "$ui_exit" != "0" ]]; then
     exit 1
 fi
 
+settings_window_output="$(mktemp "$EVIDENCE_DIR/.settings-window.XXXXXX")"
+if CLAWSHELL_EXPECTED_PID="$expected_pid" swift - >"$settings_window_output" 2>&1 <<'SWIFT'
+import CoreGraphics
+import Foundation
+
+let expectedPID = Int(ProcessInfo.processInfo.environment["CLAWSHELL_EXPECTED_PID"] ?? "") ?? -1
+var settingsWindowFound = false
+
+if let windowInfo = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] {
+    for info in windowInfo {
+        let ownerPID = info[kCGWindowOwnerPID as String] as? Int ?? -1
+        guard ownerPID == expectedPID else {
+            continue
+        }
+
+        let ownerName = info[kCGWindowOwnerName as String] as? String ?? ""
+        let windowName = info[kCGWindowName as String] as? String ?? ""
+        let layer = info[kCGWindowLayer as String] as? Int ?? -1
+        let isOnscreen = (info[kCGWindowIsOnscreen as String] as? Int ?? 0) == 1
+        let bounds = info[kCGWindowBounds as String] as? [String: Any] ?? [:]
+        let width = bounds["Width"] as? Double ?? 0
+        let height = bounds["Height"] as? Double ?? 0
+        print("windowOwnerPID=\(ownerPID)")
+        print("windowOwnerName=\(ownerName)")
+        print("windowName=\(windowName)")
+        print("windowLayer=\(layer)")
+        print("windowIsOnscreen=\(isOnscreen)")
+        print("windowBounds=\(bounds)")
+
+        if windowName == "ClawShell Settings" && layer == 0 && isOnscreen && width > 0 && height > 0 {
+            settingsWindowFound = true
+        }
+    }
+}
+
+print("settingsWindowFound=\(settingsWindowFound)")
+SWIFT
+then
+    settings_window_exit=0
+else
+    settings_window_exit=$?
+fi
+redact_metadata <"$settings_window_output" >"$EVIDENCE_DIR/settings-window.txt"
+rm -f "$settings_window_output"
+printf 'exitCode=%s\n' "$settings_window_exit" >"$EVIDENCE_DIR/settings-window.status"
+if [[ "$settings_window_exit" != "0" ]]; then
+    echo "ClawShell Settings window capture failed; inspect $EVIDENCE_DIR/settings-window.txt" >&2
+    exit 1
+fi
+
 status_item_found=false
 if grep -q '^statusItemFound=true$' "$EVIDENCE_DIR/accessibility-menu-bar.txt" &&
    grep -q "^unixID=$expected_pid$" "$EVIDENCE_DIR/accessibility-menu-bar.txt" &&
@@ -201,13 +272,33 @@ if grep -q '^statusItemFound=true$' "$EVIDENCE_DIR/accessibility-menu-bar.txt" &
     status_item_found=true
 fi
 
+bag_mode_copy_found=false
+if grep -q '^menuItem=Bag Mode$' "$EVIDENCE_DIR/accessibility-menu-bar.txt"; then
+    bag_mode_copy_found=true
+fi
+
+settings_menu_item_found=false
+if grep -q '^settingsMenuItemFound=true$' "$EVIDENCE_DIR/accessibility-menu-bar.txt" &&
+   grep -q '^settingsMenuPressed=true$' "$EVIDENCE_DIR/accessibility-menu-bar.txt"; then
+    settings_menu_item_found=true
+fi
+
+settings_window_found=false
+if grep -q '^settingsWindowFound=true$' "$EVIDENCE_DIR/settings-window.txt"; then
+    settings_window_found=true
+fi
+
 cli_reachable=false
 if grep -q '^ClawShell ' "$EVIDENCE_DIR/cli-status.txt"; then
     cli_reachable=true
 fi
 
 result="pass"
-if [[ "$status_item_found" != true || "$cli_reachable" != true ]]; then
+if [[ "$status_item_found" != true ||
+      "$bag_mode_copy_found" != true ||
+      "$settings_menu_item_found" != true ||
+      "$settings_window_found" != true ||
+      "$cli_reachable" != true ]]; then
     result="fail"
 fi
 
@@ -218,17 +309,22 @@ launchVerification=pass
 expectedPID=$expected_pid
 cliReachable=$cli_reachable
 accessibilityStatusItemFound=$status_item_found
+bagModeMenuCopyFound=$bag_mode_copy_found
+settingsMenuItemPressed=$settings_menu_item_found
+settingsWindowFound=$settings_window_found
 result=$result
 EOF
 redact_metadata <"$OUTPUT_DIR/validation-config.txt" >"$OUTPUT_DIR/validation-config.redacted"
 mv "$OUTPUT_DIR/validation-config.redacted" "$OUTPUT_DIR/validation-config.txt"
 
-cat >"$OUTPUT_DIR/README.md" <<EOF
+cat >"$OUTPUT_DIR/README.md" <<'EOF'
 # App UI Smoke
 
 This package captures live local evidence that the staged ClawShell app bundle
 launches, the CLI can reach it, and macOS Accessibility exposes a ClawShell menu
-bar item.
+bar item. It also opens the menu bar Settings item and verifies that CoreGraphics
+reports an onscreen, non-empty `ClawShell Settings` window for the staged app
+process.
 
 Evidence files:
 
@@ -236,10 +332,13 @@ Evidence files:
 - \`evidence/staged-process.txt\`
 - \`evidence/cli-status.txt\`
 - \`evidence/accessibility-menu-bar.txt\`
+- \`evidence/settings-window.txt\`
 
 This smoke does not prove a human can visually see the menu bar item on every
 display configuration. It proves the app bundle process is running and the menu
-bar item exists in the macOS accessibility tree.
+bar item exists in the macOS accessibility tree, and that the Settings window is
+present and onscreen in the macOS window list after selecting the Settings menu
+item.
 EOF
 
 if [[ "$result" != "pass" ]]; then

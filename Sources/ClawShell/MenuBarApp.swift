@@ -2,7 +2,7 @@ import AppKit
 import ClawShellCore
 
 @MainActor
-final class MenuBarApp {
+final class MenuBarApp: NSObject {
     private let services: ClawShellServices
     private let statusItem: NSStatusItem
     private let settingsWindowController: SettingsWindowController
@@ -18,6 +18,7 @@ final class MenuBarApp {
         self.statusItem = statusItem
         self.settingsWindowController = settingsWindowController
         self.currentState = initialState
+        super.init()
     }
 
     func start() {
@@ -81,6 +82,7 @@ final class MenuBarApp {
     }
 
     @objc private func openSettings() {
+        NSApp.setActivationPolicy(.regular)
         settingsWindowController.showWindow(nil)
         settingsWindowController.window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
