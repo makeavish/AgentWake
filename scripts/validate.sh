@@ -5640,6 +5640,75 @@ for helper_cli_proof_symlink_path in "$helper_cli_proof_symlink" "$helper_cli_pr
     fi
 done
 
+echo "==> helper service prototype review summary smoke"
+helper_review_summary="$bag_mode_smoke_dir/helper-review-summary.tsv"
+scripts/helper-service-prototype-review-summary.sh \
+    --capture-review "$helper_prototype_review_confirmed" \
+    --fixed-command-review "$helper_fixed_command_report" \
+    --update-review "$helper_update_review_report" \
+    --cli-proof "$helper_cli_proof_dir" \
+    --output "$helper_review_summary"
+if [[ "$(tail -n +2 "$helper_review_summary" | wc -l | tr -d ' ')" != "30" ]]; then
+    echo "Helper review summary did not report every required and optional verifier row" >&2
+    cat "$helper_review_summary" >&2
+    exit 1
+fi
+for ready_row in \
+    admin-approval-or-password-flow \
+    fixed-command-api \
+    helper-update-old-inactive \
+    helper-update-ledger-compatibility \
+    cli-helper-status-repair-uninstall
+do
+    if ! awk -F '\t' -v row="$ready_row" '$1 == row && $2 == "ready" { found = 1 } END { exit !found }' "$helper_review_summary"; then
+        echo "Helper review summary did not mark expected row ready: $ready_row" >&2
+        cat "$helper_review_summary" >&2
+        exit 1
+    fi
+done
+if ! awk -F '\t' '$1 == "helper-uninstall-state-cleanup" && $2 == "missing" { found = 1 } END { exit !found }' "$helper_review_summary"; then
+    echo "Helper review summary over-promoted helper-owned Bag Mode state cleanup" >&2
+    cat "$helper_review_summary" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "helper-uninstall-state-cleanup" && $4 == "" && $5 ~ /^unregister cleanup is not/ { found = 1 } END { exit !found }' "$helper_review_summary"; then
+    echo "Helper review summary shifted an empty evidencePath into the note column" >&2
+    cat "$helper_review_summary" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "fixed-command-api" && $4 == "" && $5 ~ /^all fixed commands have/ { found = 1 } END { exit !found }' "$helper_review_summary"; then
+    echo "Helper review summary lost the fixed-command aggregate note or empty evidencePath" >&2
+    cat "$helper_review_summary" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "homebrew-cask-semantics" && $2 == "not-applicable" { found = 1 } END { exit !found }' "$helper_review_summary"; then
+    echo "Helper review summary did not retain optional not-applicable row" >&2
+    cat "$helper_review_summary" >&2
+    exit 1
+fi
+helper_review_summary_unconfirmed="$bag_mode_smoke_dir/helper-review-summary-unconfirmed.tsv"
+scripts/helper-service-prototype-review-summary.sh \
+    --capture-review "$helper_prototype_review_report" \
+    --output "$helper_review_summary_unconfirmed"
+if ! awk -F '\t' '$1 == "admin-approval-or-password-flow" && $2 == "needs-review" { found = 1 } END { exit !found }' "$helper_review_summary_unconfirmed"; then
+    echo "Helper review summary did not preserve needs-review approval state" >&2
+    cat "$helper_review_summary_unconfirmed" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "fixed-command-api" && $2 == "missing" { found = 1 } END { exit !found }' "$helper_review_summary_unconfirmed"; then
+    echo "Helper review summary should keep fixed-command-api missing without its aggregate report" >&2
+    cat "$helper_review_summary_unconfirmed" >&2
+    exit 1
+fi
+if scripts/helper-service-prototype-review-summary.sh >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Helper review summary accepted a run without inputs" >&2
+    exit 1
+fi
+if ! grep -q "Provide at least one review report or CLI proof artifact" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
 helper_smappservice_file="$bag_mode_smoke_dir/helper-smappservice-file"
 touch "$helper_smappservice_file"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_file" >/dev/null 2>"$bag_mode_smoke_error"; then

@@ -723,6 +723,25 @@ Required manifest `checkId` rows:
 - `launchctl-status`
 - `log-evidence`
 
+To keep the remaining #27 gap auditable after running the advisory review
+scripts, consolidate their results with:
+
+```bash
+scripts/helper-service-prototype-review-summary.sh \
+  --capture-review .build/helper-service-prototype/smappservice-reboot-20260513T134512Z/review-candidates-reviewed.tsv \
+  --fixed-command-review .build/helper-service-prototype/fixed-command-review-latest.tsv \
+  --update-review .build/helper-service-prototype/helper-update-review-hupdate20260514042913.tsv \
+  --update-review .build/helper-service-prototype/helper-update-review-hupdate20260514042913-reinstall.tsv \
+  --cli-proof .build/helper-service-prototype/cli-outcome-proof-local \
+  --output .build/helper-service-prototype/review-summary-current.tsv
+```
+
+The summary emits one row for every required and optional verifier row with
+`ready`, `needs-review`, `missing`, or `not-applicable` status. It is
+intentionally non-mutating and does not promote `prototype-manifest.tsv` or
+`manual-result.md`; use it to decide the next evidence capture, not as proof by
+itself.
+
 Optional manifest `checkId` rows:
 
 - `smappservice-rejection` when `helperInstallPath=launchdaemon-fallback`;

@@ -485,6 +485,24 @@ both generations emit mirrored ledger samples with the same owner token hash.
 If same-label `register()` leaves `launchctl` pointing at the old artifact, or
 an unregister/register replacement reaches the new path but fails to spawn, keep
 the update rows as `keep-todo`.
+
+To combine the reviewed capture, fixed-command, update, and CLI proof reports
+into one gap table without editing any evidence package, run:
+
+```sh
+scripts/helper-service-prototype-review-summary.sh \
+  --capture-review .build/helper-service-prototype/smappservice-reboot-20260513T134512Z/review-candidates-reviewed.tsv \
+  --fixed-command-review .build/helper-service-prototype/fixed-command-review-latest.tsv \
+  --update-review .build/helper-service-prototype/helper-update-review-hupdate20260514042913.tsv \
+  --update-review .build/helper-service-prototype/helper-update-review-hupdate20260514042913-reinstall.tsv \
+  --cli-proof .build/helper-service-prototype/cli-outcome-proof-local \
+  --output .build/helper-service-prototype/review-summary-current.tsv
+```
+
+The summary marks rows as `ready`, `needs-review`, `missing`, or
+`not-applicable`. It is a tracker/gap report only; it never mutates
+`prototype-manifest.tsv` or `manual-result.md`, and `missing` rows still require
+new lifecycle evidence before #27 can close.
 The config records `rootLedgerPath=runtime/helper-ledger.jsonl`, and the
 LaunchDaemon passes the resolved absolute artifact path. The post-approval
 capture records ledger permissions and contents when readable without
