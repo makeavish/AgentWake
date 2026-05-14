@@ -262,6 +262,20 @@ closed-bag coverage, fail-closed behavior, or provider reliability.
 
 Thermal cutoff and fail-closed behavior are tested with mocked provider inputs through `BagModeSafetyPolicy`. These tests cover warning, cutoff, stale, unavailable, permission-denied, parse-failed, helper-crashed, unsupported-hardware, timeout, coverage-insufficient, missing/invalid battery, battery floor, and hysteresis transitions without intentionally heating hardware.
 
+To generate an attachable fail-closed policy artifact for #120:
+
+```sh
+scripts/temperature-provider-fail-closed-proof.sh \
+  --output-dir .build/temperature-provider-fail-closed-proof/local-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+The artifact writes `validation-config.txt`, `fail-closed-cases.tsv`, and
+`summary.md`. It proves the mocked safety-policy contract only:
+unsupported/stale/malformed/timed-out/insufficient-coverage provider states and
+missing/invalid battery states block arming or release Bag Mode if already
+armed. It is not helper-owned provider freshness, cadence, closed-bag hardware
+coverage, or numeric scale proof.
+
 Use the helper provider proof verifier before attaching or summarizing provider
 evidence in final app E2E issue #120:
 
