@@ -560,6 +560,52 @@ if scripts/display-topology-proof.sh \
     exit 1
 fi
 
+echo "==> app clean-install smoke guard"
+scripts/app-clean-install-smoke.sh --help >/dev/null
+if ! grep -q 'not a Homebrew cask, package installer, upgrade, uninstall' scripts/app-clean-install-smoke.sh; then
+    echo "App clean-install smoke boundary must say it is not cask/package lifecycle evidence" >&2
+    exit 1
+fi
+if ! grep -q 'cleanupSucceeded=' scripts/app-clean-install-smoke.sh; then
+    echo "App clean-install smoke must make cleanup part of the evidence contract" >&2
+    exit 1
+fi
+for required_app_clean_install_contract in \
+    'require_no_other_clawshell_processes' \
+    'CLAWSHELL_EXPECTED_PID' \
+    'installedProcessCommand' \
+    'matchingInstalledProcessCount=' \
+    'accessibilityStatusItemFound='
+do
+    if ! grep -q "$required_app_clean_install_contract" scripts/app-clean-install-smoke.sh; then
+        echo "App clean-install smoke missing static contract: $required_app_clean_install_contract" >&2
+        exit 1
+    fi
+done
+app_clean_install_file="$bag_mode_smoke_dir/app-clean-install-file"
+touch "$app_clean_install_file"
+if scripts/app-clean-install-smoke.sh --output-dir "$app_clean_install_file" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "App clean-install smoke accepted an output path that is not a directory" >&2
+    exit 1
+fi
+app_clean_install_dirty="$bag_mode_smoke_dir/app-clean-install-dirty"
+mkdir -p "$app_clean_install_dirty"
+touch "$app_clean_install_dirty/unexpected.txt"
+if scripts/app-clean-install-smoke.sh --output-dir "$app_clean_install_dirty" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "App clean-install smoke accepted dirty output directory" >&2
+    exit 1
+fi
+app_clean_install_link="$bag_mode_smoke_dir/app-clean-install-link"
+ln -s "$bag_mode_smoke_dir/display-topology-proof" "$app_clean_install_link"
+if scripts/app-clean-install-smoke.sh --output-dir "$app_clean_install_link" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "App clean-install smoke accepted symlink output directory" >&2
+    exit 1
+fi
+if scripts/app-clean-install-smoke.sh --output-dir "$app_clean_install_link/" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "App clean-install smoke accepted symlink output directory with trailing slash" >&2
+    exit 1
+fi
+
 echo "==> packaging consent audit smoke"
 packaging_audit_fixture="$bag_mode_smoke_dir/packaging-consent-audit"
 packaging_audit_app="$packaging_audit_fixture/ClawShell.app"

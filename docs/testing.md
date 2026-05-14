@@ -96,6 +96,21 @@ the `Settings...` menu item, and verifies that CoreGraphics reports an onscreen
 smoke, not a substitute for a human visual pass on the target display
 configuration.
 
+For repeatable local evidence that the packaged app launches from a clean
+install copy, run:
+
+```sh
+scripts/app-clean-install-smoke.sh \
+  --output-dir .build/app-clean-install-smoke/local-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+The clean-install smoke builds an isolated app bundle, copies it into an
+`Applications/ClawShell.app` path under the evidence directory, launches that
+copy, verifies the exact installed-copy process, verifies the CLI can reach it,
+and captures the `ClawShell` menu bar item from the accessibility tree. This is
+not a Homebrew cask, package installer, upgrade, uninstall, Gatekeeper,
+notarization, or helper-registration lifecycle proof.
+
 For repeatable local evidence of app quit/relaunch, SIGTERM/relaunch, and
 crash/relaunch behavior, run:
 
