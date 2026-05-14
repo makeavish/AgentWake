@@ -98,6 +98,10 @@ swift build
 echo "==> swift run ClawShellCoreChecks"
 swift run ClawShellCoreChecks
 
+echo "==> safety policy fail-closed proof"
+scripts/temperature-provider-fail-closed-proof.sh \
+    --output-dir .build/temperature-provider-fail-closed-proof/validate-smoke
+
 echo "==> swift run ClawShell --smoke-test"
 swift run ClawShell --smoke-test
 
