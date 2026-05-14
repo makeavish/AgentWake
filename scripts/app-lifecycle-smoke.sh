@@ -19,8 +19,9 @@ usage() {
 Usage: scripts/app-lifecycle-smoke.sh --output-dir DIR
 
 Builds and launches the staged ClawShell app bundle, then captures live local
-evidence for SIGTERM/relaunch and force-kill/relaunch behavior. This opens
-ClawShell and terminates only the staged app process owned by this repository.
+evidence for AppleEvent quit/relaunch, SIGTERM/relaunch, and force-kill/relaunch
+behavior. This opens ClawShell and terminates only the staged app process owned
+by this repository.
 EOF
 }
 
@@ -116,6 +117,10 @@ staged_pids() {
     done < <(pgrep -x ClawShell || true)
 }
 
+clawshell_pids() {
+    pgrep -x ClawShell || true
+}
+
 stop_existing_staged_app() {
     local candidate_pid remaining
 
@@ -168,6 +173,44 @@ signal_staged_pid() {
             return 2
             ;;
     esac
+}
+
+appleevent_quit_staged_pid() {
+    local pid="$1"
+    local label="$2"
+    local command clawshell_processes clawshell_process_count temp_output exit_code
+
+    command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+    case "$command" in
+        "$APP_BINARY"*)
+            ;;
+        *)
+            echo "Refusing AppleEvent quit during $label; PID $pid is not the staged ClawShell process" >&2
+            return 1
+            ;;
+    esac
+
+    clawshell_processes="$(clawshell_pids)"
+    clawshell_process_count="$(printf '%s\n' "$clawshell_processes" | sed '/^$/d' | wc -l | tr -d ' ')"
+    if [[ "$clawshell_process_count" != "1" || "$clawshell_processes" != "$pid" ]]; then
+        {
+            printf 'expectedPID=%s\n' "$pid"
+            printf 'clawshellPIDs=%s\n' "$(printf '%s\n' "$clawshell_processes" | paste -sd ',' -)"
+        } >"$EVIDENCE_DIR/$label-appleevent-quit-preflight.txt"
+        echo "Refusing AppleEvent quit during $label; expected the staged app to be the only ClawShell process" >&2
+        return 1
+    fi
+
+    temp_output="$(mktemp "$EVIDENCE_DIR/.$label-appleevent-quit.XXXXXX")"
+    if /usr/bin/osascript -e "tell application id \"$BUNDLE_ID\" to quit" >"$temp_output" 2>&1; then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+    redact_metadata <"$temp_output" >"$EVIDENCE_DIR/$label-appleevent-quit.txt"
+    rm -f "$temp_output"
+    printf 'exitCode=%s\n' "$exit_code" >"$EVIDENCE_DIR/$label-appleevent-quit.status"
+    return "$exit_code"
 }
 
 single_staged_pid() {
@@ -302,7 +345,16 @@ launch_staged_app "initial-launch"
 expect_cli_running "initial-cli-status"
 
 initial_pid="$(cat "$EVIDENCE_DIR/initial-launch.pid")"
-signal_staged_pid "$initial_pid" TERM "sigterm stop"
+appleevent_quit_staged_pid "$initial_pid" "appleevent-quit"
+wait_for_staged_process_count 0
+capture_process_snapshot "after-appleevent-quit-processes"
+expect_cli_not_running "after-appleevent-quit-cli-status"
+
+launch_staged_app "relaunch-after-appleevent-quit"
+expect_cli_running "relaunch-after-appleevent-quit-cli-status"
+
+appleevent_relaunch_pid="$(cat "$EVIDENCE_DIR/relaunch-after-appleevent-quit.pid")"
+signal_staged_pid "$appleevent_relaunch_pid" TERM "sigterm stop"
 wait_for_staged_process_count 0
 capture_process_snapshot "after-sigterm-stop-processes"
 expect_cli_not_running "after-sigterm-stop-cli-status"
@@ -325,6 +377,8 @@ cat >"$OUTPUT_DIR/validation-config.txt" <<EOF
 evidenceFormat=app-lifecycle-smoke-v1
 metadataRedacted=true
 initialLaunchPID=$initial_pid
+appleEventQuitObserved=true
+relaunchAfterAppleEventQuitPID=$appleevent_relaunch_pid
 sigtermStopObserved=true
 relaunchAfterSIGTERMStopPID=$relaunch_pid
 crashStopObserved=true
@@ -338,8 +392,9 @@ cat >"$OUTPUT_DIR/README.md" <<'EOF'
 # App Lifecycle Smoke
 
 This package captures live local evidence that the staged ClawShell app bundle
-can launch, stop after SIGTERM, relaunch, tolerate a force-kill, and relaunch
-again while the CLI reachability state follows the process lifecycle.
+can launch, quit through AppleEvent, relaunch, stop after SIGTERM, relaunch,
+tolerate a force-kill, and relaunch again while the CLI reachability state
+follows the process lifecycle.
 
 This smoke only targets the staged app process whose command starts with
 `dist/ClawShell.app/Contents/MacOS/ClawShell`. It does not terminate unrelated

@@ -94,8 +94,8 @@ captures the `ClawShell` status item from the accessibility tree. This is still
 a local UI smoke, not a substitute for a human visual pass on the target display
 configuration.
 
-For repeatable local evidence of app SIGTERM/relaunch and crash/relaunch
-behavior, run:
+For repeatable local evidence of app quit/relaunch, SIGTERM/relaunch, and
+crash/relaunch behavior, run:
 
 ```sh
 scripts/app-lifecycle-smoke.sh \
@@ -104,9 +104,10 @@ scripts/app-lifecycle-smoke.sh \
 
 The lifecycle smoke targets only the staged `dist/ClawShell.app` process for
 this repository. It verifies CLI reachability while running, verifies CLI
-not-running behavior after SIGTERM and a force-kill, and verifies the staged
-app can relaunch after both paths. It does not prove AppleEvent/menu Quit, does
-not reboot the machine, and does not exercise Bag Mode while armed.
+not-running behavior after AppleEvent quit, SIGTERM, and a force-kill, and
+verifies the staged app can relaunch after each path. The AppleEvent quit leg
+requires the staged app to be the only `ClawShell` process before sending the
+quit event. It does not reboot the machine or exercise Bag Mode while armed.
 
 ## Packaging Consent Audit
 
