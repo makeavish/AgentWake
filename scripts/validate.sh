@@ -4955,6 +4955,131 @@ if ! grep -q "missing evidence directory" "$bag_mode_smoke_error"; then
     exit 1
 fi
 
+echo "==> helper service prototype fixed-command review smoke"
+helper_fixed_command_review_root="$bag_mode_smoke_dir/helper-fixed-command-review"
+mkdir -p "$helper_fixed_command_review_root"
+write_fixed_command_artifact() {
+    local command="$1"
+    local artifact="$helper_fixed_command_review_root/$command"
+    mkdir -p "$artifact/evidence"
+    cat >"$artifact/validation-config.txt" <<EOF
+evidenceFormat=helper-prototype-v1
+daemonCommand=$command
+postApprovalCaptureAttempted=true
+unregisterCaptureAttempted=true
+EOF
+    cat >"$artifact/evidence/helper-stdout-after-approval.txt" <<EOF
+$ helper stdout $command
+uid=0
+euid=0
+commandJson="$command"
+allowed=true
+effect=dry-run
+{"schemaVersion":1,"event":"bagModeHelperLedgerSample","command":"$command","allowed":true,"effect":"dry-run"}
+EOF
+    printf 'exitCode=0\n' >"$artifact/evidence/helper-stdout-after-approval.status"
+    cat >"$artifact/evidence/helper-status-after-approval.txt" <<'EOF'
+$ helper status
+statusBeforeRaw=1
+statusAfterRaw=1
+EOF
+    printf 'exitCode=0\n' >"$artifact/evidence/helper-status-after-approval.status"
+    cat >"$artifact/evidence/launchctl-status.txt" <<'EOF'
+$ launchctl print
+managed_by = com.apple.xpc.ServiceManagement
+runs = 1
+last exit code = 0
+EOF
+    printf 'exitCode=0\n' >"$artifact/evidence/launchctl-status.status"
+    cat >"$artifact/evidence/helper-uninstall.txt" <<'EOF'
+$ unregister
+statusBeforeRaw=1
+unregisterResult=success
+statusAfterRaw=0
+EOF
+    printf 'exitCode=0\n' >"$artifact/evidence/helper-uninstall.status"
+    printf 'Could not find service "com.example.Helper" in domain for system\n' >"$artifact/evidence/launchctl-status-after-unregister.txt"
+}
+for fixed_command in status enableBagMode disableBagMode repair uninstall; do
+    write_fixed_command_artifact "$fixed_command"
+done
+helper_fixed_command_report="$helper_fixed_command_review_root/fixed-command-review.tsv"
+scripts/helper-service-prototype-review-fixed-commands.sh \
+    --command-artifact status="$helper_fixed_command_review_root/status" \
+    --command-artifact enableBagMode="$helper_fixed_command_review_root/enableBagMode" \
+    --command-artifact disableBagMode="$helper_fixed_command_review_root/disableBagMode" \
+    --command-artifact repair="$helper_fixed_command_review_root/repair" \
+    --command-artifact uninstall="$helper_fixed_command_review_root/uninstall" \
+    --output "$helper_fixed_command_report"
+if [[ "$(tail -n +2 "$helper_fixed_command_report" | wc -l | tr -d ' ')" != "6" ]]; then
+    echo "Fixed-command review did not report five commands plus aggregate row" >&2
+    cat "$helper_fixed_command_report" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "fixed-command-api" && $2 == "promote-candidate" { found = 1 } END { exit !found }' "$helper_fixed_command_report"; then
+    echo "Fixed-command review did not promote the aggregate row for complete command evidence" >&2
+    cat "$helper_fixed_command_report" >&2
+    exit 1
+fi
+helper_fixed_command_bad="$bag_mode_smoke_dir/helper-fixed-command-review-bad"
+cp -R "$helper_fixed_command_review_root" "$helper_fixed_command_bad"
+sed -i '' 's/commandJson="repair"/commandJson="status"/' "$helper_fixed_command_bad/repair/evidence/helper-stdout-after-approval.txt"
+scripts/helper-service-prototype-review-fixed-commands.sh \
+    --command-artifact status="$helper_fixed_command_bad/status" \
+    --command-artifact enableBagMode="$helper_fixed_command_bad/enableBagMode" \
+    --command-artifact disableBagMode="$helper_fixed_command_bad/disableBagMode" \
+    --command-artifact repair="$helper_fixed_command_bad/repair" \
+    --command-artifact uninstall="$helper_fixed_command_bad/uninstall" \
+    --output "$helper_fixed_command_bad/fixed-command-review.tsv"
+if ! awk -F '\t' '$1 == "repair" && $2 == "keep-todo" { found = 1 } END { exit !found }' "$helper_fixed_command_bad/fixed-command-review.tsv"; then
+    echo "Fixed-command review over-promoted a commandJson mismatch" >&2
+    cat "$helper_fixed_command_bad/fixed-command-review.tsv" >&2
+    exit 1
+fi
+if ! awk -F '\t' '$1 == "fixed-command-api" && $2 == "keep-todo" { found = 1 } END { exit !found }' "$helper_fixed_command_bad/fixed-command-review.tsv"; then
+    echo "Fixed-command review over-promoted the aggregate row with an incomplete command" >&2
+    cat "$helper_fixed_command_bad/fixed-command-review.tsv" >&2
+    exit 1
+fi
+helper_fixed_command_bad_launchctl="$bag_mode_smoke_dir/helper-fixed-command-review-bad-launchctl"
+cp -R "$helper_fixed_command_review_root" "$helper_fixed_command_bad_launchctl"
+rm "$helper_fixed_command_bad_launchctl/enableBagMode/evidence/launchctl-status.txt"
+scripts/helper-service-prototype-review-fixed-commands.sh \
+    --command-artifact status="$helper_fixed_command_bad_launchctl/status" \
+    --command-artifact enableBagMode="$helper_fixed_command_bad_launchctl/enableBagMode" \
+    --command-artifact disableBagMode="$helper_fixed_command_bad_launchctl/disableBagMode" \
+    --command-artifact repair="$helper_fixed_command_bad_launchctl/repair" \
+    --command-artifact uninstall="$helper_fixed_command_bad_launchctl/uninstall" \
+    --output "$helper_fixed_command_bad_launchctl/fixed-command-review.tsv"
+if ! awk -F '\t' '$1 == "enableBagMode" && $2 == "keep-todo" { found = 1 } END { exit !found }' "$helper_fixed_command_bad_launchctl/fixed-command-review.tsv"; then
+    echo "Fixed-command review over-promoted missing launchctl evidence" >&2
+    cat "$helper_fixed_command_bad_launchctl/fixed-command-review.tsv" >&2
+    exit 1
+fi
+helper_fixed_command_bad_uninstall="$bag_mode_smoke_dir/helper-fixed-command-review-bad-uninstall"
+cp -R "$helper_fixed_command_review_root" "$helper_fixed_command_bad_uninstall"
+printf 'exitCode=1\n' >"$helper_fixed_command_bad_uninstall/uninstall/evidence/helper-uninstall.status"
+scripts/helper-service-prototype-review-fixed-commands.sh \
+    --command-artifact status="$helper_fixed_command_bad_uninstall/status" \
+    --command-artifact enableBagMode="$helper_fixed_command_bad_uninstall/enableBagMode" \
+    --command-artifact disableBagMode="$helper_fixed_command_bad_uninstall/disableBagMode" \
+    --command-artifact repair="$helper_fixed_command_bad_uninstall/repair" \
+    --command-artifact uninstall="$helper_fixed_command_bad_uninstall/uninstall" \
+    --output "$helper_fixed_command_bad_uninstall/fixed-command-review.tsv"
+if ! awk -F '\t' '$1 == "uninstall" && $2 == "keep-todo" { found = 1 } END { exit !found }' "$helper_fixed_command_bad_uninstall/fixed-command-review.tsv"; then
+    echo "Fixed-command review over-promoted failed unregister capture status" >&2
+    cat "$helper_fixed_command_bad_uninstall/fixed-command-review.tsv" >&2
+    exit 1
+fi
+if scripts/helper-service-prototype-review-fixed-commands.sh >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Fixed-command review accepted a run without command mappings" >&2
+    exit 1
+fi
+if ! grep -q "Provide at least one --command-artifact" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+
 helper_smappservice_file="$bag_mode_smoke_dir/helper-smappservice-file"
 touch "$helper_smappservice_file"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_file" >/dev/null 2>"$bag_mode_smoke_error"; then

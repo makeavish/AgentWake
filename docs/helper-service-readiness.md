@@ -330,6 +330,23 @@ command set:
 | `repair` | `.build/helper-service-prototype/smappservice-command-repair-approved-20260513T060213Z` | status raw `1`, launchd `runs = 1`, exit code `0`, root stdout `commandJson="repair"`, mirrored ledger JSON, unregister to raw `0` / service-not-found |
 | `uninstall` | `.build/helper-service-prototype/smappservice-command-uninstall-approved-20260513T060308Z` | status raw `1`, launchd `runs = 1`, exit code `0`, root stdout `commandJson="uninstall"`, mirrored ledger JSON, unregister to raw `0` / service-not-found |
 
+The advisory fixed-command review helper consolidates those separate command
+artifacts without mutating any verifier package:
+
+```bash
+scripts/helper-service-prototype-review-fixed-commands.sh \
+  --command-artifact status=.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z \
+  --command-artifact enableBagMode=.build/helper-service-prototype/smappservice-command-enableBagMode-pending-20260513T051953Z \
+  --command-artifact disableBagMode=.build/helper-service-prototype/smappservice-command-disableBagMode-approved-20260513T060113Z \
+  --command-artifact repair=.build/helper-service-prototype/smappservice-command-repair-approved-20260513T060213Z \
+  --command-artifact uninstall=.build/helper-service-prototype/smappservice-command-uninstall-approved-20260513T060308Z \
+  --output .build/helper-service-prototype/fixed-command-review-$(date -u +%Y%m%dT%H%M%SZ).tsv
+```
+
+It marks the aggregate `fixed-command-api` row as a promotion candidate only
+when all five command artifacts prove matching `daemonCommand`, root dry-run
+stdout, mirrored ledger JSON, unregister success, and service-not-found cleanup.
+
 This still does not prove production Bag Mode state mutation, production
 repair/uninstall behavior, or the admin approval/password UI flow.
 

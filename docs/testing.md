@@ -383,6 +383,24 @@ mirrored `bagModeHelperLedgerSample`, and then unregistered cleanly back to raw
 and dry-run ledger schema evidence only, not as proof of production Bag Mode
 state mutation, production repair/uninstall behavior, or restore conflict
 handling.
+
+To consolidate the reviewed command artifacts into one advisory fixed-command
+report, run:
+
+```sh
+scripts/helper-service-prototype-review-fixed-commands.sh \
+  --command-artifact status=.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z \
+  --command-artifact enableBagMode=.build/helper-service-prototype/smappservice-command-enableBagMode-pending-20260513T051953Z \
+  --command-artifact disableBagMode=.build/helper-service-prototype/smappservice-command-disableBagMode-approved-20260513T060113Z \
+  --command-artifact repair=.build/helper-service-prototype/smappservice-command-repair-approved-20260513T060213Z \
+  --command-artifact uninstall=.build/helper-service-prototype/smappservice-command-uninstall-approved-20260513T060308Z \
+  --output .build/helper-service-prototype/fixed-command-review-$(date -u +%Y%m%dT%H%M%SZ).tsv
+```
+
+The report requires each artifact to have matching `daemonCommand`, successful
+post-approval helper stdout capture, root `uid=0`/`euid=0`, the expected
+`commandJson`, mirrored ledger JSON for that command, successful unregister,
+and service-not-found cleanup evidence. It does not edit any verifier package.
 `ClawShellCoreChecks` and
 `ControlServerTests.controlRouterSurfacesHelperCommandOutcomes` cover the CLI
 helper-command outcome boundary: `clawshell helper status`, `clawshell helper
