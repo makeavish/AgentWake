@@ -471,6 +471,20 @@ This is useful negative evidence: PMU `ioreg` support is explicit in the proof
 harness and can run helper-owned, but the local visible PMU surface does not
 expose a numeric cutoff candidate.
 
+To test the SMC sensor-dispatcher path through the same no-membership helper,
+prepare an artifact with:
+
+```sh
+CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc-dispatcher \
+scripts/temperature-provider-smappservice-proof.sh \
+  --output-dir .build/temperature-provider-proof/ioreg-smc-dispatcher-$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+That mode runs `/usr/sbin/ioreg -r -c AppleSMCSensorDispatcher -l` as
+source-selection evidence only. It must not be treated as #25 proof until an
+approved helper run produces a non-battery numeric cutoff signal plus freshness,
+cadence, timeout, closed-bag coverage, and fail-closed evidence.
+
 The thermal command artifact
 `.build/temperature-provider-proof/thermal-levels-smappservice-20260513T173804Z`
 adds `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=thermal-levels`, which runs

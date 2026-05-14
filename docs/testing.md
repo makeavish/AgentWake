@@ -256,6 +256,9 @@ Set `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu` to run the PMU inventory
 candidate `/usr/sbin/ioreg -r -c AppleARMPMUTempSensor -l`; current local
 evidence can run this source from the approved helper as root, but still sees
 PMU sensor names without numeric reading candidates.
+Set `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc-dispatcher` to run the SMC
+sensor-dispatcher inventory candidate
+`/usr/sbin/ioreg -r -c AppleSMCSensorDispatcher -l` from the approved helper.
 Set `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=thermal-levels` to run the root-gated
 `/usr/bin/thermal levels` command from the approved helper as a diagnostic
 source candidate.
