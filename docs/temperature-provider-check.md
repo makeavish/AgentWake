@@ -1,6 +1,6 @@
 # Temperature Provider Check
 
-Check date: May 13, 2026
+Check date: May 14, 2026
 
 Issue: [#7](https://github.com/makeavish/ClawShell/issues/7)
 
@@ -22,6 +22,7 @@ SMAppService provider artifacts:
 - `.build/temperature-provider-proof/ioreg-smc-bounded-smappservice-20260513T071633Z`
 - `.build/temperature-provider-proof/ioreg-pmu-local-20260513T105941Z`
 - `.build/temperature-provider-proof/ioreg-pmu-smappservice-20260513T110017Z`
+- `.build/temperature-provider-proof/ioreg-smc-dispatcher-prepare-20260514T041342Z`
 - `.build/temperature-provider-proof/thermal-levels-smappservice-20260513T173804Z`
 
 Alternate source probe artifacts:
@@ -480,9 +481,30 @@ scripts/temperature-provider-smappservice-proof.sh \
   --output-dir .build/temperature-provider-proof/ioreg-smc-dispatcher-$(date -u +%Y%m%dT%H%M%SZ)
 ```
 
-That mode runs `/usr/sbin/ioreg -r -c AppleSMCSensorDispatcher -l` as
-source-selection evidence only. It must not be treated as #25 proof until an
-approved helper run produces a non-battery numeric cutoff signal plus freshness,
+The approved SMAppService artifact
+`.build/temperature-provider-proof/ioreg-smc-dispatcher-prepare-20260514T041342Z`
+ran that source as root after approval and a 15 second wait:
+
+```text
+providerSource=ioreg-smc-dispatcher
+command=/usr/sbin/ioreg -r -c AppleSMCSensorDispatcher -l
+timeoutSeconds=1
+durationSeconds=1
+timedOut=false
+exitCode=0
+helperOwned=true
+stdoutBytes=1006
+stdoutTruncated=false
+numericTemperatureObserved=false
+numericTemperatureCandidateCount=0
+numericTemperatureAcceptedCount=0
+```
+
+The output exposes `AppleSMCSensorDispatcher`, `AppleSMCSensorDispatcherUserClient`,
+and `IOUserClientCreator = "pid 552, thermalmonitord"`, but no scalar reading.
+Cleanup unregistered the helper and returned status raw `0`. This is useful
+negative helper-owned source evidence only; it must not be treated as #25 proof
+until a source produces a non-battery numeric cutoff signal plus freshness,
 cadence, timeout, closed-bag coverage, and fail-closed evidence.
 
 The thermal command artifact
