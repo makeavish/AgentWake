@@ -276,6 +276,11 @@ generated-helper run completed within the timeout with
 `numericTemperatureCandidateCount=0`, and the approved SMAppService PMU run
 also launched as root with `numericTemperatureCandidateCount=0`.
 
+To test the helper-owned SMC sensor-dispatcher inventory path, create the
+artifact with `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc-dispatcher`.
+That mode runs `/usr/sbin/ioreg -r -c AppleSMCSensorDispatcher -l` from the
+approved helper as source-selection evidence only.
+
 To test the root-gated `thermal` command path, create the artifact with
 `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=thermal-levels`. That mode runs
 `/usr/bin/thermal levels` from the approved helper. Treat it as diagnostic

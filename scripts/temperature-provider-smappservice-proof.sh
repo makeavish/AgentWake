@@ -18,6 +18,7 @@ LaunchDaemon helper that will run one timeout-bounded provider sample when
 registered and approved. The default source is powermetrics; set
 CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc for the diagnostic I/O Registry
 SMC endpoint source, ioreg-pmu for the AppleARMPMUTempSensor inventory
+candidate, ioreg-smc-dispatcher for the AppleSMCSensorDispatcher inventory
 candidate, or thermal-levels for the root-gated thermal levels command.
 
 --register calls SMAppService and can change local helper state. Use it only
@@ -196,9 +197,9 @@ require_provider_source() {
     local name="$1"
     local value="$2"
     case "$value" in
-        powermetrics|ioreg-smc|ioreg-pmu|thermal-levels) ;;
+        powermetrics|ioreg-smc|ioreg-pmu|ioreg-smc-dispatcher|thermal-levels) ;;
         *)
-            echo "$name must be one of: powermetrics, ioreg-smc, ioreg-pmu, thermal-levels" >&2
+            echo "$name must be one of: powermetrics, ioreg-smc, ioreg-pmu, ioreg-smc-dispatcher, thermal-levels" >&2
             exit 64
             ;;
     esac
@@ -245,6 +246,9 @@ if [[ -z "$CASE_ID" ]]; then
             ;;
         ioreg-pmu)
             CASE_ID="apple-silicon-ioreg-pmu-smappservice"
+            ;;
+        ioreg-smc-dispatcher)
+            CASE_ID="apple-silicon-ioreg-smc-dispatcher-smappservice"
             ;;
         thermal-levels)
             CASE_ID="apple-silicon-thermal-levels-smappservice"
@@ -825,6 +829,9 @@ case "ioreg-smc":
 case "ioreg-pmu":
     commandPath = ioregPath
     commandArguments = ["-r", "-c", "AppleARMPMUTempSensor", "-l"]
+case "ioreg-smc-dispatcher":
+    commandPath = ioregPath
+    commandArguments = ["-r", "-c", "AppleSMCSensorDispatcher", "-l"]
 case "thermal-levels":
     commandPath = thermalPath
     commandArguments = ["levels"]
