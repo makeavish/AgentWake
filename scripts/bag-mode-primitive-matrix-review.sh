@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 if [[ -z "${BASH_VERSION:-}" ]]; then
-    echo "This script requires bash. Run it as: bash scripts/bag-mode-primitive-matrix-review.sh ..." >&2
+    echo "This script requires bash. Run it as: bash scripts/closed-lid-primitive-matrix-review.sh ..." >&2
     exit 2
 fi
 set -euo pipefail
@@ -11,9 +11,9 @@ OUTPUT_FILE=""
 
 usage() {
     cat <<'EOF'
-Usage: scripts/bag-mode-primitive-matrix-review.sh --evidence-root DIR [--output PATH]
+Usage: scripts/closed-lid-primitive-matrix-review.sh --evidence-root DIR [--output PATH]
 
-Reviews #29 Bag Mode primitive case artifacts and emits an advisory TSV report
+Reviews #29 Closed-Lid Mode primitive case artifacts and emits an advisory TSV report
 for the known matrix rows. The script never edits matrix-manifest.tsv.
 
 Report columns:

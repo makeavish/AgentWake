@@ -1,4 +1,4 @@
-# Bag Mode Readiness
+# Closed-Lid Mode Readiness
 
 This page preserves the Closed-Lid Mode readiness evidence gathered for issue #7.
 The remaining manual hardware and app-level validation now lives in the single
@@ -13,7 +13,7 @@ context for final app E2E validation in #120:
 | Issue | Current local state | Next operator action |
 |---|---|---|
 | [#29](https://github.com/makeavish/AgentWake/issues/29) primitive matrix | `.build/power-validation/bag-mode-matrix/apple-silicon-ac-internal-20260513T115058Z` is verified Apple Silicon AC/internal evidence, but the operator reported lid-close sleep-block `inconclusive`. `.build/power-validation/bag-mode-matrix/apple-silicon-battery-internal-20260513T162945Z` is verified Apple Silicon battery/internal evidence: the harness applied `/usr/bin/pmset disablesleep 1`, observed `SleepDisabled 1`, rolled back to `0`, and the operator reported closed-lid battery blocking plus clean reopen recovery. The laptop sleeping after rollback is expected normal behavior because `SleepDisabled` was restored to `0`. | Carry remaining primitive/app lifecycle rows into #120: other physically available display states, open/closed paths beyond reopen recovery, app quit/crash, and reboot-held lifecycle evidence. |
-| [#27](https://github.com/makeavish/AgentWake/issues/27) no-membership helper prototype | `.build/helper-service-readiness/recheck-20260512T105510Z` records full Xcode/tooling available, Developer ID Application identities = 0, Developer ID Installer identities = 0, and `signedPrototypeReady=false`. `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z` records a fresh ad-hoc `SMAppService` helper reaching enabled status, launchd `runs = 1`, root helper stdout with `uid=0`/`euid=0`, mirrored `bagModeHelperLedgerSample` JSON, root ledger `0600`, and unregister cleanup to status raw `0` / launchctl service-not-found. Reviewed fixed-command API artifacts now cover approved dry-run dispatch for `status`, `enableBagMode`, `disableBagMode`, `repair`, and `uninstall`; each recorded root execution, emitted mirrored ledger JSON, and unregistered cleanly. `.build/helper-service-prototype/smappservice-reboot-20260513T134512Z` records post-reboot append-capture evidence: the approved helper was still enabled after reboot, launchd was still managing the ServiceManagement daemon, root stdout appeared after reboot with mirrored ledger JSON, and unregister cleanup returned raw `0` / service-not-found. The May 14 helper-update attempt is negative evidence: same-label generation 2 `register()` did not move launchd off the generation 1 binary, while unregister/register replacement moved launchd to generation 2 but failed to spawn with `OS_REASON_CODESIGNING`; cleanup returned raw `0`. Post-approval status, launchctl, stdout-log, unified-log, root-ledger schema/ownership, post-reboot append-capture, and negative update evidence are reviewed for the local dry-run helper boundary, but no artifact is a verifier-complete package. CLI helper status/enable/disable/repair/uninstall command routing is automated as control-socket outcome evidence. Local dry-run failure-case probes are now captured by new prepare artifacts. Developer ID membership is intentionally deferred. | Carry remaining helper lifecycle rows into #120: admin approval/password flow, final manifest/manual promotion, update, production restore conflict behavior, enable/disable/repair/uninstall behavior, failure cases, and helper-owned Bag Mode state cleanup. |
+| [#27](https://github.com/makeavish/AgentWake/issues/27) no-membership helper prototype | `.build/helper-service-readiness/recheck-20260512T105510Z` records full Xcode/tooling available, Developer ID Application identities = 0, Developer ID Installer identities = 0, and `signedPrototypeReady=false`. `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z` records a fresh ad-hoc `SMAppService` helper reaching enabled status, launchd `runs = 1`, root helper stdout with `uid=0`/`euid=0`, mirrored `bagModeHelperLedgerSample` JSON, root ledger `0600`, and unregister cleanup to status raw `0` / launchctl service-not-found. Reviewed fixed-command API artifacts now cover approved dry-run dispatch for `status`, `enableBagMode`, `disableBagMode`, `repair`, and `uninstall`; each recorded root execution, emitted mirrored ledger JSON, and unregistered cleanly. `.build/helper-service-prototype/smappservice-reboot-20260513T134512Z` records post-reboot append-capture evidence: the approved helper was still enabled after reboot, launchd was still managing the ServiceManagement daemon, root stdout appeared after reboot with mirrored ledger JSON, and unregister cleanup returned raw `0` / service-not-found. The May 14 helper-update attempt is negative evidence: same-label generation 2 `register()` did not move launchd off the generation 1 binary, while unregister/register replacement moved launchd to generation 2 but failed to spawn with `OS_REASON_CODESIGNING`; cleanup returned raw `0`. Post-approval status, launchctl, stdout-log, unified-log, root-ledger schema/ownership, post-reboot append-capture, and negative update evidence are reviewed for the local dry-run helper boundary, but no artifact is a verifier-complete package. CLI helper status/enable/disable/repair/uninstall command routing is automated as control-socket outcome evidence. Local dry-run failure-case probes are now captured by new prepare artifacts. Developer ID membership is intentionally deferred. | Carry remaining helper lifecycle rows into #120: admin approval/password flow, final manifest/manual promotion, update, production restore conflict behavior, enable/disable/repair/uninstall behavior, failure cases, and helper-owned Closed-Lid Mode state cleanup. |
 | [#25](https://github.com/makeavish/AgentWake/issues/25) thermal provider proof | The unique no-membership `SMAppService` helper artifacts provide root-runtime evidence after approval, but are not verifier-accepted provider proof. `powermetrics`, `ioreg-smc`, `ioreg-pmu`, `ioreg-smc-dispatcher`, `thermal-levels`, HID, IOHID, and NVMe discovery attempts either produced no accepted non-battery numeric source or only metadata/battery-context values. The new `.build/temperature-provider-proof/ioreport-ans2-smappservice-20260514T052521Z` artifact is the first strong candidate: a bundled native `libIOReport` ANS2/MSP probe ran from the approved helper as root, completed under the 1s timeout, exited `0`, and captured four non-battery numeric temperature-like samples with no truncation. The refreshed `.build/temperature-provider-proof/alt-source-ioreport-unit-field-20260514T075756Z` direct probe records `unitFieldPresent=true`, `unitRaw=0x0`, `unitQuantity=0`, and `ioreportTemperatureScaleVerified=false`, so scale remains unverified. | Carry remaining provider/fail-closed rows into #120: scale validation or feature gate, freshness, cadence, closed-bag coverage, timeout, and fail-closed behavior. |
 
 Readiness harnesses, scaffolds, and verifier success are support evidence only.
@@ -21,14 +21,14 @@ They feed final app E2E validation in #120.
 
 ## Latest #120 Support Evidence
 
-The app still must not claim Closed-Lid Mode or release readiness until #120 is closed,
+The app still must not claim Closed-Lid Mode readiness or enablement until #120 is closed,
 but the following support slices are now covered on `main`:
 
 | Area | Current support evidence | Still open in #120 |
 |---|---|---|
 | App launch and UI | Staged app launch, clean-install copy launch, Accessibility-visible menu bar ownership, Settings window opening, lifecycle relaunch after quit/SIGTERM/SIGKILL, and product copy showing `Closed-Lid Mode unavailable` are covered by PRs #122, #126, #127, #128, #129, #133, and #138. | Human visual confirmation on target display configurations, reboot behavior for the full app, and final release package behavior. |
 | Integrations and helper CLI surface | Codex CLI owned-block recovery, helper command routing, uninstall routing, helper dry-run auth failure probes, and helper/app disagreement gating are covered by PRs #123, #124, #136, and #137. | Installed-helper enable/disable/repair/uninstall behavior, production repair conflicts, helper-owned Closed-Lid Mode cleanup, and final verifier-complete helper package. |
-| Primitive lifecycle | Battery/internal and AC/internal closed-lid reopen recovery passed in final E2E artifacts. Reboot-held, app-quit while held, and app-crash while held passed for Apple Silicon battery/internal open-lid lifecycle artifacts. | External-display/no-external-display rows where physically available, broader hardware coverage, and any final manual release sign-off rows. |
+| Primitive lifecycle | Battery/internal closed-lid reopen recovery passed in final E2E artifacts. AC/internal remains structurally complete but operator-inconclusive for lid-close sleep blocking. Reboot-held, app-quit while held, and app-crash while held passed for Apple Silicon battery/internal open-lid lifecycle artifacts. | External-display/no-external-display rows where physically available, broader hardware coverage, and any final manual release sign-off rows. |
 | Provider and safety gate | Safety policy fail-closed behavior is covered, IOReport remains a candidate but not verifier-complete, and product behavior is now explicitly feature-gated as unavailable until helper/provider validation completes. | Live provider scale, freshness, cadence, closed-bag coverage, timeout behavior, and final provider verifier success if Closed-Lid Mode is to be enabled. |
 | Packaging consent | Static staged-app/repo audit proves no detected silent privileged-helper activation path in the current sources and staged bundle. | Real Homebrew cask/package install, upgrade, uninstall, Gatekeeper/quarantine, and helper-consent lifecycle evidence. |
 
@@ -36,12 +36,12 @@ but the following support slices are now covered on `main`:
 
 `pmset disablesleep` is still only a candidate primitive. Start with a baseline-only capture:
 
-Current artifact: [Bag Mode Primitive Matrix](bag-mode-primitive-matrix.md).
+Current artifact: [Closed-Lid Mode Primitive Matrix](closed-lid-mode-primitive-matrix.md).
 
 PR #22 added the primitive validation harness, but the candidate primitive is not proven across the full app matrix. The first verified real apply artifact is `.build/power-validation/bag-mode-matrix/apple-silicon-ac-internal-20260513T115058Z`: it is structurally complete and inconclusive for the AC/internal/reopen-recovery case. The follow-up `.build/power-validation/bag-mode-matrix/apple-silicon-battery-internal-20260513T162945Z` artifact is structurally complete and passed for the battery/internal/reopen-recovery normal lifecycle case. Remaining primitive/app lifecycle validation is tracked in [#120](https://github.com/makeavish/AgentWake/issues/120).
 
 ```sh
-scripts/bag-mode-primitive-validation.sh --case-id apple-silicon-battery-internal
+scripts/closed-lid-primitive-validation.sh --case-id apple-silicon-battery-internal
 ```
 
 The baseline run does not change power settings. It creates:
@@ -53,7 +53,7 @@ The baseline run does not change power settings. It creates:
 Only run the mutating lid-close window when the target hardware scenario is ready:
 
 ```sh
-sudo scripts/bag-mode-primitive-validation.sh \
+sudo scripts/closed-lid-primitive-validation.sh \
   --case-id apple-silicon-battery-internal \
   --hold-seconds 300 \
   --apply \
@@ -65,7 +65,7 @@ Mutating mode requires root so rollback cannot stall on an expired sudo prompt. 
 If you started with a baseline-only directory, rerun that exact directory:
 
 ```sh
-sudo scripts/bag-mode-primitive-validation.sh \
+sudo scripts/closed-lid-primitive-validation.sh \
   --output-dir .build/power-validation/<baseline-case-dir> \
   --case-id apple-silicon-battery-internal \
   --hold-seconds 300 \
@@ -82,7 +82,7 @@ writes the remaining apply-mode snapshots.
 For reboot-while-held scenarios, use a dedicated evidence directory and run the explicit reboot mode:
 
 ```sh
-sudo scripts/bag-mode-primitive-validation.sh \
+sudo scripts/closed-lid-primitive-validation.sh \
   --case-id apple-silicon-battery-reboot-held \
   --apply \
   --reboot-held \
@@ -119,7 +119,7 @@ Each case must record the exact command applied, rollback command, `pmset -g cus
 
 ## Helper Spike
 
-The helper proof must answer whether Bag Mode can use a local/admin-approved
+The helper proof must answer whether Closed-Lid Mode can use a local/admin-approved
 helper without Apple Developer Program membership. `SMAppService` LaunchDaemon
 is still the preferred first target; the latest ad-hoc no-membership helper
 artifact reached enabled status and bootstrapped as root, so fallback
@@ -219,15 +219,15 @@ Required notes:
 - Helper upgrade mid-hold behavior
 - `agentwake helper status`, `agentwake helper enable`, `agentwake helper disable`, `agentwake helper repair`, `agentwake helper uninstall`, and `agentwake uninstall --remove-helper --remove-integrations` outcomes
 
-Non-Developer-ID public builds may expose Bag Mode only after the local/ad-hoc signed and hash/pairing-pinned helper path passes real validation and the UI labels the local helper trust model clearly. Truly unsigned helper experiments stay development-only.
+Non-Developer-ID public builds may expose Closed-Lid Mode only after the local/ad-hoc signed and hash/pairing-pinned helper path passes real validation and the UI labels the local helper trust model clearly. Truly unsigned helper experiments stay development-only.
 
 ## Temperature Provider Spike
 
-The provider proof must choose a fresh, permission-compatible temperature source for Bag Mode.
+The provider proof must choose a fresh, permission-compatible temperature source for Closed-Lid Mode.
 
 Current artifact: [Temperature Provider Check](temperature-provider-check.md).
 
-The May 12, 2026 non-root source check did not select a production provider. `ProcessInfo.thermalState` remains a supplemental coarse signal, `pmset -g therm` did not provide current numeric temperature evidence, and AppleSmartBattery temperature did not prove closed-bag coverage or freshness. Later no-membership `SMAppService` provider runs proved that an ad-hoc helper can launch as root on this machine. The tested `powermetrics`, bounded `ioreg-smc`, explicit `ioreg-pmu`, `thermal-levels`, `ioreg-smc-dispatcher`, HID, native IOHID, NVMe, and SMC-dispatcher paths did not produce an accepted non-battery numeric cutoff source. The May 14 `ioreport-ans2` SMAppService run did produce helper-owned non-battery numeric ANS2/MSP samples under the 1 second deadline, so it is the lead source candidate, but IOReport scale, freshness, cadence, timeout behavior, and closed-bag coverage remain unproven. The current product behavior is therefore fail-closed and feature-gated: Bag Mode is unavailable in the app until helper lifecycle and live temperature-provider validation are complete. Remaining helper-side provider validation is tracked in [#120](https://github.com/makeavish/AgentWake/issues/120).
+The May 12, 2026 non-root source check did not select a production provider. `ProcessInfo.thermalState` remains a supplemental coarse signal, `pmset -g therm` did not provide current numeric temperature evidence, and AppleSmartBattery temperature did not prove closed-bag coverage or freshness. Later no-membership `SMAppService` provider runs proved that an ad-hoc helper can launch as root on this machine. The tested `powermetrics`, bounded `ioreg-smc`, explicit `ioreg-pmu`, `thermal-levels`, `ioreg-smc-dispatcher`, HID, native IOHID, NVMe, and SMC-dispatcher paths did not produce an accepted non-battery numeric cutoff source. The May 14 `ioreport-ans2` SMAppService run did produce helper-owned non-battery numeric ANS2/MSP samples under the 1 second deadline, so it is the lead source candidate, but IOReport scale, freshness, cadence, timeout behavior, and closed-bag coverage remain unproven. The current product behavior is therefore fail-closed and feature-gated: Closed-Lid Mode is unavailable in the app until helper lifecycle and live temperature-provider validation are complete. Remaining helper-side provider validation is tracked in [#120](https://github.com/makeavish/AgentWake/issues/120).
 
 Before attempting helper/root sampling, run the non-mutating preflight:
 
@@ -385,7 +385,7 @@ Required notes:
 - 1 second command timeout behavior
 - Feasibility of 5 second active sampling and 30 second idle sampling
 - Stale, unavailable, permission-denied, and parse-failed cases
-- Evidence that fail-closed behavior blocks Bag Mode before arming or releases it when armed
+- Evidence that fail-closed behavior blocks Closed-Lid Mode before arming or releases it when armed
 
 Thermal cutoff tests must use mocks or simulated providers. Do not intentionally overheat hardware.
 

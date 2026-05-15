@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 if [[ -z "${BASH_VERSION:-}" ]]; then
-    echo "This script requires bash. Run it as: bash scripts/bag-mode-primitive-matrix-verify.sh ..." >&2
+    echo "This script requires bash. Run it as: bash scripts/closed-lid-primitive-matrix-verify.sh ..." >&2
     exit 2
 fi
 set -euo pipefail
@@ -12,9 +12,9 @@ CASE_DIRS=()
 
 usage() {
     cat <<'EOF'
-Usage: scripts/bag-mode-primitive-matrix-verify.sh [options]
+Usage: scripts/closed-lid-primitive-matrix-verify.sh [options]
 
-Checks Bag Mode primitive evidence directories for the required #29 files and
+Checks Closed-Lid Mode primitive evidence directories for the required #29 files and
 manual-result fields. This verifier does not prove the matrix passed; it only
 fails incomplete or placeholder evidence before it is attached to #29.
 
@@ -25,13 +25,13 @@ Options:
   -h, --help              Show this help
 
 Examples:
-  scripts/bag-mode-primitive-matrix-verify.sh \
+  scripts/closed-lid-primitive-matrix-verify.sh \
     --evidence-root .build/power-validation/bag-mode-matrix
 
-  scripts/bag-mode-primitive-matrix-verify.sh \
+  scripts/closed-lid-primitive-matrix-verify.sh \
     --manifest .build/power-validation/bag-mode-matrix/matrix-manifest.tsv
 
-  scripts/bag-mode-primitive-matrix-verify.sh \
+  scripts/closed-lid-primitive-matrix-verify.sh \
     --case-dir .build/power-validation/bag-mode-matrix/apple-silicon-battery
 EOF
 }
@@ -476,12 +476,12 @@ else
 fi
 
 if [[ "$case_errors" -ne 0 ]]; then
-    echo "Bag Mode primitive matrix verification failed with $case_errors error(s)." >&2
+    echo "Closed-Lid Mode primitive matrix verification failed with $case_errors error(s)." >&2
     exit 1
 fi
 
 if [[ -n "$MANIFEST_FILE" ]]; then
-    echo "Bag Mode primitive matrix manifest verification passed."
+    echo "Closed-Lid Mode primitive matrix manifest verification passed."
 else
-    echo "Bag Mode primitive matrix verification passed for ${#CASE_DIRS[@]} case(s)."
+    echo "Closed-Lid Mode primitive matrix verification passed for ${#CASE_DIRS[@]} case(s)."
 fi

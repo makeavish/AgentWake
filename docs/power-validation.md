@@ -44,24 +44,24 @@ Do not claim clamshell-on-AC support from normal assertions until a real MacBook
 | Idle sleep on battery | Timed idle harness output while on battery | Legacy confounded timed snapshot captured; assertion lifecycle observed, but clean idle validation remains open until a current-harness `conclusive=true` run or explicit owner sign-off accepting non-conclusive lifecycle evidence |
 | AC clamshell, internal display only | Manual lid-close result plus `pmset` snapshots | Not claimed |
 | AC clamshell with external display | Manual lid-close result plus `pmset` snapshots | Not claimed |
-| Battery clamshell | Bag Mode spike only; normal assertions are not proof | Not claimed |
+| Battery clamshell | Closed-Lid Mode spike only; normal assertions are not proof | Not claimed |
 
 Attach generated harness directories to the relevant issue or PR when validating hardware behavior. Generated `.build/power-validation/` artifacts are local evidence and are not committed by default.
 
-## Bag Mode Primitive Spike
+## Closed-Lid Mode Primitive Spike
 
-Bag Mode uses a separate readiness workflow because it may require privileged power-setting changes and real lid-close hardware checks. Use the issue #7 checklist in `docs/bag-mode-readiness.md`.
+Closed-Lid Mode uses a separate readiness workflow because it may require privileged power-setting changes and real lid-close hardware checks.
 
 Baseline-only capture is non-mutating:
 
 ```sh
-scripts/bag-mode-primitive-validation.sh --case-id apple-silicon-battery-internal
+scripts/closed-lid-primitive-validation.sh --case-id apple-silicon-battery-internal
 ```
 
 Mutating validation requires explicit acknowledgement:
 
 ```sh
-sudo scripts/bag-mode-primitive-validation.sh \
+sudo scripts/closed-lid-primitive-validation.sh \
   --case-id apple-silicon-battery-internal \
   --apply \
   --i-understand-this-changes-power-settings

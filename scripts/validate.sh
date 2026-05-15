@@ -432,7 +432,7 @@ if [[ "$(grep -c 'Slack/WebRTC' "$timed_idle_guidance_dir/deduped.out")" != "1" 
     exit 1
 fi
 
-echo "==> bag mode primitive harness smoke"
+echo "==> closed-lid primitive harness smoke"
 bag_mode_smoke_dir="$(mktemp -d)"
 bag_mode_smoke_error="$(mktemp)"
 test_list_output=""
@@ -888,7 +888,7 @@ if ! grep -q '^result=pass$' "$release_package_audit/validation-config.txt"; the
 fi
 
 if scripts/bag-mode-primitive-validation.sh --output-dir "$bag_mode_smoke_dir/missing-ack" --apply >"$bag_mode_smoke_error" 2>&1; then
-    echo "Bag Mode primitive harness allowed --apply without acknowledgement" >&2
+    echo "Closed-Lid Mode primitive harness allowed --apply without acknowledgement" >&2
     exit 1
 fi
 if ! grep -q -- "--apply requires --i-understand-this-changes-power-settings" "$bag_mode_smoke_error"; then
@@ -901,22 +901,22 @@ before_mtime="$(stat -f %m "$bag_mode_smoke_dir/baseline/before/metadata.txt")"
 
 for required_file in validation-config.txt manual-result.md README.txt before/metadata.txt; do
     if [[ ! -f "$bag_mode_smoke_dir/baseline/$required_file" ]]; then
-        echo "Bag Mode primitive harness did not write expected file: $required_file" >&2
+        echo "Closed-Lid Mode primitive harness did not write expected file: $required_file" >&2
         exit 1
     fi
 done
 
 if ! grep -q '^metadataRedacted=true$' "$bag_mode_smoke_dir/baseline/validation-config.txt"; then
-    echo "Bag Mode primitive harness did not record redacted metadata mode" >&2
+    echo "Closed-Lid Mode primitive harness did not record redacted metadata mode" >&2
     exit 1
 fi
 if grep -q '^host=' "$bag_mode_smoke_dir/baseline/before/metadata.txt" &&
    ! grep -q '^host=<redacted>$' "$bag_mode_smoke_dir/baseline/before/metadata.txt"; then
-    echo "Bag Mode primitive harness did not redact host metadata" >&2
+    echo "Closed-Lid Mode primitive harness did not redact host metadata" >&2
     exit 1
 fi
 if scripts/bag-mode-primitive-validation.sh --output-dir "$bag_mode_smoke_dir/baseline" --case-id validate-smoke >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive harness overwrote a non-empty evidence directory without --continue" >&2
+    echo "Closed-Lid Mode primitive harness overwrote a non-empty evidence directory without --continue" >&2
     exit 1
 fi
 if ! grep -q 'Output directory is not empty' "$bag_mode_smoke_error"; then
@@ -926,7 +926,7 @@ fi
 scripts/bag-mode-primitive-validation.sh --output-dir "$bag_mode_smoke_dir/baseline" --case-id validate-smoke --continue >/dev/null
 after_mtime="$(stat -f %m "$bag_mode_smoke_dir/baseline/before/metadata.txt")"
 if [[ "$before_mtime" != "$after_mtime" ]]; then
-    echo "Bag Mode primitive harness rewrote the original before snapshot during --continue" >&2
+    echo "Closed-Lid Mode primitive harness rewrote the original before snapshot during --continue" >&2
     exit 1
 fi
 
@@ -989,51 +989,51 @@ AGENTWAKE_FAKE_PMSET_LOG="$bag_mode_apply_log" \
         --continue \
         --i-understand-this-changes-power-settings >/dev/null
 if ! grep -q '^mode=apply$' "$bag_mode_apply_transition/validation-config.txt"; then
-    echo "Bag Mode primitive harness did not transition baseline config to apply mode" >&2
+    echo "Closed-Lid Mode primitive harness did not transition baseline config to apply mode" >&2
     exit 1
 fi
 if ! grep -q '^testOnly=true$' "$bag_mode_apply_transition/validation-config.txt"; then
-    echo "Bag Mode primitive harness did not mark fake pmset transition as test-only" >&2
+    echo "Closed-Lid Mode primitive harness did not mark fake pmset transition as test-only" >&2
     exit 1
 fi
 if ! grep -q '^previousDisablesleep=2$' "$bag_mode_apply_transition/validation-config.txt"; then
-    echo "Bag Mode primitive harness did not record previous disablesleep value during apply transition" >&2
+    echo "Closed-Lid Mode primitive harness did not record previous disablesleep value during apply transition" >&2
     exit 1
 fi
 if ! grep -q '^rollbackCommand=.*/pmset disablesleep 2$' "$bag_mode_apply_transition/validation-config.txt"; then
-    echo "Bag Mode primitive harness did not record rollback command during apply transition" >&2
+    echo "Closed-Lid Mode primitive harness did not record rollback command during apply transition" >&2
     exit 1
 fi
 if ! grep -q 'disablesleep 1' "$bag_mode_apply_transition/applied-command.txt"; then
-    echo "Bag Mode primitive harness did not apply disablesleep 1 during apply transition" >&2
+    echo "Closed-Lid Mode primitive harness did not apply disablesleep 1 during apply transition" >&2
     exit 1
 fi
 if ! grep -q 'disablesleep 2' "$bag_mode_apply_transition/rollback-command.txt"; then
-    echo "Bag Mode primitive harness did not roll back to the captured prior value during apply transition" >&2
+    echo "Closed-Lid Mode primitive harness did not roll back to the captured prior value during apply transition" >&2
     exit 1
 fi
 if [[ "$(cat "$bag_mode_apply_state")" != "2" ]]; then
-    echo "Bag Mode primitive harness fake pmset state did not return to captured prior value" >&2
+    echo "Closed-Lid Mode primitive harness fake pmset state did not return to captured prior value" >&2
     exit 1
 fi
 if ! grep -q '^disablesleep 1$' "$bag_mode_apply_log" ||
    ! grep -q '^disablesleep 2$' "$bag_mode_apply_log"; then
-    echo "Bag Mode primitive harness did not log distinct apply and rollback disablesleep commands" >&2
+    echo "Closed-Lid Mode primitive harness did not log distinct apply and rollback disablesleep commands" >&2
     cat "$bag_mode_apply_log" >&2
     exit 1
 fi
 if [[ ! -f "$bag_mode_apply_transition/during-applied/pmset-custom.txt" ||
       ! -f "$bag_mode_apply_transition/after-lid-window/pmset-custom.txt" ||
       ! -f "$bag_mode_apply_transition/after-rollback/pmset-custom.txt" ]]; then
-    echo "Bag Mode primitive harness did not write apply transition snapshots" >&2
+    echo "Closed-Lid Mode primitive harness did not write apply transition snapshots" >&2
     exit 1
 fi
 if [[ -f "$bag_mode_apply_transition/ROLLBACK_REQUIRED.txt" ]]; then
-    echo "Bag Mode primitive harness left rollback marker after successful non-reboot apply transition" >&2
+    echo "Closed-Lid Mode primitive harness left rollback marker after successful non-reboot apply transition" >&2
     exit 1
 fi
 if grep -q 'Baseline-only' "$bag_mode_apply_transition/README.txt"; then
-    echo "Bag Mode primitive harness left stale baseline README after apply transition" >&2
+    echo "Closed-Lid Mode primitive harness left stale baseline README after apply transition" >&2
     exit 1
 fi
 
@@ -1059,20 +1059,20 @@ AGENTWAKE_FAKE_PMSET_OMIT_DISABLESLEEP_ON_READ=1 \
         --continue \
         --i-understand-this-changes-power-settings >/dev/null
 if ! grep -q '^previousDisablesleep=0$' "$bag_mode_apply_missing_transition/validation-config.txt"; then
-    echo "Bag Mode primitive harness did not treat a missing disablesleep row as default/off" >&2
+    echo "Closed-Lid Mode primitive harness did not treat a missing disablesleep row as default/off" >&2
     exit 1
 fi
 if ! grep -q '^rollbackCommand=.*/pmset disablesleep 0$' "$bag_mode_apply_missing_transition/validation-config.txt"; then
-    echo "Bag Mode primitive harness did not record rollback to default/off for a missing disablesleep row" >&2
+    echo "Closed-Lid Mode primitive harness did not record rollback to default/off for a missing disablesleep row" >&2
     exit 1
 fi
 if [[ "$(cat "$bag_mode_apply_missing_state")" != "0" ]]; then
-    echo "Bag Mode primitive harness fake pmset state did not return to default/off for missing disablesleep row" >&2
+    echo "Closed-Lid Mode primitive harness fake pmset state did not return to default/off for missing disablesleep row" >&2
     exit 1
 fi
 if ! grep -q '^disablesleep 1$' "$bag_mode_apply_missing_log" ||
    ! grep -q '^disablesleep 0$' "$bag_mode_apply_missing_log"; then
-    echo "Bag Mode primitive harness did not apply and roll back when disablesleep row is absent" >&2
+    echo "Closed-Lid Mode primitive harness did not apply and roll back when disablesleep row is absent" >&2
     cat "$bag_mode_apply_missing_log" >&2
     exit 1
 fi
@@ -1103,11 +1103,11 @@ AGENTWAKE_FAKE_PMSET_EMPTY_DISABLESLEEP_ON_READ=1 \
 bag_mode_apply_empty_status=$?
 set -e
 if [[ "$bag_mode_apply_empty_status" -eq 0 ]]; then
-    echo "Bag Mode primitive harness accepted malformed empty disablesleep row" >&2
+    echo "Closed-Lid Mode primitive harness accepted malformed empty disablesleep row" >&2
     exit 1
 fi
 if grep -q '^disablesleep 1$' "$bag_mode_apply_empty_log"; then
-    echo "Bag Mode primitive harness mutated power settings after malformed empty disablesleep row" >&2
+    echo "Closed-Lid Mode primitive harness mutated power settings after malformed empty disablesleep row" >&2
     cat "$bag_mode_apply_empty_log" >&2
     exit 1
 fi
@@ -1131,7 +1131,7 @@ rollbackCommand=/usr/bin/pmset disablesleep 0
 metadataRedacted=true
 EOF
 cat >"$bag_mode_matrix_case/manual-result.md" <<'EOF'
-# Bag Mode Primitive Validation Result
+# Closed-Lid Mode Primitive Validation Result
 
 ## Matrix Case
 - Case ID: validate-smoke
@@ -1184,7 +1184,7 @@ rollbackCommand=/usr/bin/pmset disablesleep 0
 metadataRedacted=true
 EOF
 cat >"$bag_mode_matrix_intel_case/manual-result.md" <<'EOF'
-# Bag Mode Primitive Validation Result
+# Closed-Lid Mode Primitive Validation Result
 
 ## Matrix Case
 - Case ID: validate-intel-smoke
@@ -1227,27 +1227,27 @@ scripts/bag-mode-primitive-matrix-review.sh \
     --evidence-root "$bag_mode_smoke_dir/matrix" \
     --output "$bag_mode_matrix_review_report"
 if ! awk -F '\t' '$1 == "apple-silicon-battery-internal-reopen-normal" && $2 == "promote-candidate" && $3 == "validate-smoke" { found = 1 } END { exit !found }' "$bag_mode_matrix_review_report"; then
-    echo "Bag Mode primitive matrix review did not map verified battery/internal reopen evidence" >&2
+    echo "Closed-Lid Mode primitive matrix review did not map verified battery/internal reopen evidence" >&2
     cat "$bag_mode_matrix_review_report" >&2
     exit 1
 fi
 if ! awk -F '\t' '$1 == "macos-15plus-host" && $2 == "promote-candidate" && $3 == "validate-smoke" { found = 1 } END { exit !found }' "$bag_mode_matrix_review_report"; then
-    echo "Bag Mode primitive matrix review did not mark macOS 15+ host coverage" >&2
+    echo "Closed-Lid Mode primitive matrix review did not mark macOS 15+ host coverage" >&2
     cat "$bag_mode_matrix_review_report" >&2
     exit 1
 fi
 if ! awk -F '\t' '$1 == "intel-host" && $2 == "promote-candidate" && $3 == "validate-intel-smoke" { found = 1 } END { exit !found }' "$bag_mode_matrix_review_report"; then
-    echo "Bag Mode primitive matrix review did not preserve Intel host coverage" >&2
+    echo "Closed-Lid Mode primitive matrix review did not preserve Intel host coverage" >&2
     cat "$bag_mode_matrix_review_report" >&2
     exit 1
 fi
 if ! awk -F '\t' '$1 == "apple-silicon-battery-internal-open-normal" && $2 == "keep-todo" { found = 1 } END { exit !found }' "$bag_mode_matrix_review_report"; then
-    echo "Bag Mode primitive matrix review over-promoted missing open-path evidence" >&2
+    echo "Closed-Lid Mode primitive matrix review over-promoted missing open-path evidence" >&2
     cat "$bag_mode_matrix_review_report" >&2
     exit 1
 fi
 if ! awk -F '\t' '$1 == "helper-restart-after-27" && $2 == "deferred" { found = 1 } END { exit !found }' "$bag_mode_matrix_review_report"; then
-    echo "Bag Mode primitive matrix review did not preserve helper restart deferral" >&2
+    echo "Closed-Lid Mode primitive matrix review did not preserve helper restart deferral" >&2
     cat "$bag_mode_matrix_review_report" >&2
     exit 1
 fi
@@ -1257,7 +1257,7 @@ macos-13-intel	deferred		No Intel host available for this smoke
 external-display	n/a		No external display physically available in this smoke
 EOF
 if scripts/bag-mode-primitive-matrix-verify.sh --manifest "$bag_mode_smoke_dir/matrix/all-deferred-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted a manifest with no evidence rows" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted a manifest with no evidence rows" >&2
     exit 1
 fi
 if ! grep -q "at least one evidence row" "$bag_mode_smoke_error"; then
@@ -1270,7 +1270,7 @@ validate-smoke	evidence	validate-smoke	evidence attached
 macos-13-intel-deferred	deferred		TBD
 EOF
 if scripts/bag-mode-primitive-matrix-verify.sh --manifest "$bag_mode_smoke_dir/matrix/deferred-placeholder-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted placeholder deferred reason" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted placeholder deferred reason" >&2
     exit 1
 fi
 if ! grep -q "macos-13-intel-deferred" "$bag_mode_smoke_error"; then
@@ -1281,21 +1281,21 @@ bag_mode_matrix_scaffold="$bag_mode_smoke_dir/matrix-scaffold"
 scripts/bag-mode-primitive-matrix-scaffold.sh --output-dir "$bag_mode_matrix_scaffold" >/dev/null
 for required_file in matrix-manifest.tsv README.md scaffold-config.txt; do
     if [[ ! -f "$bag_mode_matrix_scaffold/$required_file" ]]; then
-        echo "Bag Mode primitive matrix scaffold did not write expected file: $required_file" >&2
+        echo "Closed-Lid Mode primitive matrix scaffold did not write expected file: $required_file" >&2
         exit 1
     fi
 done
 if ! grep -q '^scaffoldFormat=bag-mode-primitive-matrix-scaffold-v1$' "$bag_mode_matrix_scaffold/scaffold-config.txt"; then
-    echo "Bag Mode primitive matrix scaffold did not record expected scaffold format" >&2
+    echo "Closed-Lid Mode primitive matrix scaffold did not record expected scaffold format" >&2
     exit 1
 fi
 if [[ "$(head -n 1 "$bag_mode_matrix_scaffold/matrix-manifest.tsv")" != $'caseId\tstatus\tevidenceDir\tnaReason' ]]; then
-    echo "Bag Mode primitive matrix scaffold wrote an unexpected manifest header" >&2
+    echo "Closed-Lid Mode primitive matrix scaffold wrote an unexpected manifest header" >&2
     cat "$bag_mode_matrix_scaffold/matrix-manifest.tsv" >&2
     exit 1
 fi
 if ! awk -F '\t' 'NR == 1 { next } NF != 4 { exit 1 }' "$bag_mode_matrix_scaffold/matrix-manifest.tsv"; then
-    echo "Bag Mode primitive matrix scaffold wrote a manifest row with an unexpected field count" >&2
+    echo "Closed-Lid Mode primitive matrix scaffold wrote a manifest row with an unexpected field count" >&2
     cat "$bag_mode_matrix_scaffold/matrix-manifest.tsv" >&2
     exit 1
 fi
@@ -1332,13 +1332,13 @@ bag_mode_matrix_scaffold_actual_ids="$bag_mode_smoke_dir/matrix-scaffold-actual-
 } | sort >"$bag_mode_matrix_scaffold_expected_ids"
 tail -n +2 "$bag_mode_matrix_scaffold/matrix-manifest.tsv" | awk -F '\t' '{ print $1 }' | sort >"$bag_mode_matrix_scaffold_actual_ids"
 if ! diff -u "$bag_mode_matrix_scaffold_expected_ids" "$bag_mode_matrix_scaffold_actual_ids" >"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix scaffold wrote an unexpected manifest row set" >&2
+    echo "Closed-Lid Mode primitive matrix scaffold wrote an unexpected manifest row set" >&2
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
 for case_id in "${bag_mode_matrix_scaffold_todo_cases[@]}"; do
     if ! awk -F '\t' -v case_id="$case_id" '$1 == case_id && $2 == "TODO" { found = 1 } END { exit !found }' "$bag_mode_matrix_scaffold/matrix-manifest.tsv"; then
-        echo "Bag Mode primitive matrix scaffold missing TODO row: $case_id" >&2
+        echo "Closed-Lid Mode primitive matrix scaffold missing TODO row: $case_id" >&2
         cat "$bag_mode_matrix_scaffold/matrix-manifest.tsv" >&2
         exit 1
     fi
@@ -1358,12 +1358,12 @@ if ! awk -F '\t' '
     $1 == "helper-upgrade-after-27" && $2 == "deferred" && usable_reason($4) { upgrade = 1 }
     END { exit !(restart && upgrade) }
 ' "$bag_mode_matrix_scaffold/matrix-manifest.tsv"; then
-    echo "Bag Mode primitive matrix scaffold missing helper deferred rows with reasons" >&2
+    echo "Closed-Lid Mode primitive matrix scaffold missing helper deferred rows with reasons" >&2
     cat "$bag_mode_matrix_scaffold/matrix-manifest.tsv" >&2
     exit 1
 fi
 if scripts/bag-mode-primitive-matrix-verify.sh --manifest "$bag_mode_matrix_scaffold/matrix-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted the TODO scaffold manifest" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted the TODO scaffold manifest" >&2
     exit 1
 fi
 if ! grep -q "status must be evidence, n/a, or deferred" "$bag_mode_smoke_error"; then
@@ -1371,7 +1371,23 @@ if ! grep -q "status must be evidence, n/a, or deferred" "$bag_mode_smoke_error"
     exit 1
 fi
 if zsh scripts/bag-mode-primitive-matrix-scaffold.sh --output-dir "$bag_mode_smoke_dir/matrix-scaffold-zsh" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix scaffold unexpectedly ran under explicit zsh" >&2
+    echo "Closed-Lid Mode primitive matrix scaffold unexpectedly ran under explicit zsh" >&2
+    exit 1
+fi
+if ! grep -q "requires bash" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if zsh scripts/closed-lid-primitive-matrix-scaffold.sh --output-dir "$bag_mode_smoke_dir/closed-lid-matrix-scaffold-zsh" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Closed-Lid Mode primitive matrix scaffold wrapper unexpectedly ran under explicit zsh" >&2
+    exit 1
+fi
+if ! grep -q "requires bash" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if zsh scripts/closed-lid-primitive-validation.sh --help >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Closed-Lid Mode primitive validation wrapper unexpectedly ran under explicit zsh" >&2
     exit 1
 fi
 if ! grep -q "requires bash" "$bag_mode_smoke_error"; then
@@ -1381,7 +1397,7 @@ fi
 bag_mode_matrix_scaffold_file="$bag_mode_smoke_dir/matrix-scaffold-file"
 touch "$bag_mode_matrix_scaffold_file"
 if scripts/bag-mode-primitive-matrix-scaffold.sh --output-dir "$bag_mode_matrix_scaffold_file" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix scaffold accepted an output path that is not a directory" >&2
+    echo "Closed-Lid Mode primitive matrix scaffold accepted an output path that is not a directory" >&2
     exit 1
 fi
 if ! grep -q "not a directory" "$bag_mode_smoke_error"; then
@@ -1392,7 +1408,7 @@ bag_mode_matrix_scaffold_non_empty="$bag_mode_smoke_dir/matrix-scaffold-non-empt
 mkdir -p "$bag_mode_matrix_scaffold_non_empty"
 touch "$bag_mode_matrix_scaffold_non_empty/existing"
 if scripts/bag-mode-primitive-matrix-scaffold.sh --output-dir "$bag_mode_matrix_scaffold_non_empty" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix scaffold overwrote a non-empty output directory" >&2
+    echo "Closed-Lid Mode primitive matrix scaffold overwrote a non-empty output directory" >&2
     exit 1
 fi
 if ! grep -q "Output directory is not empty" "$bag_mode_smoke_error"; then
@@ -1403,7 +1419,7 @@ bag_mode_matrix_test_only="$bag_mode_smoke_dir/matrix-test-only"
 cp -R "$bag_mode_matrix_case" "$bag_mode_matrix_test_only"
 sed -i '' 's/^testOnly=false$/testOnly=true/' "$bag_mode_matrix_test_only/validation-config.txt"
 if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_test_only" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted test-only pmset evidence" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted test-only pmset evidence" >&2
     exit 1
 fi
 if ! grep -q "testOnly must be false" "$bag_mode_smoke_error"; then
@@ -1414,7 +1430,7 @@ bag_mode_matrix_bad_rollback="$bag_mode_smoke_dir/matrix-bad-rollback"
 cp -R "$bag_mode_matrix_case" "$bag_mode_matrix_bad_rollback"
 sed -i '' 's/^previousDisablesleep=0$/previousDisablesleep=1/' "$bag_mode_matrix_bad_rollback/validation-config.txt"
 if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_bad_rollback" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted rollback command that does not restore previousDisablesleep" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted rollback command that does not restore previousDisablesleep" >&2
     exit 1
 fi
 if ! grep -q "rollbackCommand must restore previousDisablesleep" "$bag_mode_smoke_error"; then
@@ -1429,7 +1445,7 @@ host=local-hostname
 user=local-user
 EOF
 if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_unredacted_metadata" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted unredacted snapshot metadata" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted unredacted snapshot metadata" >&2
     exit 1
 fi
 if ! grep -q "redacted host/user" "$bag_mode_smoke_error"; then
@@ -1446,7 +1462,7 @@ user=<redacted>
 user=local-user
 EOF
 if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_mixed_metadata" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted mixed redacted and unredacted snapshot metadata" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted mixed redacted and unredacted snapshot metadata" >&2
     exit 1
 fi
 if ! grep -q "redacted host/user" "$bag_mode_smoke_error"; then
@@ -1460,7 +1476,7 @@ sed -i '' 's#^rollbackCommand=/usr/bin/pmset disablesleep 0$#rollbackCommand=/us
 sed -i '' 's/- Prior disablesleep value: 0/- Prior disablesleep value: 1/' "$bag_mode_matrix_bad_manual_rollback/manual-result.md"
 sed -i '' 's#- Rollback command: `/usr/bin/pmset disablesleep 0`#- Rollback command: `/usr/bin/pmset disablesleep 10`#' "$bag_mode_matrix_bad_manual_rollback/manual-result.md"
 if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_bad_manual_rollback" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted manual rollback command with numeric-prefix mismatch" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted manual rollback command with numeric-prefix mismatch" >&2
     exit 1
 fi
 if ! grep -q "Rollback command must restore the prior disablesleep value" "$bag_mode_smoke_error"; then
@@ -1469,7 +1485,7 @@ if ! grep -q "Rollback command must restore the prior disablesleep value" "$bag_
 fi
 sed -i '' 's/- Result: inconclusive/- Result: pass | fail | inconclusive/' "$bag_mode_matrix_case/manual-result.md"
 if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_case" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted a placeholder result" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted a placeholder result" >&2
     exit 1
 fi
 if ! grep -q "Result" "$bag_mode_smoke_error"; then
@@ -1479,7 +1495,7 @@ fi
 sed -i '' 's/- Result: pass | fail | inconclusive/- Result: inconclusive/' "$bag_mode_matrix_case/manual-result.md"
 : >"$bag_mode_matrix_case/after-rollback/pmset-custom.txt"
 if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_case" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted empty snapshot output" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted empty snapshot output" >&2
     exit 1
 fi
 if ! grep -q "empty file" "$bag_mode_smoke_error"; then
@@ -1488,7 +1504,7 @@ if ! grep -q "empty file" "$bag_mode_smoke_error"; then
 fi
 echo '$ pmset -g custom' >"$bag_mode_matrix_case/after-rollback/pmset-custom.txt"
 if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_case" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted header-only snapshot output" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted header-only snapshot output" >&2
     exit 1
 fi
 if ! grep -q "no captured command body" "$bag_mode_smoke_error"; then
@@ -1497,7 +1513,7 @@ if ! grep -q "no captured command body" "$bag_mode_smoke_error"; then
 fi
 printf '$ pmset -g custom\nTODO paste output here\n' >"$bag_mode_matrix_case/after-rollback/pmset-custom.txt"
 if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_case" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted placeholder snapshot output" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted placeholder snapshot output" >&2
     exit 1
 fi
 if ! grep -q "placeholder content" "$bag_mode_smoke_error"; then
@@ -1507,7 +1523,7 @@ fi
 printf '$ pmset -g custom\nBattery Power:\n' >"$bag_mode_matrix_case/after-rollback/pmset-custom.txt"
 sed -i '' 's/- macOS: 15.0/- macOS: banana/' "$bag_mode_matrix_case/manual-result.md"
 if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_case" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted invalid macOS value" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted invalid macOS value" >&2
     exit 1
 fi
 if ! grep -q "macOS" "$bag_mode_smoke_error"; then
@@ -1527,7 +1543,7 @@ printf '$ ioreg -r -c IOPMPowerSource -a\n<plist version="1.0">\n' >"$bag_mode_m
 sed -i '' 's/rebootHeld=0/rebootHeld=1/' "$bag_mode_matrix_case/validation-config.txt"
 sed -i '' 's/- Lifecycle path: normal/- Lifecycle path: reboot/' "$bag_mode_matrix_case/manual-result.md"
 if scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$bag_mode_matrix_case" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted N/A reboot state for reboot-held case" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted N/A reboot state for reboot-held case" >&2
     exit 1
 fi
 if ! grep -q "reboot-held" "$bag_mode_smoke_error"; then
@@ -1538,7 +1554,7 @@ sed -i '' 's/rebootHeld=1/rebootHeld=0/' "$bag_mode_matrix_case/validation-confi
 sed -i '' 's/- Lifecycle path: reboot/- Lifecycle path: normal/' "$bag_mode_matrix_case/manual-result.md"
 sed -i '' 's/No external display physically available in this smoke/TODO/' "$bag_mode_smoke_dir/matrix/matrix-manifest.tsv"
 if scripts/bag-mode-primitive-matrix-verify.sh --manifest "$bag_mode_smoke_dir/matrix/matrix-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
-    echo "Bag Mode primitive matrix verifier accepted placeholder N/A reason" >&2
+    echo "Closed-Lid Mode primitive matrix verifier accepted placeholder N/A reason" >&2
     exit 1
 fi
 if ! grep -q "external-display-na" "$bag_mode_smoke_error"; then
@@ -1569,7 +1585,7 @@ do
     fi
 done
 if ! grep -q '^bagModeTemperatureProviderReady=false$' "$temperature_smoke_dir/validation-config.txt"; then
-    echo "Temperature provider harness should not mark Bag Mode temperature provider ready" >&2
+    echo "Temperature provider harness should not mark Closed-Lid Mode temperature provider ready" >&2
     exit 1
 fi
 if ! grep -q '^candidateSelected=none$' "$temperature_smoke_dir/validation-config.txt"; then
@@ -4416,7 +4432,7 @@ cat >"$helper_prototype_dir/manual-result.md" <<'EOF'
 - Old helper inactive after update: yes
 - Ledger compatibility or repair checked: yes
 - Uninstall unloaded helper: yes
-- Helper-owned Bag Mode state removed: yes
+- Helper-owned Closed-Lid Mode state removed: yes
 
 ## Failure Cases
 - Failure cases recorded: yes
@@ -5717,7 +5733,7 @@ if ! awk -F '\t' '$1 == "root-ledger-schema-and-permissions" && $2 == "review-ne
     exit 1
 fi
 if ! awk -F '\t' '$1 == "helper-uninstall-state-cleanup" && $2 == "keep-todo" { found = 1 } END { exit !found }' "$helper_prototype_review_report"; then
-    echo "Helper prototype review over-promoted helper-owned Bag Mode state cleanup" >&2
+    echo "Helper prototype review over-promoted helper-owned Closed-Lid Mode state cleanup" >&2
     cat "$helper_prototype_review_report" >&2
     exit 1
 fi
@@ -5753,7 +5769,7 @@ if ! awk -F '\t' '$1 == "root-ledger-ownership-sample" && $2 == "promote-candida
     exit 1
 fi
 if ! awk -F '\t' '$1 == "helper-uninstall-state-cleanup" && $2 == "keep-todo" { found = 1 } END { exit !found }' "$helper_prototype_review_confirmed"; then
-    echo "Helper prototype review confirmation over-promoted helper-owned Bag Mode state cleanup" >&2
+    echo "Helper prototype review confirmation over-promoted helper-owned Closed-Lid Mode state cleanup" >&2
     cat "$helper_prototype_review_confirmed" >&2
     exit 1
 fi
@@ -6267,7 +6283,7 @@ if awk -F '\t' '$1 == "cli-helper-status-repair-uninstall" && $2 == "ready" { fo
     exit 1
 fi
 if ! awk -F '\t' '$1 == "helper-uninstall-state-cleanup" && $2 == "missing" { found = 1 } END { exit !found }' "$helper_review_summary"; then
-    echo "Helper review summary over-promoted helper-owned Bag Mode state cleanup" >&2
+    echo "Helper review summary over-promoted helper-owned Closed-Lid Mode state cleanup" >&2
     cat "$helper_review_summary" >&2
     exit 1
 fi

@@ -1,4 +1,4 @@
-# Bag Mode Primitive Matrix
+# Closed-Lid Mode Primitive Matrix
 
 Check date: May 13, 2026
 
@@ -15,11 +15,11 @@ Latest local apply artifacts:
 
 ## Question
 
-Is `pmset disablesleep` reliable enough across AgentWake's required Bag Mode matrix?
+Is `pmset disablesleep` reliable enough across AgentWake's required Closed-Lid Mode matrix?
 
 ## Current Evidence
 
-PR #22 added `scripts/bag-mode-primitive-validation.sh`, a dedicated harness for the candidate primitive. The harness can:
+PR #22 added `scripts/closed-lid-primitive-validation.sh`, a dedicated harness for the candidate primitive. The harness can:
 
 - run a non-mutating baseline capture
 - require root plus explicit acknowledgement for mutating runs
@@ -100,13 +100,13 @@ Each case still needs the exact command applied, rollback command, `pmset -g cus
 Before attaching evidence, run:
 
 ```sh
-scripts/bag-mode-primitive-matrix-verify.sh --manifest <matrix-evidence-root>/matrix-manifest.tsv
+scripts/closed-lid-primitive-matrix-verify.sh --manifest <matrix-evidence-root>/matrix-manifest.tsv
 ```
 
 To review current case directories before editing the manifest, run:
 
 ```sh
-scripts/bag-mode-primitive-matrix-review.sh \
+scripts/closed-lid-primitive-matrix-review.sh \
   --evidence-root .build/power-validation/bag-mode-matrix \
   --output .build/power-validation/bag-mode-matrix-review-candidates.tsv
 ```
@@ -120,7 +120,7 @@ To start a local matrix directory without inventing rows by hand, generate a
 non-mutating scaffold:
 
 ```sh
-scripts/bag-mode-primitive-matrix-scaffold.sh \
+scripts/closed-lid-primitive-matrix-scaffold.sh \
   --output-dir .build/power-validation/bag-mode-matrix-$(date -u +%Y%m%dT%H%M%SZ)
 ```
 

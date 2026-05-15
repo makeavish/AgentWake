@@ -10,7 +10,7 @@ usage() {
     cat <<'EOF'
 Usage: scripts/temperature-provider-fail-closed-proof.sh --output-dir DIR
 
-Builds and runs the non-privileged Bag Mode safety-policy proof harness.
+Builds and runs the non-privileged Closed-Lid Mode safety-policy proof harness.
 The generated artifact proves mocked provider failure states fail closed, but it
 does not select or validate a production numeric temperature provider.
 EOF

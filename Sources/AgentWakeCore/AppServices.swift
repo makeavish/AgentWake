@@ -305,15 +305,15 @@ public final class AgentWakeServices {
                 resolvedAssertionManager.reconcile()
                 return "Integration event accepted: \(event.agent.rawValue) \(event.event.rawValue)"
             }, helperStatusProvider: {
-                BagModeAvailability.helperCommandMessage("status")
+                ClosedLidModeAvailability.helperCommandMessage("status")
             }, helperEnableBagModeHandler: { _ in
-                BagModeAvailability.helperCommandMessage("enable")
+                ClosedLidModeAvailability.helperCommandMessage("enable")
             }, helperDisableBagModeHandler: { _ in
-                BagModeAvailability.helperCommandMessage("disable")
+                ClosedLidModeAvailability.helperCommandMessage("disable")
             }, helperRepairHandler: { _ in
-                BagModeAvailability.helperCommandMessage("repair")
+                ClosedLidModeAvailability.helperCommandMessage("repair")
             }, helperUninstallHandler: { _ in
-                BagModeAvailability.helperCommandMessage("uninstall")
+                ClosedLidModeAvailability.helperCommandMessage("uninstall")
             }, uninstallHandler: { removeHelper, removeIntegrations, receivedAt in
                 var outcomes = ["Uninstall requested"]
                 if removeIntegrations {

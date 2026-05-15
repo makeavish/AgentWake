@@ -88,7 +88,7 @@ struct AgentWakeCoreChecks {
 
         let titles = snapshot.items.map(\.title)
         try check(titles.contains("Sessions: none seen"), "Expected session summary in menu")
-        try check(titles.contains(BagModeAvailability.unavailableTitle), "Expected Closed-Lid Mode boundary in menu")
+        try check(titles.contains(ClosedLidModeAvailability.unavailableTitle), "Expected Closed-Lid Mode boundary in menu")
         try check(titles.contains("Claude Code: Installed"), "Expected integration status in menu")
         try check(titles.contains("Refresh Status"), "Expected refresh action in menu")
         try check(titles.contains("Repair Integrations..."), "Expected repair action in menu")
@@ -100,10 +100,10 @@ struct AgentWakeCoreChecks {
         try check(snapshot.currentState == .bagMode, "Expected Closed-Lid Mode as current state")
         try check(snapshot.statusItemTitle == "AgentWake", "Expected stable status item title")
         try check(
-            snapshot.items.first?.title == "Current: \(BagModeAvailability.unavailableTitle)",
+            snapshot.items.first?.title == "Current: \(ClosedLidModeAvailability.unavailableTitle)",
             "Expected current-state menu row"
         )
-        try check(snapshot.items.first?.detail == BagModeAvailability.settingsDetail, "Expected Closed-Lid Mode unavailable detail")
+        try check(snapshot.items.first?.detail == ClosedLidModeAvailability.settingsDetail, "Expected Closed-Lid Mode unavailable detail")
     }
 
     private static func stateDerivesFromHoldState() throws {
@@ -681,7 +681,7 @@ struct AgentWakeCoreChecks {
         )
         try check(temperatureCutoff.state.mode == .cutoffLockedOut, "Expected cutoff temperature to lock out")
         try check(temperatureCutoff.state.cutoffReason == .temperature, "Expected temperature cutoff reason")
-        try check(temperatureCutoff.action == .releaseIfArmed, "Expected armed Bag Mode to release on cutoff")
+        try check(temperatureCutoff.action == .releaseIfArmed, "Expected armed Closed-Lid Mode to release on cutoff")
 
         let batteryCutoff = policy.evaluate(
             input: safetyInput(temperature: 70, battery: 15, now: now),
@@ -721,7 +721,7 @@ struct AgentWakeCoreChecks {
                 isBagModeArmed: true
             )
             try check(decision.state.cutoffReason == .parseFailed, "Expected malformed temperature samples to fail closed")
-            try check(decision.action == .releaseIfArmed, "Expected malformed temperature samples to release armed Bag Mode")
+            try check(decision.action == .releaseIfArmed, "Expected malformed temperature samples to release armed Closed-Lid Mode")
         }
 
         let failClosedReadings: [(BagModeTemperatureReading, BagModeSafetyCutoffReason)] = [
@@ -738,7 +738,7 @@ struct AgentWakeCoreChecks {
                 isBagModeArmed: true
             )
             try check(decision.state.cutoffReason == reason, "Expected \(reason.rawValue) to fail closed")
-            try check(decision.action == .releaseIfArmed, "Expected \(reason.rawValue) to release armed Bag Mode")
+            try check(decision.action == .releaseIfArmed, "Expected \(reason.rawValue) to release armed Closed-Lid Mode")
         }
 
         let coverage = policy.evaluate(
@@ -772,7 +772,7 @@ struct AgentWakeCoreChecks {
             isBagModeArmed: true
         )
         try check(invalidBattery.state.cutoffReason == .batteryInvalid, "Expected out-of-range battery reading to fail closed")
-        try check(invalidBattery.action == .releaseIfArmed, "Expected invalid battery reading to release armed Bag Mode")
+        try check(invalidBattery.action == .releaseIfArmed, "Expected invalid battery reading to release armed Closed-Lid Mode")
 
         let locked = BagModeSafetyState(
             mode: .cutoffLockedOut,
@@ -799,7 +799,7 @@ struct AgentWakeCoreChecks {
             input: safetyInput(temperature: 84, battery: 20, now: now),
             isBagModeArmed: true
         )
-        try check(recoveredButStillArmed.state.mode == .cutoffLockedOut, "Expected lockout to stay active until Bag Mode is observed disarmed")
+        try check(recoveredButStillArmed.state.mode == .cutoffLockedOut, "Expected lockout to stay active until Closed-Lid Mode is observed disarmed")
         try check(recoveredButStillArmed.action == .releaseIfArmed, "Expected recovered but still armed lockout to keep requesting release")
 
         let rearmed = policy.evaluate(
@@ -1397,23 +1397,23 @@ struct AgentWakeCoreChecks {
         let defaultUninstall = try defaultRouter.route(.helperUninstall, receivedAt: receivedAt)
 
         try check(
-            defaultStatus.message == BagModeAvailability.helperCommandMessage("status"),
+            defaultStatus.message == ClosedLidModeAvailability.helperCommandMessage("status"),
             "Expected default helper status outcome"
         )
         try check(
-            defaultEnable.message == BagModeAvailability.helperCommandMessage("enable"),
+            defaultEnable.message == ClosedLidModeAvailability.helperCommandMessage("enable"),
             "Expected default helper enable outcome"
         )
         try check(
-            defaultDisable.message == BagModeAvailability.helperCommandMessage("disable"),
+            defaultDisable.message == ClosedLidModeAvailability.helperCommandMessage("disable"),
             "Expected default helper disable outcome"
         )
         try check(
-            defaultRepair.message == BagModeAvailability.helperCommandMessage("repair"),
+            defaultRepair.message == ClosedLidModeAvailability.helperCommandMessage("repair"),
             "Expected default helper repair outcome"
         )
         try check(
-            defaultUninstall.message == BagModeAvailability.helperCommandMessage("uninstall"),
+            defaultUninstall.message == ClosedLidModeAvailability.helperCommandMessage("uninstall"),
             "Expected default helper uninstall outcome"
         )
 

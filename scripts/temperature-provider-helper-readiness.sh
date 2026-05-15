@@ -6,7 +6,7 @@ usage() {
 Usage: scripts/temperature-provider-helper-readiness.sh --output-dir DIR
    or: scripts/temperature-provider-helper-readiness.sh DIR
 
-Captures non-mutating helper-equivalent readiness evidence for the Bag Mode
+Captures non-mutating helper-equivalent readiness evidence for the Closed-Lid Mode
 temperature provider. The script never prompts for sudo; when not running as
 root it uses `sudo -n` only so missing authorization is recorded as evidence
 instead of blocking.

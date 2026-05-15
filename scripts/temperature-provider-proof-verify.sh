@@ -28,7 +28,7 @@ usage() {
     cat <<'EOF'
 Usage: scripts/temperature-provider-proof-verify.sh --manifest PATH
 
-Checks #25 helper-owned Bag Mode temperature-provider proof evidence for
+Checks #25 helper-owned Closed-Lid Mode temperature-provider proof evidence for
 structure and internal consistency. This verifier does not select a provider,
 run privileged sampling, or prove thermal safety; it only fails incomplete or
 placeholder evidence before it is attached to #25.

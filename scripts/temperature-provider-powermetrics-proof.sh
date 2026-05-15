@@ -335,7 +335,7 @@ cat >"$EVIDENCE_DIR/no-user-visible-prompts.txt" <<EOF
 noUserVisiblePrompts=true
 The harness never invokes promptable sudo. It uses sudo -n only when not root,
 so missing authorization is recorded as command output instead of showing a
-password prompt during Bag Mode.
+password prompt during Closed-Lid Mode.
 EOF
 
 cat >"$EVIDENCE_DIR/timeout-enforcement.txt" <<EOF
@@ -427,7 +427,7 @@ fi
     manifest_row "active-cadence-samples" "TODO" "" "Capture samples at active cadence"
     manifest_row "idle-cadence-samples" "TODO" "" "Capture samples at idle cadence"
     manifest_row "timeout-enforcement" "evidence" "evidence/timeout-enforcement.txt" "sample timeout behavior captured"
-    manifest_row "timeout-fail-closed" "TODO" "" "Attach policy evidence that timeout blocks/releases Bag Mode"
+    manifest_row "timeout-fail-closed" "TODO" "" "Attach policy evidence that timeout blocks/releases Closed-Lid Mode"
     manifest_row "permission-behavior" "evidence" "evidence/permission-behavior.txt" "permission behavior captured"
     manifest_row "no-user-visible-prompts" "evidence" "evidence/no-user-visible-prompts.txt" "sudo -n only; no promptable sudo"
     manifest_row "closed-bag-coverage-analysis" "TODO" "" "Analyze whether powermetrics reading covers closed-bag risk"

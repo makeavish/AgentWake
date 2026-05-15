@@ -124,7 +124,7 @@ this repository. It verifies CLI reachability while running, verifies CLI
 not-running behavior after AppleEvent quit, SIGTERM, and a force-kill, and
 verifies the staged app can relaunch after each path. The AppleEvent quit leg
 requires the staged app to be the only `AgentWake` process before sending the
-quit event. It does not reboot the machine or exercise Bag Mode while armed.
+quit event. It does not reboot the machine or exercise Closed-Lid Mode while armed.
 
 ## Packaging Consent Audit
 
@@ -194,14 +194,14 @@ evidence.
 
 See [power-validation.md](power-validation.md) for the current normal assertion policy, disk/display assertion status, timed-idle caveats, and hardware result matrix.
 
-## Bag Mode Primitive Harness
+## Closed-Lid Mode Primitive Harness
 
-Use the Bag Mode primitive harness for historical #7/#29 evidence and for
+Use the Closed-Lid Mode primitive harness for historical #7/#29 evidence and for
 final app E2E carry-forward evidence in
 [#120](https://github.com/makeavish/AgentWake/issues/120):
 
 ```sh
-sudo scripts/bag-mode-primitive-validation.sh \
+sudo scripts/closed-lid-primitive-validation.sh \
   --output-dir .build/power-validation/bag-mode-matrix/apple-silicon-battery-internal \
   --case-id apple-silicon-battery-internal \
   --apply \
@@ -222,7 +222,7 @@ external-display	n/a		No external display physically available
 Use the matrix scaffold when starting a new local matrix package:
 
 ```sh
-scripts/bag-mode-primitive-matrix-scaffold.sh \
+scripts/closed-lid-primitive-matrix-scaffold.sh \
   --output-dir .build/power-validation/bag-mode-matrix-$(date -u +%Y%m%dT%H%M%SZ)
 ```
 
@@ -230,7 +230,7 @@ The scaffold intentionally contains `TODO` manifest rows and should fail the
 verifier until the rows are replaced with evidence, concrete N/A reasons, or
 concrete deferrals.
 
-To record whether external-display Bag Mode rows are physically available on the
+To record whether external-display Closed-Lid Mode rows are physically available on the
 current machine:
 
 ```sh
@@ -244,12 +244,12 @@ metadata by storing stable display labels, connection/display type, online/main
 state, and resolution. If no external display is attached in
 `SPDisplaysDataType`, the manifest marks AC and battery external-display rows
 `n/a` with a concrete unavailable-hardware reason. This is availability/N/A
-evidence only; it does not exercise lid-close or Bag Mode lifecycle behavior.
+evidence only; it does not exercise lid-close or Closed-Lid Mode lifecycle behavior.
 
 Before attaching a matrix evidence root, run:
 
 ```sh
-scripts/bag-mode-primitive-matrix-verify.sh --manifest .build/power-validation/bag-mode-matrix/matrix-manifest.tsv
+scripts/closed-lid-primitive-matrix-verify.sh --manifest .build/power-validation/bag-mode-matrix/matrix-manifest.tsv
 ```
 
 This checks manifest and evidence completeness only. The verifier also rejects
@@ -257,7 +257,7 @@ manifests with no evidence rows. It does not prove the primitive is reliable.
 To generate an advisory row-by-row review before editing the manifest, run:
 
 ```sh
-scripts/bag-mode-primitive-matrix-review.sh \
+scripts/closed-lid-primitive-matrix-review.sh \
   --evidence-root .build/power-validation/bag-mode-matrix \
   --output .build/power-validation/bag-mode-matrix-review-candidates.tsv
 ```
@@ -303,7 +303,7 @@ scripts/temperature-provider-fail-closed-proof.sh \
 The artifact writes `validation-config.txt`, `fail-closed-cases.tsv`, and
 `summary.md`. It proves the mocked safety-policy contract only:
 unsupported/stale/malformed/timed-out/insufficient-coverage provider states and
-missing/invalid battery states block arming or release Bag Mode if already
+missing/invalid battery states block arming or release Closed-Lid Mode if already
 armed. The TSV also records the user-facing diagnostic title, detail, and
 recovery action for each warning or fail-closed row, including unsupported
 provider states. It is not helper-owned provider freshness, cadence, closed-bag
@@ -505,7 +505,7 @@ and a mirrored `bagModeHelperLedgerSample` JSON event. A later
 and unregister evidence, not complete final E2E evidence. The manifest still needs
 deliberate promotion only after reviewing admin-approval/password-flow,
 reboot, update, production restore conflict behavior, production
-repair/uninstall behavior, installed-helper/fallback failure-case, and helper-owned Bag Mode state cleanup
+repair/uninstall behavior, installed-helper/fallback failure-case, and helper-owned Closed-Lid Mode state cleanup
 captures. The local post-approval
 status/bootstrap/launchctl/stdout-log/unified-log boundary and dry-run
 root-ledger schema/ownership boundary are reviewed through the current
@@ -523,7 +523,7 @@ scripts/helper-service-prototype-review-captures.sh \
 ```
 
 Those flags do not affect update, repair/conflict, CLI attachment, production
-uninstall behavior, or helper-owned Bag Mode cleanup rows.
+uninstall behavior, or helper-owned Closed-Lid Mode cleanup rows.
 The reviewed fixed-command API artifacts are recorded at:
 
 - `.build/helper-service-prototype/smappservice-register-stdout-20260513T040749Z`
@@ -537,7 +537,7 @@ They record approved dry-run dispatch for `status`, `enableBagMode`,
 `1`, produced root helper stdout with the expected `commandJson`, emitted a
 mirrored `bagModeHelperLedgerSample`, and then unregistered cleanly back to raw
 `0` with launchctl service-not-found. Treat them as fixed-command API evidence
-and dry-run ledger schema evidence only, not as proof of production Bag Mode
+and dry-run ledger schema evidence only, not as proof of production Closed-Lid Mode
 state mutation, production repair/uninstall behavior, or restore conflict
 handling.
 
@@ -709,8 +709,8 @@ scripts/helper-service-smappservice-prototype.sh \
 This cleanup mode calls `unregister()` from the existing app bundle, then
 captures follow-up `status`, `launchctl`, and unified log evidence. It does not
 promote manifest rows automatically. The current artifact proves the unregister
-call removed the ServiceManagement job; keep helper-owned Bag Mode state cleanup
-as a separate required evidence row until a real helper-owned Bag Mode state is
+call removed the ServiceManagement job; keep helper-owned Closed-Lid Mode state cleanup
+as a separate required evidence row until a real helper-owned Closed-Lid Mode state is
 created and removed.
 
 Use the non-mutating prototype scaffold when starting a new #120 helper evidence

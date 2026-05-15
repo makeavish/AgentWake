@@ -61,6 +61,10 @@ Planned safeguards include:
 
 Normal sleep prevention should work without admin privileges. macOS authorization is planned only when installing the privileged helper needed for closed-lid battery support.
 
+The CLI vocabulary for that future guarded path is `agentwake closed-lid
+status|enable|disable`. In v0.1.0 those commands intentionally report the mode
+as unavailable until the helper and temperature-provider gates pass.
+
 ## Privacy Model
 
 AgentWake is designed to be local-first.

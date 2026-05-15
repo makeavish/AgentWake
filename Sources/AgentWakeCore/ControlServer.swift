@@ -342,11 +342,11 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         integrationRemoveHandler: @escaping (String, Date) throws -> String = { agentID, _ in "Remove integration requested: \(agentID)" },
         integrationEnableAutoHandler: @escaping (String, Date) throws -> String = { agentID, _ in "Auto-integration enabled: \(agentID)" },
         integrationEventHandler: @escaping (HookAdapterEvent, Date) -> String = { event, _ in "Integration event accepted: \(event.agent.rawValue) \(event.event.rawValue)" },
-        helperStatusProvider: @escaping () -> String = { BagModeAvailability.helperCommandMessage("status") },
-        helperEnableBagModeHandler: @escaping (Date) throws -> String = { _ in BagModeAvailability.helperCommandMessage("enable") },
-        helperDisableBagModeHandler: @escaping (Date) throws -> String = { _ in BagModeAvailability.helperCommandMessage("disable") },
-        helperRepairHandler: @escaping (Date) throws -> String = { _ in BagModeAvailability.helperCommandMessage("repair") },
-        helperUninstallHandler: @escaping (Date) throws -> String = { _ in BagModeAvailability.helperCommandMessage("uninstall") },
+        helperStatusProvider: @escaping () -> String = { ClosedLidModeAvailability.helperCommandMessage("status") },
+        helperEnableBagModeHandler: @escaping (Date) throws -> String = { _ in ClosedLidModeAvailability.helperCommandMessage("enable") },
+        helperDisableBagModeHandler: @escaping (Date) throws -> String = { _ in ClosedLidModeAvailability.helperCommandMessage("disable") },
+        helperRepairHandler: @escaping (Date) throws -> String = { _ in ClosedLidModeAvailability.helperCommandMessage("repair") },
+        helperUninstallHandler: @escaping (Date) throws -> String = { _ in ClosedLidModeAvailability.helperCommandMessage("uninstall") },
         uninstallHandler: @escaping (Bool, Bool, Date) throws -> String = { removeHelper, removeIntegrations, _ in
             "Uninstall requested removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations)"
         }

@@ -50,6 +50,8 @@ public struct AgentWakeCLI {
             return .add(binary: binary)
         case "integrations":
             return try parseIntegrations(Array(arguments.dropFirst()))
+        case "closed-lid":
+            return try parseClosedLidMode(Array(arguments.dropFirst()))
         case "helper":
             return try parseHelper(Array(arguments.dropFirst()))
         case "uninstall":
@@ -112,8 +114,14 @@ public struct AgentWakeCLI {
         case "enable":
             try requireArgumentCount(arguments, 1, usage: "helper enable takes no arguments")
             return .helperEnableBagMode
+        case "enable-closed-lid":
+            try requireArgumentCount(arguments, 1, usage: "helper enable-closed-lid takes no arguments")
+            return .helperEnableBagMode
         case "disable":
             try requireArgumentCount(arguments, 1, usage: "helper disable takes no arguments")
+            return .helperDisableBagMode
+        case "disable-closed-lid":
+            try requireArgumentCount(arguments, 1, usage: "helper disable-closed-lid takes no arguments")
             return .helperDisableBagMode
         case "repair":
             try requireArgumentCount(arguments, 1, usage: "helper repair takes no arguments")
@@ -123,6 +131,26 @@ public struct AgentWakeCLI {
             return .helperUninstall
         default:
             throw ControlServerError.invalidRequest("unknown helper subcommand: \(first)")
+        }
+    }
+
+    private func parseClosedLidMode(_ arguments: [String]) throws -> ControlCommand {
+        guard let first = arguments.first else {
+            throw ControlServerError.invalidRequest("closed-lid requires a subcommand")
+        }
+
+        switch first {
+        case "status":
+            try requireArgumentCount(arguments, 1, usage: "closed-lid status takes no arguments")
+            return .helperStatus
+        case "enable":
+            try requireArgumentCount(arguments, 1, usage: "closed-lid enable takes no arguments")
+            return .helperEnableBagMode
+        case "disable":
+            try requireArgumentCount(arguments, 1, usage: "closed-lid disable takes no arguments")
+            return .helperDisableBagMode
+        default:
+            throw ControlServerError.invalidRequest("unknown closed-lid subcommand: \(first)")
         }
     }
 

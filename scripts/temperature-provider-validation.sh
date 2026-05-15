@@ -6,7 +6,7 @@ usage() {
 Usage: scripts/temperature-provider-validation.sh --output-dir DIR [--continue]
    or: scripts/temperature-provider-validation.sh DIR [--continue]
 
-Captures non-destructive temperature-provider evidence for Bag Mode readiness.
+Captures non-destructive temperature-provider evidence for Closed-Lid Mode readiness.
 The harness does not use sudo and does not intentionally heat hardware.
 
 It records:
@@ -325,14 +325,14 @@ cat >"$OUTPUT_DIR/summary-computed.md" <<SUMMARY
 
 ## Conclusion
 
-No production Bag Mode temperature provider is selected by this harness.
+No production Closed-Lid Mode temperature provider is selected by this harness.
 ProcessInfo is permission-compatible but coarse and non-numeric. The non-root
 powermetrics probe cannot be used by the app directly. AppleSmartBattery
 temperature fields are useful context when present, but they do not prove
 CPU/package or closed-bag thermal coverage and may not satisfy the 10 second
 freshness requirement.
 
-Production Bag Mode remains blocked until a no-membership helper or other
+Production Closed-Lid Mode remains blocked until a no-membership helper or other
 validated provider supplies fresh, permission-compatible thermal evidence with
 fail-closed behavior.
 SUMMARY

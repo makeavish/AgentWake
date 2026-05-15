@@ -375,7 +375,7 @@ verify_manual_result() {
         "Old helper inactive after update" \
         "Ledger compatibility or repair checked" \
         "Uninstall unloaded helper" \
-        "Helper-owned Bag Mode state removed" \
+        "Helper-owned Closed-Lid Mode state removed" \
         "Failure cases recorded" \
         "Homebrew cask used" \
         "Homebrew cask registers helper during install" \
@@ -393,7 +393,7 @@ verify_manual_result() {
     require_yes_field "Old helper inactive after update"
     require_yes_field "Ledger compatibility or repair checked"
     require_yes_field "Uninstall unloaded helper"
-    require_yes_field "Helper-owned Bag Mode state removed"
+    require_yes_field "Helper-owned Closed-Lid Mode state removed"
     require_yes_field "Failure cases recorded"
     check_choice_field "Result" "pass" "fail" "inconclusive"
 

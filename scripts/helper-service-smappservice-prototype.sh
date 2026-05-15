@@ -1483,7 +1483,7 @@ cat >"$OUTPUT_DIR/manual-result.md" <<EOF
 - Old helper inactive after update: TODO
 - Ledger compatibility or repair checked: TODO
 - Uninstall unloaded helper: TODO
-- Helper-owned Bag Mode state removed: TODO
+- Helper-owned Closed-Lid Mode state removed: TODO
 
 ## Failure Cases
 - Failure cases recorded: yes

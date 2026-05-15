@@ -398,7 +398,7 @@ follows the process lifecycle.
 
 This smoke only targets the staged app process whose command starts with
 `dist/AgentWake.app/Contents/MacOS/AgentWake`. It does not terminate unrelated
-AgentWake installs, does not reboot the machine, and does not exercise Bag Mode
+AgentWake installs, does not reboot the machine, and does not exercise Closed-Lid Mode
 while armed.
 EOF
 

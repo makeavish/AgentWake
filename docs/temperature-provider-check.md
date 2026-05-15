@@ -39,7 +39,7 @@ Alternate source probe artifacts:
 
 ## Question
 
-Which fresh, permission-compatible temperature source is reliable enough for Bag Mode cutoff decisions?
+Which fresh, permission-compatible temperature source is reliable enough for Closed-Lid Mode cutoff decisions?
 
 ## Method
 
@@ -100,7 +100,7 @@ bagModeTemperatureProviderReady=false
 
 ## Failure Behavior
 
-Production Bag Mode must fail closed for:
+Production Closed-Lid Mode must fail closed for:
 
 - provider unavailable
 - stale reading
@@ -443,7 +443,7 @@ providerProofReady=false
 That proves a live `smctempsensor0` node and `AppleSMCSensorDispatcher` user
 client are visible locally, with `thermalmonitord` attached, but the inventory
 does not expose a current scalar temperature reading or a public provider
-contract for Bag Mode.
+contract for Closed-Lid Mode.
 
 The follow-up `.build/temperature-provider-proof/ioreg-pmu-local-20260513T105941Z`
 artifact adds `AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu`, which runs
@@ -586,15 +586,15 @@ validation, closed-bag coverage, and fail-closed rows remain incomplete.
 
 ## Conclusion
 
-No production Bag Mode temperature provider is selected yet. The current best
+No production Closed-Lid Mode temperature provider is selected yet. The current best
 candidate is the helper-owned native `libIOReport` ANS2/MSP probe because it is
 non-battery, numeric, root-owned, and completes under the 1 second deadline.
 It still needs scale validation, freshness/cadence evidence, closed-bag
 coverage, and fail-closed proof in final app E2E validation.
 
-`ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. The no-membership `SMAppService` path can launch a helper as root on this machine. The tested `powermetrics` sampler variants did not provide a trustworthy numeric cutoff source. The bounded `ioreg-smc` diagnostic path now runs as root through SMAppService without timing out, but its observed `AppleSmartBattery` values are rejected as production cutoff candidates and do not prove CPU/package or closed-bag thermal coverage. The `ioreg-pmu` path now also runs as root through SMAppService without timing out, but the visible `AppleARMPMUTempSensor` inventory exposes PMU sensor names without numeric readings. The `thermal-levels` path can also run as root through SMAppService, but `/usr/bin/thermal levels` exits 69 with unsupported-hardware output on this machine. The refreshed alternate-source probe now captures `hidutil list`, HID temperature-service NDJSON/dump metadata, native IOHID service properties, NVMe temperature sensor inventory, and native IOReport samples. On this machine the IOReport ANS2/MSP path is the first accepted non-battery numeric candidate, while the HID/PMU/NVMe inventory remains metadata only. Final app E2E issue [#120](https://github.com/makeavish/AgentWake/issues/120) must still prove scale or feature-gated fail-closed behavior, freshness, cadence, timeout, and coverage before Bag Mode/release readiness is claimed.
+`ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. The no-membership `SMAppService` path can launch a helper as root on this machine. The tested `powermetrics` sampler variants did not provide a trustworthy numeric cutoff source. The bounded `ioreg-smc` diagnostic path now runs as root through SMAppService without timing out, but its observed `AppleSmartBattery` values are rejected as production cutoff candidates and do not prove CPU/package or closed-bag thermal coverage. The `ioreg-pmu` path now also runs as root through SMAppService without timing out, but the visible `AppleARMPMUTempSensor` inventory exposes PMU sensor names without numeric readings. The `thermal-levels` path can also run as root through SMAppService, but `/usr/bin/thermal levels` exits 69 with unsupported-hardware output on this machine. The refreshed alternate-source probe now captures `hidutil list`, HID temperature-service NDJSON/dump metadata, native IOHID service properties, NVMe temperature sensor inventory, and native IOReport samples. On this machine the IOReport ANS2/MSP path is the first accepted non-battery numeric candidate, while the HID/PMU/NVMe inventory remains metadata only. Final app E2E issue [#120](https://github.com/makeavish/AgentWake/issues/120) must still prove scale or feature-gated fail-closed behavior, freshness, cadence, timeout, and coverage before Closed-Lid Mode/release readiness is claimed.
 
-Production Bag Mode readiness remains gated by [#120](https://github.com/makeavish/AgentWake/issues/120), which carries forward the remaining provider validation rows from #25.
+Production Closed-Lid Mode readiness remains gated by [#120](https://github.com/makeavish/AgentWake/issues/120), which carries forward the remaining provider validation rows from #25.
 
 ## Helper Provider Proof Verifier
 

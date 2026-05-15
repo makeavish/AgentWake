@@ -531,7 +531,26 @@ public struct CodexConfigPatcher {
             )
         }
 
-        return ranges.sorted { $0.lowerBound < $1.lowerBound }
+        return mergedRanges(ranges.sorted { $0.lowerBound < $1.lowerBound })
+    }
+
+    private static func mergedRanges(_ ranges: [Range<String.Index>]) -> [Range<String.Index>] {
+        var merged: [Range<String.Index>] = []
+
+        for range in ranges {
+            guard let last = merged.last else {
+                merged.append(range)
+                continue
+            }
+
+            if range.lowerBound <= last.upperBound {
+                merged[merged.count - 1] = last.lowerBound..<max(last.upperBound, range.upperBound)
+            } else {
+                merged.append(range)
+            }
+        }
+
+        return merged
     }
 
     private static func ownedBlockRanges(

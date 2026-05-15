@@ -33,7 +33,7 @@ Reviewed fixed-command API artifacts:
 
 ## Question
 
-Is `SMAppService` a source-backed helper path worth trying before AgentWake proves a no-membership Bag Mode helper install/update/uninstall path?
+Is `SMAppService` a source-backed helper path worth trying before AgentWake proves a no-membership Closed-Lid Mode helper install/update/uninstall path?
 
 ## Source Findings
 
@@ -121,7 +121,7 @@ ledger sample. Cleanup returned the helper label to raw status `0`.
 [#120](https://github.com/makeavish/AgentWake/issues/120): admin
 approval/password-flow evidence, final manifest/manual promotion of remaining
 rows, update, production restore conflict behavior, production repair/uninstall
-behavior, installed-helper/fallback failure behavior, and helper-owned Bag Mode
+behavior, installed-helper/fallback failure behavior, and helper-owned Closed-Lid Mode
 state cleanup evidence. New prepare artifacts also record local dry-run failure-case
 evidence for unpaired caller, bundle/label mismatch, wrong effective user,
 stale helper generation, and denied/revoked approval state. The CLI
@@ -133,10 +133,10 @@ The design should keep these constraints:
 - App bundle contains the helper and LaunchDaemon plist.
 - LaunchDaemon plist lives under `Contents/Library/LaunchDaemons`.
 - App and helper use the strongest available local signing/auth model; Developer ID designated requirements are a later distribution upgrade.
-- Registration is app-initiated after Bag Mode consent.
+- Registration is app-initiated after Closed-Lid Mode consent.
 - LaunchDaemon approval is admin-mediated in System Settings.
-- Non-Developer-ID public builds may expose Bag Mode only after the local/ad-hoc signed and hash/pairing-pinned helper path passes real validation and the UI clearly labels the local helper trust model. Truly unsigned helper experiments stay development-only.
-- A Homebrew cask may install the app bundle containing the helper and plist, but it must not silently activate the helper. Onboarding triggers `SMAppService` registration or a local admin-approved fallback install after Bag Mode consent.
+- Non-Developer-ID public builds may expose Closed-Lid Mode only after the local/ad-hoc signed and hash/pairing-pinned helper path passes real validation and the UI clearly labels the local helper trust model. Truly unsigned helper experiments stay development-only.
+- A Homebrew cask may install the app bundle containing the helper and plist, but it must not silently activate the helper. Onboarding triggers `SMAppService` registration or a local admin-approved fallback install after Closed-Lid Mode consent.
 
 ## Required Prototype Notes
 
@@ -151,7 +151,7 @@ Final app E2E issue [#120](https://github.com/makeavish/AgentWake/issues/120) mu
 - `launchctl` evidence before and after approval
 - reboot behavior after approval
 - update behavior from helper generation N to N+1
-- uninstall behavior via `unregister()` or fallback `launchctl bootout` plus helper-owned Bag Mode cleanup
+- uninstall behavior via `unregister()` or fallback `launchctl bootout` plus helper-owned Closed-Lid Mode cleanup
 - fixed command API evidence for `status`, `enableBagMode`, `disableBagMode`, `repair`, and `uninstall`
 - reviewed dry-run ledger schema, file ownership/mode, and sample owner token/generation/boot state; production restore conflict behavior and repair output remain open
 - CLI evidence for `agentwake helper status`, `agentwake helper enable`, `agentwake helper disable`, `agentwake helper repair`, `agentwake helper uninstall`, and `agentwake uninstall --remove-helper --remove-integrations`
@@ -276,7 +276,7 @@ bootstrap boundary, and the mirrored ledger sample plus root-owned `0600` file
 evidence cover the dry-run root-ledger schema/ownership boundary. The verifier
 still fails until the remaining admin-approval/password-flow, post-reboot
 manifest/manual promotion, update, production restore conflict behavior,
-production repair/uninstall behavior, failure case, and helper-owned Bag Mode
+production repair/uninstall behavior, failure case, and helper-owned Closed-Lid Mode
 state cleanup rows are completed and reviewed.
 
 The first command-specific follow-up artifact exercised an approved
@@ -322,7 +322,7 @@ launchctlAfterUnregister=service-not-found
 This artifact records the first approved evidence that the ad-hoc SMAppService
 helper can dispatch a non-`status` fixed command as root and then cleanly
 unregister. By itself it does not prove the full fixed-command matrix,
-production Bag Mode state mutation, or the admin approval/password UI flow.
+production Closed-Lid Mode state mutation, or the admin approval/password UI flow.
 
 Three follow-up command-specific artifacts reached enabled status after waiting
 at least 15 seconds for approval propagation:
@@ -369,7 +369,7 @@ It marks the aggregate `fixed-command-api` row as a promotion candidate only
 when all five command artifacts prove matching `daemonCommand`, root dry-run
 stdout, mirrored ledger JSON, unregister success, and service-not-found cleanup.
 
-This still does not prove production Bag Mode state mutation, production
+This still does not prove production Closed-Lid Mode state mutation, production
 repair/uninstall behavior, or the admin approval/password UI flow.
 
 The post-approval bootstrap evidence is reviewed through the readable capture
@@ -500,7 +500,7 @@ scripts/helper-service-prototype-review-captures.sh \
 Those flags only promote the approval/password-flow and root-ledger rows when
 the underlying status, root-owned ledger mode, and mirrored ledger schema
 evidence are still present. Update, repair/conflict, CLI attachment, and
-helper-owned Bag Mode cleanup rows remain separate proof work.
+helper-owned Closed-Lid Mode cleanup rows remain separate proof work.
 
 After rebooting the machine with the same helper approval state, append
 non-mutating reboot-lifecycle evidence to that same artifact:
@@ -535,7 +535,7 @@ log-evidence-post-reboot: exitCode=0, backgroundtaskmanagementd records for the 
 in the post-approval evidence. The readable stdout mirror showed
 `schemaVersion=1`, `helperGeneration=1`, `allowed=true`, and `effect="dry-run"`.
 This is reviewed post-reboot append-capture evidence for the local dry-run
-helper boundary, not a verifier-complete artifact, production Bag Mode mutation,
+helper boundary, not a verifier-complete artifact, production Closed-Lid Mode mutation,
 or update evidence.
 
 After cleanup approval, append mutating unregister evidence to the same
@@ -554,7 +554,7 @@ manifest rows. The reviewed post-reboot artifact captured
 `unregisterResult=success`, status `1 -> 0`, follow-up status `0`, `launchctl`
 service-not-found, and unified-log removal records for the helper label. Treat
 this as SMAppService unregister cleanup append-capture evidence only; keep
-`helper-uninstall-state-cleanup` incomplete until helper-owned Bag Mode state
+`helper-uninstall-state-cleanup` incomplete until helper-owned Closed-Lid Mode state
 cleanup is exercised, then run the verifier.
 
 The CLI helper-command outcome boundary is automated in
@@ -568,7 +568,7 @@ disable`, `agentwake helper repair`, `agentwake helper uninstall`, and
 The current app reports helper commands as unavailable because no production
 helper is installed yet; this proves CLI and control-routing behavior only.
 Production helper-backed enable, disable, repair, uninstall, restore conflict
-handling, and helper-owned Bag Mode cleanup remain separate #120 evidence rows.
+handling, and helper-owned Closed-Lid Mode cleanup remain separate #120 evidence rows.
 
 The CLI outcome proof harness captures that boundary in an attachable package:
 
@@ -656,7 +656,7 @@ LaunchDaemon plist filename must use the same suffix.
 - Old helper inactive after update: yes
 - Ledger compatibility or repair checked: yes
 - Uninstall unloaded helper: yes
-- Helper-owned Bag Mode state removed: yes
+- Helper-owned Closed-Lid Mode state removed: yes
 
 ## Failure Cases
 - Failure cases recorded: yes
@@ -784,5 +784,5 @@ rows now live in final app E2E issue
 [#120](https://github.com/makeavish/AgentWake/issues/120): admin
 approval/password flow, final post-reboot manifest/manual promotion, update,
 production restore conflict behavior, production repair/uninstall behavior,
-installed-helper/fallback failure cases, and helper-owned Bag Mode state
+installed-helper/fallback failure cases, and helper-owned Closed-Lid Mode state
 cleanup. Developer ID signing remains a later distribution/trust milestone.

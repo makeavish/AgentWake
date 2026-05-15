@@ -342,6 +342,33 @@ private func runConfigPatchersPreserveAndRemoveOnlyOwnedBlocks() throws {
     try check(!legacyCodexRemoved.contains("com.clawshell.integration.codex-cli.v1"), "Expected Codex removal to clean legacy owner marker")
     try check(!legacyCodexRemoved.contains("ClawShellHookAdapter"), "Expected Codex removal to clean legacy adapter command")
 
+    let originalNotify = #"notify = ["/usr/local/bin/original-notify", "Codex"]"#
+    let originalNotifyBase64 = Data(originalNotify.utf8).base64EncodedString()
+    let nestedCodex = """
+    model = "gpt-5.5"
+
+    # BEGIN com.clawshell.integration.codex-cli.v1
+    # ClawShell owns this top-level Codex notify fallback.
+    # clawshell-previous-notify-base64: \(originalNotifyBase64)
+    # BEGIN \(CodexConfigPatcher.manifest.ownerMarker)
+    # AgentWake owns this top-level Codex notify fallback.
+    # agentwake-previous-notify-base64: \(Data("notify = [\"/Applications/ClawShell.app/Contents/MacOS/ClawShellHookAdapter\"]".utf8).base64EncodedString())
+    notify = ["/Applications/AgentWake.app/Contents/MacOS/AgentWakeHookAdapter", "--owner-marker", "\(CodexConfigPatcher.manifest.ownerMarker)"]
+    # END \(CodexConfigPatcher.manifest.ownerMarker)
+    # END com.clawshell.integration.codex-cli.v1
+
+    [profiles.work]
+    model = "gpt-5.4"
+    """
+    let nestedRemoval = try codexPatcher.removalPlan(currentData: Data(nestedCodex.utf8))
+    let nestedRemoved = String(data: nestedRemoval.patchedData, encoding: .utf8) ?? ""
+    try codexPatcher.validate(nestedRemoval.patchedData)
+    try check(nestedRemoved.contains(originalNotify), "Expected nested legacy/current cleanup to restore the original notify")
+    try check(nestedRemoved.contains("[profiles.work]"), "Expected nested legacy/current cleanup to preserve unrelated tables")
+    try check(!nestedRemoved.contains("com.clawshell.integration.codex-cli.v1"), "Expected nested cleanup to remove legacy marker")
+    try check(!nestedRemoved.contains(CodexConfigPatcher.manifest.ownerMarker), "Expected nested cleanup to remove current marker")
+    try check(!nestedRemoved.contains("ClawShellHookAdapter"), "Expected nested cleanup not to restore stale ClawShell adapter")
+
     let multilineCodex = """
     model = "gpt-5.5"
     notify = [

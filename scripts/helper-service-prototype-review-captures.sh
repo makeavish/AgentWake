@@ -254,7 +254,7 @@ review_uninstall() {
         row helper-uninstall keep-todo "" "missing successful unregister and service-not-found cleanup evidence"
     fi
 
-    row helper-uninstall-state-cleanup keep-todo "" "unregister cleanup is not helper-owned Bag Mode state cleanup proof"
+    row helper-uninstall-state-cleanup keep-todo "" "unregister cleanup is not helper-owned Closed-Lid Mode state cleanup proof"
 }
 
 review_remaining_rows() {

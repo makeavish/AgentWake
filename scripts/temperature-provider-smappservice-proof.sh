@@ -1399,7 +1399,7 @@ manifest_row() {
     manifest_row "active-cadence-samples" "TODO" "" "Capture samples at active cadence"
     manifest_row "idle-cadence-samples" "TODO" "" "Capture samples at idle cadence"
     manifest_row "timeout-enforcement" "TODO" "" "Capture helper-side timeout status after approval"
-    manifest_row "timeout-fail-closed" "TODO" "" "Attach policy evidence that timeout blocks/releases Bag Mode"
+    manifest_row "timeout-fail-closed" "TODO" "" "Attach policy evidence that timeout blocks/releases Closed-Lid Mode"
     manifest_row "permission-behavior" "TODO" "" "Capture helper/root permission behavior after approval"
     manifest_row "no-user-visible-prompts" "evidence" "evidence/no-user-visible-prompts.txt" "SMAppService approval path; no promptable sudo"
     manifest_row "closed-bag-coverage-analysis" "TODO" "" "Analyze whether provider reading covers closed-bag risk"

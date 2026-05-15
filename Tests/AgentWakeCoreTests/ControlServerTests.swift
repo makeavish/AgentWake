@@ -264,6 +264,16 @@ private func runCLIParsesCommandsAndSendsThroughClient() throws {
     try check(client.commands.last == .helperEnableBagMode, "Expected helper enable command")
     _ = try cli.run(arguments: ["agentwake", "helper", "disable"])
     try check(client.commands.last == .helperDisableBagMode, "Expected helper disable command")
+    _ = try cli.run(arguments: ["agentwake", "helper", "enable-closed-lid"])
+    try check(client.commands.last == .helperEnableBagMode, "Expected helper closed-lid enable command")
+    _ = try cli.run(arguments: ["agentwake", "helper", "disable-closed-lid"])
+    try check(client.commands.last == .helperDisableBagMode, "Expected helper closed-lid disable command")
+    _ = try cli.run(arguments: ["agentwake", "closed-lid", "status"])
+    try check(client.commands.last == .helperStatus, "Expected closed-lid status command")
+    _ = try cli.run(arguments: ["agentwake", "closed-lid", "enable"])
+    try check(client.commands.last == .helperEnableBagMode, "Expected closed-lid enable command")
+    _ = try cli.run(arguments: ["agentwake", "closed-lid", "disable"])
+    try check(client.commands.last == .helperDisableBagMode, "Expected closed-lid disable command")
     _ = try cli.run(arguments: ["agentwake", "helper", "repair"])
     try check(client.commands.last == .helperRepair, "Expected helper repair command")
     _ = try cli.run(arguments: ["agentwake", "helper", "uninstall"])
@@ -290,6 +300,12 @@ private func runCLIRejectsExtraArgumentsAndUnknownFlags() throws {
     try expectThrows(ControlServerError.invalidRequest("helper status takes no arguments")) {
         _ = try cli.parse(arguments: ["helper", "status", "--json"])
     }
+    try expectThrows(ControlServerError.invalidRequest("closed-lid status takes no arguments")) {
+        _ = try cli.parse(arguments: ["closed-lid", "status", "--json"])
+    }
+    try expectThrows(ControlServerError.invalidRequest("unknown closed-lid subcommand: arm")) {
+        _ = try cli.parse(arguments: ["closed-lid", "arm"])
+    }
     try expectThrows(ControlServerError.invalidRequest("helper uninstall takes no arguments")) {
         _ = try cli.parse(arguments: ["helper", "uninstall", "--force"])
     }
@@ -307,11 +323,11 @@ private func runControlRouterSurfacesHelperCommandOutcomes() throws {
     let defaultRepair = try defaultRouter.route(.helperRepair, receivedAt: receivedAt)
     let defaultUninstall = try defaultRouter.route(.helperUninstall, receivedAt: receivedAt)
 
-    try check(defaultStatus.message == BagModeAvailability.helperCommandMessage("status"), "Expected default helper status outcome")
-    try check(defaultEnable.message == BagModeAvailability.helperCommandMessage("enable"), "Expected default helper enable outcome")
-    try check(defaultDisable.message == BagModeAvailability.helperCommandMessage("disable"), "Expected default helper disable outcome")
-    try check(defaultRepair.message == BagModeAvailability.helperCommandMessage("repair"), "Expected default helper repair outcome")
-    try check(defaultUninstall.message == BagModeAvailability.helperCommandMessage("uninstall"), "Expected default helper uninstall outcome")
+    try check(defaultStatus.message == ClosedLidModeAvailability.helperCommandMessage("status"), "Expected default helper status outcome")
+    try check(defaultEnable.message == ClosedLidModeAvailability.helperCommandMessage("enable"), "Expected default helper enable outcome")
+    try check(defaultDisable.message == ClosedLidModeAvailability.helperCommandMessage("disable"), "Expected default helper disable outcome")
+    try check(defaultRepair.message == ClosedLidModeAvailability.helperCommandMessage("repair"), "Expected default helper repair outcome")
+    try check(defaultUninstall.message == ClosedLidModeAvailability.helperCommandMessage("uninstall"), "Expected default helper uninstall outcome")
 
     let router = DefaultControlCommandRouter(
         helperStatusProvider: {

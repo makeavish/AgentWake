@@ -590,7 +590,7 @@ temperature sensor, NVMe temperature sensor, die temperature controller, HID
 service/dump, native IOHID service properties, and IOReport-style local
 surfaces for #25.
 
-It is non-mutating, does not use sudo, and does not select a production Bag Mode
+It is non-mutating, does not use sudo, and does not select a production Closed-Lid Mode
 temperature provider. A usable provider still needs helper-owned numeric output,
 freshness, active/idle cadence, timeout behavior, closed-bag coverage, and
 fail-closed evidence.

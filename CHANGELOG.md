@@ -22,6 +22,8 @@ Closed-Lid Mode status:
   complete.
 - The app, UI smoke harness, readiness docs, and README intentionally present
   Closed-Lid Mode as unavailable rather than partially supported.
+- The CLI accepts the product-facing `agentwake closed-lid status|enable|disable`
+  path; these commands still fail closed for this release.
 
 Release notes:
 

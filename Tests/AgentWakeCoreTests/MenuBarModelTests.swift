@@ -19,7 +19,7 @@ struct MenuBarModelTests {
         )
 
         #expect(snapshot.items.map(\.title).contains("Sessions: none seen"))
-        #expect(snapshot.items.map(\.title).contains(BagModeAvailability.unavailableTitle))
+        #expect(snapshot.items.map(\.title).contains(ClosedLidModeAvailability.unavailableTitle))
         #expect(snapshot.items.map(\.title).contains("Claude Code: Installed"))
         #expect(snapshot.items.map(\.title).contains("Refresh Status"))
         #expect(snapshot.items.map(\.title).contains("Repair Integrations..."))
@@ -30,8 +30,8 @@ struct MenuBarModelTests {
 
         #expect(snapshot.currentState == .bagMode)
         #expect(snapshot.statusItemTitle == "AgentWake")
-        #expect(snapshot.items.first?.title == "Current: \(BagModeAvailability.unavailableTitle)")
-        #expect(snapshot.items.first?.detail == BagModeAvailability.settingsDetail)
+        #expect(snapshot.items.first?.title == "Current: \(ClosedLidModeAvailability.unavailableTitle)")
+        #expect(snapshot.items.first?.detail == ClosedLidModeAvailability.settingsDetail)
     }
 
     @Test func stateDerivesFromHoldState() {
@@ -74,7 +74,7 @@ final class MenuBarModelTests: XCTestCase {
         )
 
         XCTAssertTrue(snapshot.items.map(\.title).contains("Sessions: none seen"))
-        XCTAssertTrue(snapshot.items.map(\.title).contains(BagModeAvailability.unavailableTitle))
+        XCTAssertTrue(snapshot.items.map(\.title).contains(ClosedLidModeAvailability.unavailableTitle))
         XCTAssertTrue(snapshot.items.map(\.title).contains("Claude Code: Installed"))
         XCTAssertTrue(snapshot.items.map(\.title).contains("Refresh Status"))
         XCTAssertTrue(snapshot.items.map(\.title).contains("Repair Integrations..."))
@@ -85,8 +85,8 @@ final class MenuBarModelTests: XCTestCase {
 
         XCTAssertEqual(snapshot.currentState, .bagMode)
         XCTAssertEqual(snapshot.statusItemTitle, "AgentWake")
-        XCTAssertEqual(snapshot.items.first?.title, "Current: \(BagModeAvailability.unavailableTitle)")
-        XCTAssertEqual(snapshot.items.first?.detail, BagModeAvailability.settingsDetail)
+        XCTAssertEqual(snapshot.items.first?.title, "Current: \(ClosedLidModeAvailability.unavailableTitle)")
+        XCTAssertEqual(snapshot.items.first?.detail, ClosedLidModeAvailability.settingsDetail)
     }
 
     func testStateDerivesFromHoldState() {

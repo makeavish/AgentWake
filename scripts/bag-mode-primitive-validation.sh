@@ -25,9 +25,9 @@ fi
 
 usage() {
     cat <<'EOF'
-Usage: scripts/bag-mode-primitive-validation.sh [options]
+Usage: scripts/closed-lid-primitive-validation.sh [options]
 
-Captures Bag Mode primitive evidence for the candidate `pmset disablesleep`
+Captures Closed-Lid Mode primitive evidence for the candidate `pmset disablesleep`
 path. By default this script is non-mutating and only writes a readiness
 template plus baseline power snapshots.
 
@@ -118,7 +118,7 @@ fi
 
 if [[ "$APPLY" == "1" && "$(id -u)" -ne 0 ]]; then
     echo "--apply must be run as root to guarantee non-interactive rollback" >&2
-    echo "Re-run with: sudo scripts/bag-mode-primitive-validation.sh --apply --i-understand-this-changes-power-settings ..." >&2
+    echo "Re-run with: sudo scripts/closed-lid-primitive-validation.sh --apply --i-understand-this-changes-power-settings ..." >&2
     exit 2
 fi
 
@@ -255,7 +255,7 @@ fi
 
 if [[ ! -f "$OUTPUT_DIR/manual-result.md" || "$CONTINUE_OUTPUT" != "1" ]]; then
     cat >"$OUTPUT_DIR/manual-result.md" <<EOF
-# Bag Mode Primitive Validation Result
+# Closed-Lid Mode Primitive Validation Result
 
 ## Matrix Case
 - Case ID: ${CASE_ID:-TODO}
@@ -298,12 +298,12 @@ fi
 
 if [[ "$APPLY" != "1" ]]; then
     cat >"$OUTPUT_DIR/README.txt" <<EOF
-Baseline-only Bag Mode primitive readiness capture written.
+Baseline-only Closed-Lid Mode primitive readiness capture written.
 
 This run did not change power settings. To run the mutating manual lid-close
 window, re-run with:
 
-sudo scripts/bag-mode-primitive-validation.sh \\
+sudo scripts/closed-lid-primitive-validation.sh \\
   --output-dir "$OUTPUT_DIR" \\
   --case-id "${CASE_ID:-<case-id>}" \\
   --apply \\
@@ -313,7 +313,7 @@ sudo scripts/bag-mode-primitive-validation.sh \\
 The mutating mode applies /usr/bin/pmset disablesleep 1, captures evidence,
 waits for the manual lid-close window, and restores the pre-run disablesleep value.
 EOF
-    echo "Bag Mode primitive baseline written to $OUTPUT_DIR"
+    echo "Closed-Lid Mode primitive baseline written to $OUTPUT_DIR"
     exit 0
 fi
 
@@ -324,7 +324,7 @@ fi
 ROLLBACK_NEEDED=1
 
 cat >"$OUTPUT_DIR/ROLLBACK_REQUIRED.txt" <<EOF
-Bag Mode primitive validation changed this setting:
+Closed-Lid Mode primitive validation changed this setting:
 
 Applied: ${PMSET_BIN} disablesleep 1
 Restore: ${PMSET_BIN} disablesleep ${PREVIOUS_DISABLESLEEP}
@@ -336,28 +336,28 @@ AGENTWAKE_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh "$OUTPUT_DIR/after-r
 EOF
 
 cat >"$OUTPUT_DIR/README.txt" <<EOF
-Mutating Bag Mode primitive validation evidence is in progress.
+Mutating Closed-Lid Mode primitive validation evidence is in progress.
 
 Fill in manual-result.md with the physical lid-close/reopen result and run:
 
-scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$OUTPUT_DIR"
+scripts/closed-lid-primitive-matrix-verify.sh --case-dir "$OUTPUT_DIR"
 EOF
 
 snapshot "$OUTPUT_DIR/during-applied"
 
 if [[ "$REBOOT_HELD" == "1" ]]; then
     cat >"$OUTPUT_DIR/README.txt" <<EOF
-Reboot-held Bag Mode primitive validation evidence is in progress.
+Reboot-held Closed-Lid Mode primitive validation evidence is in progress.
 
 Rollback instructions were written to ROLLBACK_REQUIRED.txt. After reboot,
 capture post-reboot state, restore the prior disablesleep value, capture
 after-rollback state, fill in manual-result.md, and run:
 
-scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$OUTPUT_DIR"
+scripts/closed-lid-primitive-matrix-verify.sh --case-dir "$OUTPUT_DIR"
 EOF
 
     cat <<EOF
-Bag Mode primitive is applied for reboot-held validation.
+Closed-Lid Mode primitive is applied for reboot-held validation.
 
 The script will not roll back automatically because this run is expected to
 continue through reboot. Rollback instructions were written to:
@@ -377,7 +377,7 @@ EOF
 fi
 
 cat <<EOF
-Bag Mode primitive is applied for ${HOLD_SECONDS}s.
+Closed-Lid Mode primitive is applied for ${HOLD_SECONDS}s.
 
 Manual step:
 1. Close the lid for the target scenario.
@@ -396,11 +396,11 @@ ROLLBACK_NEEDED=0
 rm -f "$OUTPUT_DIR/ROLLBACK_REQUIRED.txt"
 
 cat >"$OUTPUT_DIR/README.txt" <<EOF
-Mutating Bag Mode primitive validation evidence written.
+Mutating Closed-Lid Mode primitive validation evidence written.
 
 Fill in manual-result.md with the physical lid-close/reopen result and run:
 
-scripts/bag-mode-primitive-matrix-verify.sh --case-dir "$OUTPUT_DIR"
+scripts/closed-lid-primitive-matrix-verify.sh --case-dir "$OUTPUT_DIR"
 EOF
 
-echo "Bag Mode primitive validation written to $OUTPUT_DIR"
+echo "Closed-Lid Mode primitive validation written to $OUTPUT_DIR"

@@ -207,7 +207,7 @@ if externalCount > 0 {
 
 let manifestReason = externalCount == 0
     ? "No external display detected in current SPDisplaysDataType snapshot"
-    : "External display detected; manual Bag Mode lifecycle evidence still required"
+    : "External display detected; manual Closed-Lid Mode lifecycle evidence still required"
 
 let config = """
 evidenceFormat=display-topology-proof-v1
@@ -257,7 +257,7 @@ let summary = """
 
 ## Boundary
 
-This artifact proves only the captured display topology and whether external-display Bag Mode rows are physically available right now. It does not exercise lid-close behavior, power settings, or external-display Bag Mode lifecycle behavior.
+This artifact proves only the captured display topology and whether external-display Closed-Lid Mode rows are physically available right now. It does not exercise lid-close behavior, power settings, or external-display Closed-Lid Mode lifecycle behavior.
 """
 try write(summary + "\n", to: outputURL.appendingPathComponent("summary.md"))
 }

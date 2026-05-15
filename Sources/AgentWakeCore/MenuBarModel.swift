@@ -72,8 +72,8 @@ public enum MenuBarModel {
 
         items.append(
             MenuBarItem(
-                title: BagModeAvailability.unavailableTitle,
-                detail: BagModeAvailability.settingsDetail,
+                title: ClosedLidModeAvailability.unavailableTitle,
+                detail: ClosedLidModeAvailability.settingsDetail,
                 isEnabled: false,
                 kind: .diagnostic
             )
