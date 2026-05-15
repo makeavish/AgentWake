@@ -166,29 +166,29 @@ public final class AgentMonitor: AppLifecycleComponent {
         queue.sync {
             let activeSessions = stateMachine.sessions.filter { $0.state != .finished }
             guard !activeSessions.isEmpty else {
-                return "Sessions: none seen"
+                return "No sessions"
             }
 
             let timestamp = now()
             let heldCount = activeSessions.filter { $0.contributesToHold(at: timestamp) }.count
-            let detectedCount = activeSessions.count - heldCount
+            let foundCount = activeSessions.count - heldCount
             if heldCount == activeSessions.count {
-                return "Sessions: \(activeSessions.count) protecting"
+                return countLabel(activeSessions.count, singular: "keeping awake", plural: "keeping awake")
             }
 
             if heldCount == 0 {
-                return "Sessions: \(detectedCount) seen, none protecting"
+                return countLabel(foundCount, singular: "found", plural: "found")
             }
 
             var parts: [String] = []
             if heldCount > 0 {
-                parts.append("\(heldCount) protecting")
+                parts.append(countLabel(heldCount, singular: "keeping awake", plural: "keeping awake"))
             }
-            if detectedCount > 0 {
-                parts.append("\(detectedCount) seen")
+            if foundCount > 0 {
+                parts.append(countLabel(foundCount, singular: "found", plural: "found"))
             }
 
-            return "Sessions: \(parts.joined(separator: ", "))"
+            return parts.joined(separator: ", ")
         }
     }
 
@@ -196,7 +196,7 @@ public final class AgentMonitor: AppLifecycleComponent {
         queue.sync {
             let activeSessions = stateMachine.sessions.filter { $0.state != .finished }
             guard !activeSessions.isEmpty else {
-                return "No sessions seen"
+                return "No sessions"
             }
 
             return activeSessions
@@ -224,9 +224,35 @@ public final class AgentMonitor: AppLifecycleComponent {
         }
     }
 
+    public func sessionOverviewMessage() -> String {
+        queue.sync {
+            let activeSessions = stateMachine.sessions.filter { $0.state != .finished }
+            guard !activeSessions.isEmpty else {
+                return "No sessions"
+            }
+
+            let timestamp = now()
+            let grouped = Dictionary(grouping: activeSessions) { session in
+                "\(session.agent.displayName)|\(sessionDisplayState(session, at: timestamp))"
+            }
+
+            return grouped.keys.sorted().compactMap { key in
+                let parts = key.split(separator: "|", maxSplits: 1).map(String.init)
+                guard parts.count == 2, let count = grouped[key]?.count else {
+                    return nil
+                }
+
+                let state = parts[1]
+                let label = count == 1 ? state : "\(count) \(state)"
+                return "\(parts[0]): \(label)"
+            }
+            .joined(separator: "\n")
+        }
+    }
+
     private func sessionDisplayState(_ session: AgentSession, at now: Date) -> String {
         if isManuallyProtectedDetectedSession(session) {
-            return "manually protecting"
+            return "keeping awake"
         }
 
         if session.contributesToHold(at: now) {
@@ -234,7 +260,7 @@ public final class AgentMonitor: AppLifecycleComponent {
         }
 
         if session.source == .processScan && session.state != .finished {
-            return "seen"
+            return "found"
         }
 
         return sessionProtectingState(session)
@@ -243,12 +269,16 @@ public final class AgentMonitor: AppLifecycleComponent {
     private func sessionProtectingState(_ session: AgentSession) -> String {
         switch session.state {
         case .active:
-            return "protecting"
+            return "keeping awake"
         case .standingBy:
-            return "recently active"
+            return "releasing soon"
         case .finished:
             return "finished"
         }
+    }
+
+    private func countLabel(_ count: Int, singular: String, plural: String) -> String {
+        "\(count) \(count == 1 ? singular : plural)"
     }
 
     private func isProtectableDetectedSession(_ session: AgentSession) -> Bool {

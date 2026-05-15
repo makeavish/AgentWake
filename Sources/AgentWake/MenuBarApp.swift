@@ -68,7 +68,7 @@ final class MenuBarApp: NSObject {
             sessionSummary: services.agentMonitor.sessionSummaryMessage(),
             closedLidModeStatus: closedLidModeStatusLine,
             closedLidModeDetail: closedLidModeStatusDetail,
-            protectDetectedSessionsEnabled: services.agentMonitor.protectableDetectedSessionCount > 0,
+            protectableDetectedSessionCount: services.agentMonitor.protectableDetectedSessionCount,
             enableClosedLidModeEnabled: canEnableClosedLidMode,
             disableClosedLidModeEnabled: canDisableClosedLidMode,
             integrationStatuses: services.integrationManager.snapshots()
@@ -100,11 +100,14 @@ final class MenuBarApp: NSObject {
             switch item.kind {
             case .status:
                 menu.addItem(disabledMenuItem(for: item))
-                menu.addItem(.separator())
             case .diagnostic, .integrationStatus:
                 menu.addItem(disabledMenuItem(for: item))
+            case .separator:
+                menu.addItem(.separator())
             case .protectDetectedSessions:
                 menu.addItem(actionMenuItem(for: item, action: #selector(protectDetectedSessions)))
+            case .releaseProtection:
+                menu.addItem(actionMenuItem(for: item, action: #selector(releaseProtection)))
             case .closedLidEnable:
                 menu.addItem(actionMenuItem(for: item, action: #selector(enableClosedLidMode)))
             case .closedLidDisable:
@@ -114,9 +117,7 @@ final class MenuBarApp: NSObject {
             case .repairIntegrations:
                 menu.addItem(actionMenuItem(for: item, action: #selector(repairIntegrations)))
             case .settings:
-                menu.addItem(.separator())
                 menu.addItem(actionMenuItem(for: item, action: #selector(openSettings)))
-                menu.addItem(.separator())
             case .quit:
                 menu.addItem(actionMenuItem(for: item, action: #selector(quit)))
             }
@@ -166,23 +167,17 @@ final class MenuBarApp: NSObject {
     }
 
     @objc private func protectDetectedSessions() {
-        let protectedCount = services.agentMonitor.protectDetectedSessions(at: Date())
+        _ = services.agentMonitor.protectDetectedSessions(at: Date())
         services.assertionManager.reconcile()
         refreshState()
+        settingsWindowController.refresh()
+    }
 
-        if protectedCount > 0 {
-            presentMessage(
-                title: "Detected sessions protected",
-                message: "AgentWake is protecting \(protectedCount) detected session\(protectedCount == 1 ? "" : "s") until the process exits.",
-                style: .informational
-            )
-        } else {
-            presentMessage(
-                title: "No detected sessions",
-                message: "AgentWake did not find any unprotected detected sessions.",
-                style: .informational
-            )
-        }
+    @objc private func releaseProtection() {
+        services.agentMonitor.releaseHeldSessions(at: Date())
+        services.assertionManager.reconcile()
+        refreshState()
+        settingsWindowController.refresh()
     }
 
     @objc private func enableClosedLidMode() {
@@ -190,7 +185,7 @@ final class MenuBarApp: NSObject {
             return
         }
         let controller = services.closedLidModeController
-        runClosedLidAction(title: "Closed-Lid Mode enabled") {
+        runClosedLidAction {
             try controller.enable()
         }
     }
@@ -200,12 +195,12 @@ final class MenuBarApp: NSObject {
             return
         }
         let controller = services.closedLidModeController
-        runClosedLidAction(title: "Closed-Lid Mode disabled") {
+        runClosedLidAction {
             try controller.disable()
         }
     }
 
-    private func runClosedLidAction(title: String, action: @escaping @Sendable () throws -> String) {
+    private func runClosedLidAction(action: @escaping @Sendable () throws -> String) {
         closedLidModeActionInFlight = true
         closedLidModeStatusDetail = "Closed-Lid Mode change is waiting for macOS administrator approval."
         refreshState()
@@ -223,7 +218,6 @@ final class MenuBarApp: NSObject {
                     self.closedLidModeStatusDetail = message
                     self.closedLidModeActionInFlight = false
                     self.refreshState()
-                    self.presentMessage(title: title, message: message, style: .informational)
                 case .failure(let error):
                     self.closedLidModeStatusLine = "Closed-Lid Mode status unknown"
                     self.closedLidModeStatusDetail = error.localizedDescription

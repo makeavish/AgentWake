@@ -2,18 +2,18 @@
 
 Keep coding agents running while your Mac would normally sleep.
 
-AgentWake is a planned native macOS menu bar app for keeping long-running AI coding agents alive while they work, then letting the Mac return to normal sleep behavior when they are done.
+AgentWake is a native macOS menu bar app for keeping long-running AI coding agents alive while they work, then letting the Mac return to normal sleep behavior when they are done.
 
 It is designed for developers using tools like Claude Code and Codex CLI on a MacBook as their main machine.
 
 ## Status
 
-AgentWake is in early design. There is no public release yet.
+AgentWake is in early public release.
 
-The first public version is planned to focus on:
+The current release focuses on:
 
 - Detecting active agent sessions automatically
-- Letting you manually protect already-running detected sessions
+- Letting you manually keep already-running found sessions awake
 - Holding normal macOS sleep while agents are working
 - Showing exactly why sleep is currently being held
 - Releasing sleep prevention when agent work finishes or times out
@@ -30,9 +30,9 @@ Closed-Lid Mode currently uses macOS administrator approval to toggle the
 `pmset disablesleep` primitive and records the prior value so AgentWake can
 restore it when disabled.
 
-## Planned First Version Support
+## Current Support
 
-| Agent | Planned behavior |
+| Agent | Behavior |
 |---|---|
 | Claude Code | First-class local hook integration where available, with process fallback |
 | Codex CLI | Native lifecycle hooks where available, legacy `notify` completion fallback, and process fallback |
@@ -86,17 +86,20 @@ The V1 adapter contract reduces native hook payloads to a minimal event schema a
 
 ## Install
 
-No hosted or Homebrew installable build is available yet.
+Download the latest macOS ZIP from GitHub Releases and move `AgentWake.app` to
+`/Applications`.
 
-The planned primary distribution path is a Homebrew cask. Direct downloads may come later, with signing and notarization planned after the early release path is validated.
-See [CHANGELOG.md](CHANGELOG.md) for the pending v1 release scope and Closed-Lid Mode boundary.
+The planned primary distribution path is a Homebrew cask. Direct downloads may
+come later, with signing and notarization planned after the early release path
+is validated. See [CHANGELOG.md](CHANGELOG.md) for release scope and
+Closed-Lid Mode boundaries.
 
 ## Release Packaging
 
 Build a local release ZIP:
 
 ```sh
-scripts/package-release.sh --version v0.1.0
+scripts/package-release.sh --version v0.2.0
 ```
 
 The generated artifact is ad-hoc signed and does not install/register privileged

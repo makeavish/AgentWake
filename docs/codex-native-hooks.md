@@ -38,9 +38,9 @@ Native hooks provide integrated confidence:
 - `SessionStart` creates or refreshes an integrated active session keyed by `session_id`, cwd hash, and process identity when available.
 - `UserPromptSubmit` creates or refreshes an integrated active turn keyed by `turn_id`.
 - `PreToolUse` keeps the matching turn active.
-- `PostToolUse` keeps the matching turn active after tool completion because the agent may continue the turn.
-- `Stop` moves the matching active turn to standing-by and starts the normal grace window.
+- `PostToolUse` keeps the matching turn active briefly after tool completion because the agent may continue the turn. If no `Stop` or further activity arrives, AgentWake expires this stale post-tool hold and falls back to process-only detection while the Codex desktop process remains open.
+- `Stop` finishes the matching Codex turn and releases protection. The still-open Codex desktop process remains visible as process-only detection until new activity arrives.
 
-Legacy Codex `notify` remains completion-only fallback evidence. It can move a matching active turn to standing-by, but it must not be treated as an early activity signal.
+Legacy Codex `notify` remains completion-only fallback evidence. It can finish a matching active turn, but it must not be treated as an early activity signal.
 
 If the Codex process disappears, process reconciliation finishes the matching integrated session. If a native hook cannot be parsed or AgentWake is unavailable, the adapter exits successfully without blocking Codex.

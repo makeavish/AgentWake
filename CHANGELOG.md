@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.2.0 - 2026-05-15
+
+Session and UX polish release:
+
+- Adds concise menu/settings copy: `found`, `keeping awake`, `Keep Awake`,
+  and `Stop Keeping Awake`.
+- Detects the primary Codex Desktop app-server after AgentWake starts, while
+  still treating it as found-only until trusted activity or manual action.
+- Reuses Codex process-backed sessions across new turn IDs to avoid duplicate
+  session rows.
+- Releases Codex protection on `Stop`/completion, and expires stale
+  `PostToolUse` holds when Codex does not send a completion hook.
+- Adds `Stop Keeping Awake` to release current sleep protection from the menu.
+- Hides installed integration rows from the short menu and shows repair only
+  when an integration needs attention.
+- Refreshes the Settings window while it is visible.
+- Removes success popups for routine menu/settings actions.
+
 ## v0.1.0 - 2026-05-15
 
 First public release scope:

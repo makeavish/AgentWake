@@ -33,7 +33,7 @@ public enum AgentWakeState: String, CaseIterable, Equatable, Identifiable, Senda
     public var placeholderDetail: String {
         switch self {
         case .idle:
-            "No agent session seen"
+            "No agent session detected"
         case .active:
             "Keeping this Mac awake for agent work"
         case .bagMode:

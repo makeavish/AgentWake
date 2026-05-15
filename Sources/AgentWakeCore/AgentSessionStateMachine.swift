@@ -3,6 +3,7 @@ import Foundation
 public final class AgentSessionStateMachine {
     public var graceInterval: TimeInterval
     public var processDetectionHoldInterval: TimeInterval
+    public var codexPostToolIdleTimeout: TimeInterval
     public private(set) var sessions: [AgentSession]
     public private(set) var pauseAllExpiresAt: Date?
     public private(set) var manualPauseAllExpiresAt: Date?
@@ -12,6 +13,7 @@ public final class AgentSessionStateMachine {
     public init(
         graceInterval: TimeInterval = 15 * 60,
         processDetectionHoldInterval: TimeInterval = 15 * 60,
+        codexPostToolIdleTimeout: TimeInterval = 90,
         sessions: [AgentSession] = [],
         pauseAllExpiresAt: Date? = nil,
         manualPauseAllExpiresAt: Date? = nil,
@@ -20,6 +22,7 @@ public final class AgentSessionStateMachine {
     ) {
         self.graceInterval = graceInterval
         self.processDetectionHoldInterval = processDetectionHoldInterval
+        self.codexPostToolIdleTimeout = codexPostToolIdleTimeout
         self.sessions = sessions
         self.pauseAllExpiresAt = pauseAllExpiresAt
         self.manualPauseAllExpiresAt = manualPauseAllExpiresAt
@@ -219,6 +222,13 @@ public final class AgentSessionStateMachine {
         }
 
         for index in sessions.indices {
+            if shouldExpireStaleCodexPostToolSession(sessions[index], at: now) {
+                sessions[index].state = .finished
+                sessions[index].standingByExpiresAt = nil
+                sessions[index].lastEvent = SessionEvent(kind: .staleActivityExpired, occurredAt: now)
+                continue
+            }
+
             guard sessions[index].state == .standingBy,
                   !sessions[index].holdWhileOpen,
                   let expiresAt = sessions[index].standingByExpiresAt,
@@ -264,8 +274,13 @@ public final class AgentSessionStateMachine {
                 return
             }
 
-            sessions[index].state = .standingBy
-            sessions[index].standingByExpiresAt = now.addingTimeInterval(graceInterval)
+            if sessions[index].agent == .codexCLI {
+                sessions[index].state = .finished
+                sessions[index].standingByExpiresAt = nil
+            } else {
+                sessions[index].state = .standingBy
+                sessions[index].standingByExpiresAt = now.addingTimeInterval(graceInterval)
+            }
             sessions[index].lastEvent = SessionEvent(kind: kind, occurredAt: now)
 
         case .sessionFinished, .processDisappeared, .releaseNow:
@@ -312,9 +327,18 @@ public final class AgentSessionStateMachine {
             sessions[index].provisionalHoldExpiresAt = nil
             sessions[index].lastEvent = SessionEvent(kind: kind, occurredAt: now)
 
-        case .matchingProcessStarted, .graceExpired:
+        case .matchingProcessStarted, .graceExpired, .staleActivityExpired:
             return
         }
+    }
+
+    private func shouldExpireStaleCodexPostToolSession(_ session: AgentSession, at now: Date) -> Bool {
+        session.agent == .codexCLI
+            && session.state == .active
+            && session.hasIntegratedEvidence
+            && !session.holdWhileOpen
+            && session.lastEvent?.kind == .toolFinishedContinuing
+            && now.timeIntervalSince(session.lastActivityAt) >= codexPostToolIdleTimeout
     }
 
     private func isProtectableProcessOnlySession(_ session: AgentSession) -> Bool {
@@ -342,12 +366,6 @@ public final class AgentSessionStateMachine {
                    return false
                }
 
-               if let sessionIntegrationId = $0.key.integrationSessionId,
-                  let eventIntegrationId = event.integrationSessionId,
-                  sessionIntegrationId != eventIntegrationId {
-                   return false
-               }
-
                guard eventProcessEvidenceMatches(session: $0, event: event) else {
                    return false
                }
@@ -368,7 +386,7 @@ public final class AgentSessionStateMachine {
         from event: HookAdapterEvent,
         forSessionAt index: Array<AgentSession>.Index
     ) {
-        if sessions[index].key.integrationSessionId == nil {
+        if sessions[index].key.integrationSessionId == nil || shouldReplaceIntegrationSessionID(from: event, forSessionAt: index) {
             sessions[index].key.integrationSessionId = event.integrationSessionId
         }
 
@@ -377,6 +395,21 @@ public final class AgentSessionStateMachine {
         }
 
         sessions[index].provisionalHoldExpiresAt = nil
+    }
+
+    private func shouldReplaceIntegrationSessionID(
+        from event: HookAdapterEvent,
+        forSessionAt index: Array<AgentSession>.Index
+    ) -> Bool {
+        guard event.agent == .codexCLI,
+              let eventIntegrationSessionId = event.integrationSessionId,
+              let sessionIntegrationSessionId = sessions[index].key.integrationSessionId,
+              eventIntegrationSessionId != sessionIntegrationSessionId,
+              eventProcessEvidenceMatches(session: sessions[index], event: event) else {
+            return false
+        }
+
+        return true
     }
 
     private func refreshProvisionalProcessHolds(
@@ -435,6 +468,13 @@ public final class AgentSessionStateMachine {
     ) -> Bool {
         if sessions[index].state == .standingBy,
            sessions[index].lastEvent?.kind == .turnFinished {
+            if event.agent == .codexCLI,
+               let sessionIntegrationId = sessions[index].key.integrationSessionId,
+               let eventIntegrationId = event.integrationSessionId,
+               eventIntegrationId != sessionIntegrationId {
+                return true
+            }
+
             switch event.event {
             case .toolStarted, .toolFinishedContinuing:
                 return false
@@ -456,8 +496,18 @@ public final class AgentSessionStateMachine {
         return sessions.contains {
             $0.agent == event.agent
                 && $0.key.integrationSessionId == integrationSessionId
-                && $0.lastEvent?.kind == .sessionFinished
+                && $0.state == .finished
+                && isTerminalIntegrationEndEvent($0.lastEvent?.kind)
                 && eventProcessEvidenceMatches(session: $0, event: event)
+        }
+    }
+
+    private func isTerminalIntegrationEndEvent(_ kind: SessionEventKind?) -> Bool {
+        switch kind {
+        case .turnFinished, .sessionFinished, .staleActivityExpired:
+            true
+        default:
+            false
         }
     }
 
@@ -582,8 +632,12 @@ public final class AgentSessionStateMachine {
 
 private extension AgentSession {
     var hasTerminalEndEvent: Bool {
-        switch lastEvent?.kind {
-        case .sessionFinished, .processDisappeared, .graceExpired:
+        if state == .finished, lastEvent?.kind == .turnFinished {
+            return true
+        }
+
+        return switch lastEvent?.kind {
+        case .sessionFinished, .processDisappeared, .graceExpired, .staleActivityExpired:
             true
         default:
             false

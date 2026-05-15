@@ -11,7 +11,7 @@ final class SettingsWindowController: NSWindowController {
         let window = NSWindow(contentViewController: contentViewController)
         window.title = "AgentWake Settings"
         window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 520, height: 360))
+        window.setContentSize(NSSize(width: 620, height: 500))
         window.center()
         window.isReleasedWhenClosed = false
         window.tabbingMode = .disallowed
@@ -44,11 +44,17 @@ extension SettingsWindowController: NSWindowDelegate {
 private final class SettingsViewController: NSViewController {
     private let services: AgentWakeServices
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
+    private let sessionListLabel = NSTextField(wrappingLabelWithString: "")
     private let closedLidModeStatusLabel = NSTextField(wrappingLabelWithString: "")
     private let claudeStatusLabel = NSTextField(labelWithString: "")
     private let codexStatusLabel = NSTextField(labelWithString: "")
+    private let protectButton = NSButton(title: "Keep Awake", target: nil, action: nil)
+    private let enableClosedLidButton = NSButton(title: "Turn On", target: nil, action: nil)
+    private let disableClosedLidButton = NSButton(title: "Turn Off", target: nil, action: nil)
     private let repairButton = NSButton(title: "Repair Integrations", target: nil, action: nil)
     private let refreshButton = NSButton(title: "Refresh", target: nil, action: nil)
+    private var closedLidActionInFlight = false
+    private var refreshTimer: Timer?
 
     init(services: AgentWakeServices) {
         self.services = services
@@ -64,17 +70,19 @@ private final class SettingsViewController: NSViewController {
         let rootView = NSView()
         rootView.translatesAutoresizingMaskIntoConstraints = false
 
-        let titleLabel = NSTextField(labelWithString: "AgentWake Settings")
-        titleLabel.font = .preferredFont(forTextStyle: .title2)
+        let titleLabel = NSTextField(labelWithString: "AgentWake")
+        titleLabel.font = .preferredFont(forTextStyle: .title1)
         titleLabel.setAccessibilityLabel("AgentWake Settings")
 
-        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.font = .preferredFont(forTextStyle: .title3)
         statusLabel.setAccessibilityLabel("AgentWake runtime status")
+        sessionListLabel.textColor = .secondaryLabelColor
+        sessionListLabel.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        sessionListLabel.maximumNumberOfLines = 4
+        sessionListLabel.setAccessibilityLabel("Found agent sessions")
 
-        let normalProtectionLabel = keyValueLabel(key: "Normal sleep protection", value: "On")
-        let closedLidModeLabel = keyValueLabel(key: "Closed-Lid Mode", value: "Admin controlled")
         closedLidModeStatusLabel.textColor = .secondaryLabelColor
-        closedLidModeStatusLabel.setAccessibilityLabel("Closed-Lid Mode validation gates")
+        closedLidModeStatusLabel.setAccessibilityLabel("Closed-Lid Mode status")
 
         let claudeTitle = keyValueLabel(key: "Claude Code", value: "")
         let codexTitle = keyValueLabel(key: "Codex CLI", value: "")
@@ -89,6 +97,21 @@ private final class SettingsViewController: NSViewController {
         integrationGrid.column(at: 1).xPlacement = .leading
         integrationGrid.rowSpacing = 8
         integrationGrid.columnSpacing = 18
+
+        protectButton.target = self
+        protectButton.action = #selector(protectDetectedSessions)
+        protectButton.bezelStyle = .rounded
+        protectButton.setAccessibilityLabel("Keep found sessions awake")
+
+        enableClosedLidButton.target = self
+        enableClosedLidButton.action = #selector(enableClosedLidMode)
+        enableClosedLidButton.bezelStyle = .rounded
+        enableClosedLidButton.setAccessibilityLabel("Turn on lid-closed awake")
+
+        disableClosedLidButton.target = self
+        disableClosedLidButton.action = #selector(disableClosedLidMode)
+        disableClosedLidButton.bezelStyle = .rounded
+        disableClosedLidButton.setAccessibilityLabel("Turn off lid-closed awake")
 
         let closeButton = NSButton(title: "Close", target: self, action: #selector(closeWindow))
         closeButton.bezelStyle = .rounded
@@ -105,24 +128,29 @@ private final class SettingsViewController: NSViewController {
         refreshButton.bezelStyle = .rounded
         refreshButton.setAccessibilityLabel("Refresh status")
 
-        let buttonStack = NSStackView(views: [repairButton, refreshButton, closeButton])
-        buttonStack.orientation = .horizontal
-        buttonStack.alignment = .trailing
-        buttonStack.spacing = 8
+        let sessionButtons = rowStack([protectButton, refreshButton])
+        let closedLidButtons = rowStack([enableClosedLidButton, disableClosedLidButton])
+        let footerButtons = rowStack([NSView(), closeButton])
 
         let stack = NSStackView(views: [
             titleLabel,
+            sectionHeader("Sessions"),
             statusLabel,
-            normalProtectionLabel,
-            closedLidModeLabel,
-            closedLidModeStatusLabel,
+            sessionListLabel,
+            sessionButtons,
             separator(),
+            sectionHeader("Lid-Closed Awake"),
+            closedLidModeStatusLabel,
+            closedLidButtons,
+            separator(),
+            sectionHeader("Integrations"),
             integrationGrid,
-            buttonStack
+            repairButton,
+            footerButtons
         ])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 16
+        stack.spacing = 12
         stack.edgeInsets = NSEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
@@ -132,11 +160,24 @@ private final class SettingsViewController: NSViewController {
             stack.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
             stack.topAnchor.constraint(equalTo: rootView.topAnchor),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: rootView.bottomAnchor)
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: rootView.bottomAnchor),
+            sessionButtons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
+            closedLidButtons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
+            footerButtons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48)
         ])
 
         view = rootView
         refresh()
+    }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        startRefreshingWhileVisible()
+    }
+
+    override func viewDidDisappear() {
+        super.viewDidDisappear()
+        stopRefreshingWhileVisible()
     }
 
     func refresh() {
@@ -144,8 +185,19 @@ private final class SettingsViewController: NSViewController {
             return
         }
 
+        let protectableCount = services.agentMonitor.protectableDetectedSessionCount
         statusLabel.stringValue = services.agentMonitor.sessionSummaryMessage()
-        closedLidModeStatusLabel.stringValue = services.closedLidModeController.statusMessage()
+        sessionListLabel.stringValue = services.agentMonitor.sessionOverviewMessage()
+        protectButton.title = protectButtonTitle(count: protectableCount)
+        protectButton.isEnabled = protectableCount > 0
+
+        let closedLidStatusMessage = services.closedLidModeController.statusMessage()
+        closedLidModeStatusLabel.stringValue = closedLidDisplayText(for: closedLidStatusMessage)
+        enableClosedLidButton.isEnabled = !closedLidActionInFlight &&
+            canEnableClosedLidMode(statusMessage: closedLidStatusMessage)
+        disableClosedLidButton.isEnabled = !closedLidActionInFlight &&
+            canDisableClosedLidMode(statusMessage: closedLidStatusMessage)
+
         let snapshots = Dictionary(
             uniqueKeysWithValues: services.integrationManager.snapshots().map { ($0.agentID, $0) }
         )
@@ -157,6 +209,12 @@ private final class SettingsViewController: NSViewController {
         let text = value.isEmpty ? key : "\(key): \(value)"
         let label = NSTextField(labelWithString: text)
         label.font = .preferredFont(forTextStyle: .body)
+        return label
+    }
+
+    private func sectionHeader(_ title: String) -> NSTextField {
+        let label = NSTextField(labelWithString: title)
+        label.font = .preferredFont(forTextStyle: .headline)
         return label
     }
 
@@ -179,6 +237,118 @@ private final class SettingsViewController: NSViewController {
         let box = NSBox()
         box.boxType = .separator
         return box
+    }
+
+    private func rowStack(_ views: [NSView]) -> NSStackView {
+        let stack = NSStackView(views: views)
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 8
+        return stack
+    }
+
+    private func protectButtonTitle(count: Int) -> String {
+        guard count > 0 else {
+            return "Keep Awake"
+        }
+
+        return count == 1 ? "Keep Awake" : "Keep \(count) Awake"
+    }
+
+    private func closedLidDisplayText(for message: String) -> String {
+        let lines = message.split(separator: "\n").map(String.init)
+        guard let first = lines.first else {
+            return "Status unknown"
+        }
+
+        switch first {
+        case "Closed-Lid Mode off":
+            return "Off"
+        case "Closed-Lid Mode enabled":
+            return "Enabled\nAgentWake will restore the previous sleep setting when this is disabled."
+        case "Closed-Lid Mode already enabled":
+            return "Enabled"
+        case "Closed-Lid Mode ownership pending":
+            return "Finishing setup\nDisable is blocked until AgentWake confirms ownership."
+        case "Closed-Lid Mode enabled outside AgentWake":
+            return "On outside AgentWake\nDisable is blocked because AgentWake did not create this state."
+        case "Closed-Lid Mode status unknown":
+            return (["Status unknown"] + lines.dropFirst()).joined(separator: "\n")
+        default:
+            return first
+        }
+    }
+
+    private func canEnableClosedLidMode(statusMessage: String) -> Bool {
+        let firstLine = statusMessage.split(separator: "\n").first.map(String.init) ?? ""
+        return firstLine == "Closed-Lid Mode off" || firstLine == "Closed-Lid Mode already off"
+    }
+
+    private func canDisableClosedLidMode(statusMessage: String) -> Bool {
+        let firstLine = statusMessage.split(separator: "\n").first.map(String.init) ?? ""
+        return firstLine == "Closed-Lid Mode enabled" || firstLine == "Closed-Lid Mode already enabled"
+    }
+
+    private func presentAlert(title: String, message: String, style: NSAlert.Style = .informational) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = style
+        alert.addButton(withTitle: "OK")
+        if let window = view.window {
+            alert.beginSheetModal(for: window) { _ in }
+        } else {
+            alert.runModal()
+        }
+    }
+
+    @objc private func protectDetectedSessions() {
+        _ = services.agentMonitor.protectDetectedSessions(at: Date())
+        services.assertionManager.reconcile()
+        refresh()
+    }
+
+    @objc private func enableClosedLidMode() {
+        let controller = services.closedLidModeController
+        runClosedLidModeAction {
+            try controller.enable()
+        }
+    }
+
+    @objc private func disableClosedLidMode() {
+        let controller = services.closedLidModeController
+        runClosedLidModeAction {
+            try controller.disable()
+        }
+    }
+
+    private func runClosedLidModeAction(action: @escaping @Sendable () throws -> String) {
+        guard !closedLidActionInFlight else {
+            return
+        }
+
+        closedLidActionInFlight = true
+        closedLidModeStatusLabel.stringValue = "Waiting for macOS administrator approval"
+        enableClosedLidButton.isEnabled = false
+        disableClosedLidButton.isEnabled = false
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = Result { try action() }
+            DispatchQueue.main.async {
+                guard let self else {
+                    return
+                }
+
+                self.closedLidActionInFlight = false
+                switch result {
+                case .success:
+                    self.refresh()
+                case .failure(let error):
+                    self.refresh()
+                    self.presentAlert(title: "Closed-Lid Mode failed", message: error.localizedDescription, style: .warning)
+                }
+            }
+        }
     }
 
     @objc private func repairIntegrations() {
@@ -218,5 +388,22 @@ private final class SettingsViewController: NSViewController {
     @objc private func closeWindow() {
         view.window?.close()
         NSApp.setActivationPolicy(.accessory)
+    }
+
+    private func startRefreshingWhileVisible() {
+        guard refreshTimer == nil else {
+            return
+        }
+
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refresh()
+            }
+        }
+    }
+
+    private func stopRefreshingWhileVisible() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
     }
 }

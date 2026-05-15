@@ -77,7 +77,7 @@ struct AgentWakeCoreChecks {
     private static func snapshotIncludesRuntimeDiagnostics() throws {
         let snapshot = MenuBarModel.snapshot(
             currentState: .idle,
-            sessionSummary: "Sessions: none seen",
+            sessionSummary: "No sessions",
             integrationStatuses: [
                 IntegrationStatusSnapshot(
                     agentID: "claude-code",
@@ -88,14 +88,51 @@ struct AgentWakeCoreChecks {
         )
 
         let titles = snapshot.items.map(\.title)
-        try check(titles.contains("Sessions: none seen"), "Expected session summary in menu")
+        try check(titles.contains("No sessions"), "Expected session summary in menu")
         try check(titles.contains(ClosedLidModeAvailability.unavailableTitle), "Expected Closed-Lid Mode boundary in menu")
-        try check(titles.contains("Claude Code: Installed"), "Expected integration status in menu")
-        try check(titles.contains("Protect Detected Sessions"), "Expected protect detected sessions action in menu")
-        try check(titles.contains("Enable Closed-Lid Mode"), "Expected Closed-Lid Mode enable action in menu")
-        try check(titles.contains("Disable Closed-Lid Mode"), "Expected Closed-Lid Mode disable action in menu")
-        try check(titles.contains("Refresh Status"), "Expected refresh action in menu")
-        try check(titles.contains("Repair Integrations..."), "Expected repair action in menu")
+        try check(!titles.contains("Keep Awake"), "Expected protect action only when sessions are detected")
+        try check(titles.contains("Turn On Lid-Closed Awake"), "Expected Closed-Lid Mode enable action in menu")
+        try check(titles.contains("Refresh"), "Expected refresh action in menu")
+        try check(!titles.contains("Claude Code: Installed"), "Expected installed integrations to stay out of the short menu")
+        try check(!titles.contains("Repair Integrations..."), "Expected repair action only when an integration needs attention")
+
+        let protectableSnapshot = MenuBarModel.snapshot(
+            currentState: .idle,
+            protectableDetectedSessionCount: 2
+        )
+        try check(
+            protectableSnapshot.items.contains {
+                $0.title == "Keep 2 Awake" && $0.isEnabled
+            },
+            "Expected protect action to name the number of detected sessions"
+        )
+
+        let activeSnapshot = MenuBarModel.snapshot(
+            currentState: .active,
+            sessionSummary: "1 keeping awake, 2 found"
+        )
+        try check(
+            activeSnapshot.items.first?.title == "Status: 1 keeping awake, 2 found",
+            "Expected active menu status to include the protected session count"
+        )
+        try check(
+            activeSnapshot.items.contains { $0.title == "Stop Keeping Awake" && $0.isEnabled },
+            "Expected active menu to include a release action"
+        )
+
+        let degradedSnapshot = MenuBarModel.snapshot(
+            currentState: .idle,
+            integrationStatuses: [
+                IntegrationStatusSnapshot(
+                    agentID: "codex-cli",
+                    displayName: "Codex CLI",
+                    status: .failed
+                )
+            ]
+        )
+        let degradedTitles = degradedSnapshot.items.map(\.title)
+        try check(degradedTitles.contains("Codex CLI: Needs repair"), "Expected broken integration to be visible")
+        try check(degradedTitles.contains("Repair Integrations..."), "Expected repair action for broken integration")
     }
 
     private static func snapshotNamesTheCurrentState() throws {
@@ -104,7 +141,7 @@ struct AgentWakeCoreChecks {
         try check(snapshot.currentState == .bagMode, "Expected Closed-Lid Mode as current state")
         try check(snapshot.statusItemTitle == "AgentWake", "Expected stable status item title")
         try check(
-            snapshot.items.first?.title == "Current: \(ClosedLidModeAvailability.unavailableTitle)",
+            snapshot.items.first?.title == "Status: \(ClosedLidModeAvailability.unavailableTitle)",
             "Expected current-state menu row"
         )
         try check(snapshot.items.first?.detail == ClosedLidModeAvailability.settingsDetail, "Expected Closed-Lid Mode unavailable detail")
@@ -313,19 +350,33 @@ struct AgentWakeCoreChecks {
         let observations = detector.observations(
             in: [
                 ProcessSnapshot(
+                    pid: 16,
+                    processName: "Codex",
+                    executablePath: "/Applications/Codex.app/Contents/MacOS/Codex",
+                    processStartTime: Date(timeIntervalSince1970: 1)
+                ),
+                ProcessSnapshot(
                     pid: 17,
+                    parentPID: 16,
                     processName: "codex",
                     executablePath: "/Applications/Codex.app/Contents/Resources/codex",
                     processStartTime: Date(timeIntervalSince1970: 1)
                 ),
                 ProcessSnapshot(
                     pid: 18,
+                    parentPID: 99,
+                    processName: "codex",
+                    executablePath: "/Applications/Codex.app/Contents/Resources/codex",
+                    processStartTime: Date(timeIntervalSince1970: 1)
+                ),
+                ProcessSnapshot(
+                    pid: 19,
                     processName: "codex",
                     executablePath: "/Users/tester/.vscode/extensions/openai.chatgpt-1.0/bin/macos-aarch64/codex",
                     processStartTime: Date(timeIntervalSince1970: 1)
                 ),
                 ProcessSnapshot(
-                    pid: 19,
+                    pid: 20,
                     processName: "codex",
                     executablePath: "/opt/homebrew/bin/codex",
                     processStartTime: Date(timeIntervalSince1970: 1)
@@ -334,8 +385,8 @@ struct AgentWakeCoreChecks {
         )
 
         try check(
-            observations.map(\.snapshot.pid) == [19],
-            "Expected Codex CLI detection to exclude app-server helper processes"
+            observations.map(\.snapshot.pid) == [17, 20],
+            "Expected Codex detection to include the primary desktop app-server but exclude helper app-servers"
         )
     }
 
@@ -371,7 +422,7 @@ struct AgentWakeCoreChecks {
         monitor.poll()
         try check(monitor.visibleSessions.count == 3, "Expected parallel agent processes to remain distinct")
         try check(
-            monitor.sessionSummaryMessage() == "Sessions: 3 seen, none protecting",
+            monitor.sessionSummaryMessage() == "3 found",
             "Expected process-only matches to stay diagnostic instead of claiming confirmed protection"
         )
 
@@ -387,8 +438,8 @@ struct AgentWakeCoreChecks {
             at: now.addingTimeInterval(1)
         )
         try check(
-            monitor.sessionSummaryMessage() == "Sessions: 1 protecting, 2 seen",
-            "Expected integration-backed activity to protect while process-only sessions remain seen: \(monitor.sessionSummaryMessage())"
+            monitor.sessionSummaryMessage() == "1 keeping awake, 2 found",
+            "Expected integration-backed activity to protect while process-only sessions remain detected: \(monitor.sessionSummaryMessage())"
         )
     }
 
@@ -423,17 +474,21 @@ struct AgentWakeCoreChecks {
 
         monitor.poll()
         try check(
-            monitor.sessionSummaryMessage() == "Sessions: 3 seen, none protecting",
+            monitor.sessionSummaryMessage() == "3 found",
             "Expected process-only detections to remain diagnostic until hook evidence arrives: \(monitor.sessionSummaryMessage())"
         )
         try check(
-            monitor.sessionListMessage().contains("Codex CLI: seen source=processScan pid=32"),
-            "Expected process-only detection to be labeled seen: \(monitor.sessionListMessage())"
+            monitor.sessionOverviewMessage().contains("Codex CLI: found"),
+            "Expected settings overview to hide process diagnostics: \(monitor.sessionOverviewMessage())"
+        )
+        try check(
+            monitor.sessionListMessage().contains("Codex CLI: found source=processScan pid=32"),
+            "Expected process-only detection to be labeled detected: \(monitor.sessionListMessage())"
         )
 
         currentDate = currentDate.addingTimeInterval(901)
         try check(
-            monitor.sessionSummaryMessage() == "Sessions: 3 seen, none protecting",
+            monitor.sessionSummaryMessage() == "3 found",
             "Expected process-only detections to stay diagnostic without hook evidence: \(monitor.sessionSummaryMessage())"
         )
     }
@@ -529,7 +584,10 @@ struct AgentWakeCoreChecks {
         let baseline = Date(timeIntervalSince1970: 1_000)
         let machine = AgentSessionStateMachine(graceInterval: 900)
 
-        machine.applyProcessObservations([observation(pid: 42, start: baseline)], at: baseline)
+        machine.applyProcessObservations(
+            [observation(pid: 42, start: baseline, path: "/opt/homebrew/bin/claude", agent: .claudeCode)],
+            at: baseline
+        )
         let firstSessionID = try checkNotNil(machine.sessions.first?.id, "Expected initial process session")
         try check(machine.sessions.first?.state == .active, "Expected matching process start to create an active session")
         try check(!machine.aggregateHoldState(at: baseline).shouldHold, "Expected process-only session not to protect")
@@ -539,19 +597,19 @@ struct AgentWakeCoreChecks {
         )
         machine.applyIntegrationEvent(
             HookAdapterEvent(
-                agent: .codexCLI,
-                host: "codex-cli",
+                agent: .claudeCode,
+                host: "claude-code",
                 event: .toolStarted,
                 pid: 42,
                 processStartTime: baseline,
-                integrationSessionId: "codex-turn-42"
+                integrationSessionId: "claude-session-42"
             ),
             at: baseline.addingTimeInterval(1)
         )
         try check(machine.aggregateHoldState(at: baseline.addingTimeInterval(1)).shouldHold, "Expected integration-backed session to hold")
 
         machine.applyProcessObservations(
-            [observation(pid: 42, start: baseline, cpuPercent: 80)],
+            [observation(pid: 42, start: baseline, path: "/opt/homebrew/bin/claude", agent: .claudeCode, cpuPercent: 80)],
             at: baseline.addingTimeInterval(30)
         )
         try check(machine.sessions.count == 1, "Expected pid/start/path identity to dedupe")
@@ -571,7 +629,10 @@ struct AgentWakeCoreChecks {
         try check(machine.sessions[0].standingByExpiresAt == nil, "Expected trusted activity to clear grace expiry")
 
         let restartedAt = baseline.addingTimeInterval(120)
-        machine.applyProcessObservations([observation(pid: 42, start: restartedAt)], at: restartedAt)
+        machine.applyProcessObservations(
+            [observation(pid: 42, start: restartedAt, path: "/opt/homebrew/bin/claude", agent: .claudeCode)],
+            at: restartedAt
+        )
         try check(machine.sessions.count == 2, "Expected PID reuse to create a new session")
         try check(
             machine.sessions.contains { $0.id == firstSessionID && $0.state == .finished },
@@ -588,12 +649,12 @@ struct AgentWakeCoreChecks {
         )
         machine.applyIntegrationEvent(
             HookAdapterEvent(
-                agent: .codexCLI,
-                host: "codex-cli",
+                agent: .claudeCode,
+                host: "claude-code",
                 event: .toolStarted,
                 pid: 42,
                 processStartTime: restartedAt,
-                integrationSessionId: "codex-turn-43"
+                integrationSessionId: "claude-session-43"
             ),
             at: restartedAt.addingTimeInterval(1)
         )
@@ -622,13 +683,16 @@ struct AgentWakeCoreChecks {
         let baseline = Date(timeIntervalSince1970: 1_000)
         let machine = AgentSessionStateMachine()
 
-        machine.applyProcessObservations([observationWithMissingPath(pid: 43, start: baseline)], at: baseline)
+        machine.applyProcessObservations(
+            [observationWithMissingPath(pid: 43, start: baseline, processName: "claude", agent: .claudeCode)],
+            at: baseline
+        )
         let sessionID = try checkNotNil(machine.sessions.first?.id, "Expected fallback process session")
         machine.applyTrustedEvent(.turnFinished, to: sessionID, at: baseline.addingTimeInterval(10))
         let expiry = try checkNotNil(machine.sessions.first?.standingByExpiresAt, "Expected standing-by expiry")
 
         machine.applyProcessObservations(
-            [observation(pid: 43, start: baseline, path: "/opt/homebrew/bin/codex")],
+            [observation(pid: 43, start: baseline, path: "/opt/homebrew/bin/claude", agent: .claudeCode)],
             at: baseline.addingTimeInterval(20)
         )
 
@@ -636,7 +700,7 @@ struct AgentWakeCoreChecks {
         try check(machine.sessions[0].id == sessionID, "Expected path hash upgrade to preserve session identity")
         try check(machine.sessions[0].state == .standingBy, "Expected path hash upgrade not to reactivate the session")
         try check(machine.sessions[0].standingByExpiresAt == expiry, "Expected path hash upgrade not to reset grace")
-        try check(machine.sessions[0].key.executablePathHash == StablePathHash.sha256("/opt/homebrew/bin/codex"), "Expected verified path hash to upgrade")
+        try check(machine.sessions[0].key.executablePathHash == StablePathHash.sha256("/opt/homebrew/bin/claude"), "Expected verified path hash to upgrade")
         try check(machine.sessions[0].key.executablePathHashIsVerified, "Expected upgraded path hash to be marked verified")
     }
 
@@ -670,13 +734,16 @@ struct AgentWakeCoreChecks {
         let baseline = Date(timeIntervalSince1970: 2_000)
         let machine = AgentSessionStateMachine(graceInterval: 900)
 
-        machine.applyProcessObservations([observation(pid: 60, start: baseline, cpuPercent: 5)], at: baseline)
+        machine.applyProcessObservations(
+            [observation(pid: 60, start: baseline, path: "/opt/homebrew/bin/claude", agent: .claudeCode, cpuPercent: 5)],
+            at: baseline
+        )
         let sessionID = try checkNotNil(machine.sessions.first?.id, "Expected active CPU diagnostic session")
         machine.applyTrustedEvent(.turnFinished, to: sessionID, at: baseline.addingTimeInterval(10))
         let originalExpiry = try checkNotNil(machine.sessions[0].standingByExpiresAt, "Expected standing-by expiry")
 
         machine.applyProcessObservations(
-            [observation(pid: 60, start: baseline, cpuPercent: 95)],
+            [observation(pid: 60, start: baseline, path: "/opt/homebrew/bin/claude", agent: .claudeCode, cpuPercent: 95)],
             at: baseline.addingTimeInterval(20)
         )
 
@@ -1092,40 +1159,34 @@ struct AgentWakeCoreChecks {
             hookEvent(.turnFinished, integrationSessionId: sessionID, pid: 100, processStartTime: processStart),
             at: baseline.addingTimeInterval(30)
         )
-        try check(machine.sessions[0].state == .standingBy, "Expected current turnFinished hook to enter standing by")
-        try check(
-            machine.sessions[0].standingByExpiresAt == baseline.addingTimeInterval(930),
-            "Expected standing-by expiry from accepted turnFinished hook"
-        )
+        try check(machine.sessions[0].state == .finished, "Expected current Codex Stop hook to finish the turn")
+        try check(machine.sessions[0].standingByExpiresAt == nil, "Expected Codex Stop not to keep a grace hold")
 
         machine.applyIntegrationEvent(
             hookEvent(.toolStarted, integrationSessionId: sessionID, pid: 100, processStartTime: processStart),
             at: baseline.addingTimeInterval(25)
         )
-        try check(machine.sessions[0].state == .standingBy, "Expected stale toolStarted hook not to reactivate standing-by")
-        try check(
-            machine.sessions[0].standingByExpiresAt == baseline.addingTimeInterval(930),
-            "Expected stale toolStarted hook not to alter standing-by expiry"
-        )
+        try check(machine.sessions[0].state == .finished, "Expected stale toolStarted hook not to reactivate the finished Codex turn")
 
         machine.applyIntegrationEvent(
             hookEvent(.toolStarted, integrationSessionId: sessionID, pid: 100, processStartTime: processStart),
             at: baseline.addingTimeInterval(40)
         )
-        try check(machine.sessions[0].state == .standingBy, "Expected late toolStarted hook after turnFinished not to reactivate")
+        try check(machine.sessions[0].state == .finished, "Expected late toolStarted hook after Codex Stop not to reactivate")
 
         machine.applyIntegrationEvent(
             hookEvent(.turnStarted, integrationSessionId: sessionID, pid: 100, processStartTime: processStart),
             at: baseline.addingTimeInterval(45)
         )
-        try check(machine.sessions[0].state == .standingBy, "Expected late same-turn Codex UserPromptSubmit not to reactivate after Stop")
+        try check(machine.sessions[0].state == .finished, "Expected late same-turn Codex UserPromptSubmit not to reactivate after Stop")
 
         machine.applyIntegrationEvent(
             hookEvent(.turnStarted, integrationSessionId: "codex-turn-2", pid: 100, processStartTime: processStart),
             at: baseline.addingTimeInterval(46)
         )
-        try check(machine.sessions.count == 2, "Expected a new Codex turn id to create a separate active session")
+        try check(machine.sessions.count == 2, "Expected a new Codex turn id on the same process to create a new active turn")
         try check(machine.sessions[1].state == .active, "Expected the new Codex turn to become active")
+        try check(machine.sessions[1].key.integrationSessionId == "codex-turn-2", "Expected latest Codex turn id to be retained")
 
         let processBackedMachine = AgentSessionStateMachine(graceInterval: 900)
         processBackedMachine.applyProcessObservations([observation(pid: 102, start: processStart)], at: baseline)
@@ -1133,7 +1194,7 @@ struct AgentWakeCoreChecks {
             hookEvent(.turnFinished, integrationSessionId: "codex-turn-1", pid: 102, processStartTime: processStart),
             at: baseline.addingTimeInterval(1)
         )
-        try check(processBackedMachine.sessions[0].state == .standingBy, "Expected Stop to move process-backed Codex turn to standing by")
+        try check(processBackedMachine.sessions[0].state == .finished, "Expected Stop to finish the process-backed Codex turn")
         try check(
             processBackedMachine.sessions[0].key.integrationSessionId == "codex-turn-1",
             "Expected matched process-backed session to adopt the first Codex turn id"
@@ -1142,8 +1203,47 @@ struct AgentWakeCoreChecks {
             hookEvent(.turnStarted, integrationSessionId: "codex-turn-2", pid: 102, processStartTime: processStart),
             at: baseline.addingTimeInterval(2)
         )
-        try check(processBackedMachine.sessions.count == 2, "Expected a different Codex turn id not to be swallowed by PID fallback")
+        try check(processBackedMachine.sessions.count == 2, "Expected a different Codex turn id to create a new process-backed turn")
         try check(processBackedMachine.sessions[1].state == .active, "Expected the new process-backed Codex turn to become active")
+        try check(
+            processBackedMachine.sessions[1].key.integrationSessionId == "codex-turn-2",
+            "Expected process-backed Codex session to adopt the latest turn id"
+        )
+
+        let missingStopMachine = AgentSessionStateMachine(
+            graceInterval: 900,
+            codexPostToolIdleTimeout: 30
+        )
+        missingStopMachine.applyIntegrationEvent(
+            hookEvent(.turnStarted, integrationSessionId: "codex-turn-missing-stop", pid: 103, processStartTime: processStart),
+            at: baseline
+        )
+        missingStopMachine.applyIntegrationEvent(
+            hookEvent(.toolFinishedContinuing, integrationSessionId: "codex-turn-missing-stop", pid: 103, processStartTime: processStart),
+            at: baseline.addingTimeInterval(1)
+        )
+        try check(
+            missingStopMachine.aggregateHoldState(at: baseline.addingTimeInterval(2)).shouldHold,
+            "Expected Codex post-tool activity to protect while waiting for completion"
+        )
+        missingStopMachine.applyProcessObservations(
+            [observation(pid: 103, start: processStart, path: "/opt/homebrew/bin/codex")],
+            at: baseline.addingTimeInterval(31)
+        )
+        try check(
+            !missingStopMachine.aggregateHoldState(at: baseline.addingTimeInterval(31)).shouldHold,
+            "Expected stale Codex post-tool activity to release even when the desktop process remains open"
+        )
+        try check(
+            missingStopMachine.sessions.contains { $0.lastEvent?.kind == .staleActivityExpired },
+            "Expected stale Codex post-tool activity to record an expiry event"
+        )
+        try check(
+            missingStopMachine.sessions.contains {
+                $0.source == .processScan && $0.state != .finished && !$0.hasIntegratedEvidence
+            },
+            "Expected the still-open Codex process to remain visible only as a detected process"
+        )
 
         let terminalMachine = AgentSessionStateMachine(graceInterval: 900)
         terminalMachine.applyIntegrationEvent(
@@ -2311,8 +2411,8 @@ struct AgentWakeCoreChecks {
             at: baseline.addingTimeInterval(10)
         )
 
-        try check(machine.sessions.first?.state == .standingBy, "Expected Codex notify completion to move matching process session to standing by")
-        try check(machine.sessions.first?.standingByExpiresAt == baseline.addingTimeInterval(910), "Expected Codex notify completion to start grace timer")
+        try check(machine.sessions.first?.state == .finished, "Expected Codex notify completion to finish the matching process session")
+        try check(machine.sessions.first?.standingByExpiresAt == nil, "Expected Codex notify completion not to keep a grace hold")
 
         let staleMachine = AgentSessionStateMachine(graceInterval: 900)
         staleMachine.applyProcessObservations(
@@ -3072,21 +3172,26 @@ struct AgentWakeCoreChecks {
         )
     }
 
-    private static func observationWithMissingPath(pid: Int32, start: Date) -> AgentProcessObservation {
+    private static func observationWithMissingPath(
+        pid: Int32,
+        start: Date,
+        processName: String = "codex",
+        agent: AgentKind = .codexCLI
+    ) -> AgentProcessObservation {
         let snapshot = ProcessSnapshot(
             pid: pid,
-            processName: "codex",
+            processName: processName,
             executablePath: nil,
             processStartTime: start
         )
 
         return AgentProcessObservation(
-            agent: .codexCLI,
+            agent: agent,
             snapshot: snapshot,
             key: SessionKey(
                 pid: pid,
                 processStartTime: start,
-                executablePathHash: StablePathHash.sha256("process:codex"),
+                executablePathHash: StablePathHash.sha256("process:\(processName)"),
                 executablePathHashIsVerified: false
             )
         )

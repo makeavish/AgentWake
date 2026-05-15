@@ -224,13 +224,16 @@ private func runProcessIdentityDedupesAndSeparatesPIDReuse() throws {
 private func runPathLookupVolatilityDoesNotSplitSessions() throws {
     let machine = AgentSessionStateMachine()
 
-    machine.applyProcessObservations([observationWithMissingPath(pid: 43, start: baseline)], at: baseline)
+    machine.applyProcessObservations(
+        [observationWithMissingPath(pid: 43, start: baseline, processName: "claude", agent: .claudeCode)],
+        at: baseline
+    )
     let sessionID = try checkNotNil(machine.sessions.first?.id, "Expected fallback process session")
     machine.applyTrustedEvent(.turnFinished, to: sessionID, at: baseline.addingTimeInterval(10))
     let expiry = try checkNotNil(machine.sessions.first?.standingByExpiresAt, "Expected standing-by expiry")
 
     machine.applyProcessObservations(
-        [observation(pid: 43, start: baseline, path: "/opt/homebrew/bin/codex")],
+        [observation(pid: 43, start: baseline, path: "/opt/homebrew/bin/claude", agent: .claudeCode)],
         at: baseline.addingTimeInterval(20)
     )
 
@@ -238,7 +241,7 @@ private func runPathLookupVolatilityDoesNotSplitSessions() throws {
     try check(machine.sessions[0].id == sessionID, "Expected path hash upgrade to preserve session identity")
     try check(machine.sessions[0].state == .standingBy, "Expected path hash upgrade not to reactivate the session")
     try check(machine.sessions[0].standingByExpiresAt == expiry, "Expected path hash upgrade not to reset grace")
-    try check(machine.sessions[0].key.executablePathHash == StablePathHash.sha256("/opt/homebrew/bin/codex"), "Expected path hash to upgrade when a verified path appears")
+    try check(machine.sessions[0].key.executablePathHash == StablePathHash.sha256("/opt/homebrew/bin/claude"), "Expected path hash to upgrade when a verified path appears")
     try check(machine.sessions[0].key.executablePathHashIsVerified, "Expected upgraded path hash to be marked verified")
 }
 
@@ -313,17 +316,21 @@ private func runProcessOnlyDetectionsRemainDiagnosticUntilIntegrated() throws {
 
     monitor.poll()
     try check(
-        monitor.sessionSummaryMessage() == "Sessions: 3 seen, none protecting",
+        monitor.sessionSummaryMessage() == "3 found",
         "Expected process-only detections to remain diagnostic until hook evidence arrives: \(monitor.sessionSummaryMessage())"
     )
     try check(
-        monitor.sessionListMessage().contains("Codex CLI: seen source=processScan pid=32"),
-        "Expected process-only detection to be labeled seen: \(monitor.sessionListMessage())"
+        monitor.sessionOverviewMessage().contains("Codex CLI: found"),
+        "Expected settings overview to hide process diagnostics: \(monitor.sessionOverviewMessage())"
+    )
+    try check(
+        monitor.sessionListMessage().contains("Codex CLI: found source=processScan pid=32"),
+        "Expected process-only detection to be labeled detected: \(monitor.sessionListMessage())"
     )
 
     currentDate = currentDate.addingTimeInterval(901)
     try check(
-        monitor.sessionSummaryMessage() == "Sessions: 3 seen, none protecting",
+        monitor.sessionSummaryMessage() == "3 found",
         "Expected process-only detections to stay diagnostic without hook evidence: \(monitor.sessionSummaryMessage())"
     )
 }
@@ -392,7 +399,10 @@ private func runAgentMonitorStartUsesTimerCadence() throws {
 
 private func runTransitionMatrixCoversActivityStandbyGraceAndFinish() throws {
     let machine = AgentSessionStateMachine(graceInterval: 900)
-    machine.applyProcessObservations([observation(pid: 50, start: baseline)], at: baseline)
+    machine.applyProcessObservations(
+        [observation(pid: 50, start: baseline, path: "/opt/homebrew/bin/claude", agent: .claudeCode)],
+        at: baseline
+    )
     let sessionID = try checkNotNil(machine.sessions.first?.id, "Expected active process-backed session")
 
     try check(machine.sessions[0].state == .active, "Expected matching process start to create an active session")
@@ -403,12 +413,12 @@ private func runTransitionMatrixCoversActivityStandbyGraceAndFinish() throws {
     )
     machine.applyIntegrationEvent(
         HookAdapterEvent(
-            agent: .codexCLI,
-            host: "codex-cli",
+            agent: .claudeCode,
+            host: "claude-code",
             event: .toolStarted,
             pid: 50,
             processStartTime: baseline,
-            integrationSessionId: "codex-turn-50"
+            integrationSessionId: "claude-session-50"
         ),
         at: baseline.addingTimeInterval(1)
     )
@@ -440,11 +450,14 @@ private func runTransitionMatrixCoversActivityStandbyGraceAndFinish() throws {
 
 private func runCPUDiagnosticsDoNotResetActivityOrGrace() throws {
     let machine = AgentSessionStateMachine(graceInterval: 900)
-    machine.applyProcessObservations([observation(pid: 60, start: baseline, cpuPercent: 1)], at: baseline)
+    machine.applyProcessObservations(
+        [observation(pid: 60, start: baseline, path: "/opt/homebrew/bin/claude", agent: .claudeCode, cpuPercent: 1)],
+        at: baseline
+    )
     let sessionID = try checkNotNil(machine.sessions.first?.id, "Expected active session")
 
     machine.applyProcessObservations(
-        [observation(pid: 60, start: baseline, cpuPercent: 88)],
+        [observation(pid: 60, start: baseline, path: "/opt/homebrew/bin/claude", agent: .claudeCode, cpuPercent: 88)],
         at: baseline.addingTimeInterval(120)
     )
     try check(machine.sessions[0].lastActivityAt == baseline, "Expected CPU changes not to reset active timestamp")
@@ -454,7 +467,7 @@ private func runCPUDiagnosticsDoNotResetActivityOrGrace() throws {
     let originalExpiry = try checkNotNil(machine.sessions[0].standingByExpiresAt, "Expected standing-by expiry")
 
     machine.applyProcessObservations(
-        [observation(pid: 60, start: baseline, cpuPercent: 0)],
+        [observation(pid: 60, start: baseline, path: "/opt/homebrew/bin/claude", agent: .claudeCode, cpuPercent: 0)],
         at: baseline.addingTimeInterval(240)
     )
     try check(machine.sessions[0].state == .standingBy, "Expected process presence not to reactivate standing-by session")
@@ -602,40 +615,34 @@ private func runOutOfOrderHookEventsAreIgnored() throws {
         hookEvent(.turnFinished, integrationSessionId: sessionID, pid: 100, processStartTime: processStart),
         at: baseline.addingTimeInterval(30)
     )
-    try check(machine.sessions[0].state == .standingBy, "Expected current turnFinished hook to enter standing by")
-    try check(
-        machine.sessions[0].standingByExpiresAt == baseline.addingTimeInterval(930),
-        "Expected standing-by expiry from the accepted turnFinished hook"
-    )
+    try check(machine.sessions[0].state == .finished, "Expected current Codex Stop hook to finish the turn")
+    try check(machine.sessions[0].standingByExpiresAt == nil, "Expected Codex Stop not to keep a grace hold")
 
     machine.applyIntegrationEvent(
         hookEvent(.toolStarted, integrationSessionId: sessionID, pid: 100, processStartTime: processStart),
         at: baseline.addingTimeInterval(25)
     )
-    try check(machine.sessions[0].state == .standingBy, "Expected stale toolStarted hook not to reactivate standing-by session")
-    try check(
-        machine.sessions[0].standingByExpiresAt == baseline.addingTimeInterval(930),
-        "Expected stale toolStarted hook not to alter standing-by expiry"
-    )
+    try check(machine.sessions[0].state == .finished, "Expected stale toolStarted hook not to reactivate the finished Codex turn")
 
     machine.applyIntegrationEvent(
         hookEvent(.toolStarted, integrationSessionId: sessionID, pid: 100, processStartTime: processStart),
         at: baseline.addingTimeInterval(40)
     )
-    try check(machine.sessions[0].state == .standingBy, "Expected late toolStarted hook after turnFinished not to reactivate the session")
+    try check(machine.sessions[0].state == .finished, "Expected late toolStarted hook after Codex Stop not to reactivate the session")
 
     machine.applyIntegrationEvent(
         hookEvent(.turnStarted, integrationSessionId: sessionID, pid: 100, processStartTime: processStart),
         at: baseline.addingTimeInterval(45)
     )
-    try check(machine.sessions[0].state == .standingBy, "Expected late same-turn Codex UserPromptSubmit not to reactivate after Stop")
+    try check(machine.sessions[0].state == .finished, "Expected late same-turn Codex UserPromptSubmit not to reactivate after Stop")
 
     machine.applyIntegrationEvent(
         hookEvent(.turnStarted, integrationSessionId: "codex-turn-2", pid: 100, processStartTime: processStart),
         at: baseline.addingTimeInterval(46)
     )
-    try check(machine.sessions.count == 2, "Expected a new Codex turn id to create a separate active session")
+    try check(machine.sessions.count == 2, "Expected a new Codex turn id on the same process to create a new active turn")
     try check(machine.sessions[1].state == .active, "Expected the new Codex turn to become active")
+    try check(machine.sessions[1].key.integrationSessionId == "codex-turn-2", "Expected latest Codex turn id to be retained")
 
     let processBackedMachine = AgentSessionStateMachine(graceInterval: 900)
     processBackedMachine.applyProcessObservations([observation(pid: 102, start: processStart)], at: baseline)
@@ -643,7 +650,7 @@ private func runOutOfOrderHookEventsAreIgnored() throws {
         hookEvent(.turnFinished, integrationSessionId: "codex-turn-1", pid: 102, processStartTime: processStart),
         at: baseline.addingTimeInterval(1)
     )
-    try check(processBackedMachine.sessions[0].state == .standingBy, "Expected Stop to move the process-backed Codex turn to standing by")
+    try check(processBackedMachine.sessions[0].state == .finished, "Expected Stop to finish the process-backed Codex turn")
     try check(
         processBackedMachine.sessions[0].key.integrationSessionId == "codex-turn-1",
         "Expected matched process-backed session to adopt the first Codex turn id"
@@ -652,8 +659,47 @@ private func runOutOfOrderHookEventsAreIgnored() throws {
         hookEvent(.turnStarted, integrationSessionId: "codex-turn-2", pid: 102, processStartTime: processStart),
         at: baseline.addingTimeInterval(2)
     )
-    try check(processBackedMachine.sessions.count == 2, "Expected a different Codex turn id not to be swallowed by PID fallback")
+    try check(processBackedMachine.sessions.count == 2, "Expected a different Codex turn id to create a new process-backed turn")
     try check(processBackedMachine.sessions[1].state == .active, "Expected the new process-backed Codex turn to become active")
+    try check(
+        processBackedMachine.sessions[1].key.integrationSessionId == "codex-turn-2",
+        "Expected process-backed Codex session to adopt the latest turn id"
+    )
+
+    let missingStopMachine = AgentSessionStateMachine(
+        graceInterval: 900,
+        codexPostToolIdleTimeout: 30
+    )
+    missingStopMachine.applyIntegrationEvent(
+        hookEvent(.turnStarted, integrationSessionId: "codex-turn-missing-stop", pid: 103, processStartTime: processStart),
+        at: baseline
+    )
+    missingStopMachine.applyIntegrationEvent(
+        hookEvent(.toolFinishedContinuing, integrationSessionId: "codex-turn-missing-stop", pid: 103, processStartTime: processStart),
+        at: baseline.addingTimeInterval(1)
+    )
+    try check(
+        missingStopMachine.aggregateHoldState(at: baseline.addingTimeInterval(2)).shouldHold,
+        "Expected Codex post-tool activity to protect while waiting for completion"
+    )
+    missingStopMachine.applyProcessObservations(
+        [observation(pid: 103, start: processStart, path: "/opt/homebrew/bin/codex")],
+        at: baseline.addingTimeInterval(31)
+    )
+    try check(
+        !missingStopMachine.aggregateHoldState(at: baseline.addingTimeInterval(31)).shouldHold,
+        "Expected stale Codex post-tool activity to release even when the desktop process remains open"
+    )
+    try check(
+        missingStopMachine.sessions.contains { $0.lastEvent?.kind == .staleActivityExpired },
+        "Expected stale Codex post-tool activity to record an expiry event"
+    )
+    try check(
+        missingStopMachine.sessions.contains {
+            $0.source == .processScan && $0.state != .finished && !$0.hasIntegratedEvidence
+        },
+        "Expected the still-open Codex process to remain visible only as a detected process"
+    )
 
     let terminalMachine = AgentSessionStateMachine(graceInterval: 900)
     terminalMachine.applyIntegrationEvent(
@@ -825,20 +871,25 @@ private func observation(
     )
 }
 
-private func observationWithMissingPath(pid: Int32, start: Date) -> AgentProcessObservation {
+private func observationWithMissingPath(
+    pid: Int32,
+    start: Date,
+    processName: String = "codex",
+    agent: AgentKind = .codexCLI
+) -> AgentProcessObservation {
     let snapshot = ProcessSnapshot(
         pid: pid,
-        processName: "codex",
+        processName: processName,
         executablePath: nil,
         processStartTime: start
     )
     return AgentProcessObservation(
-        agent: .codexCLI,
+        agent: agent,
         snapshot: snapshot,
         key: SessionKey(
             pid: pid,
             processStartTime: start,
-            executablePathHash: StablePathHash.sha256("process:codex"),
+            executablePathHash: StablePathHash.sha256("process:\(processName)"),
             executablePathHashIsVerified: false
         )
     )

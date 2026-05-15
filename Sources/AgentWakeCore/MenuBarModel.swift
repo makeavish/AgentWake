@@ -3,7 +3,9 @@ import Foundation
 public enum MenuBarItemKind: Equatable, Sendable {
     case status
     case diagnostic
+    case separator
     case protectDetectedSessions
+    case releaseProtection
     case closedLidEnable
     case closedLidDisable
     case integrationStatus(String)
@@ -54,21 +56,21 @@ public enum MenuBarModel {
         sessionSummary: String? = nil,
         closedLidModeStatus: String = ClosedLidModeAvailability.currentStatus.title,
         closedLidModeDetail: String? = ClosedLidModeAvailability.currentStatus.settingsDetail,
-        protectDetectedSessionsEnabled: Bool = false,
+        protectableDetectedSessionCount: Int = 0,
         enableClosedLidModeEnabled: Bool = true,
-        disableClosedLidModeEnabled: Bool = true,
+        disableClosedLidModeEnabled: Bool = false,
         integrationStatuses: [IntegrationStatusSnapshot] = []
     ) -> MenuBarSnapshot {
         var items = [
             MenuBarItem(
-                title: "Current: \(currentState.menuTitle)",
+                title: statusTitle(currentState: currentState, sessionSummary: sessionSummary),
                 detail: currentState.placeholderDetail,
                 isEnabled: false,
                 kind: .status
             )
         ]
 
-        if let sessionSummary, !sessionSummary.isEmpty {
+        if let sessionSummary, !sessionSummary.isEmpty, !statusIncludesSessionSummary(currentState: currentState, sessionSummary: sessionSummary) {
             items.append(
                 MenuBarItem(
                     title: sessionSummary,
@@ -78,66 +80,97 @@ public enum MenuBarModel {
             )
         }
 
-        items.append(
-            MenuBarItem(
-                title: "Protect Detected Sessions",
-                detail: "Manually protects currently seen agent processes until they exit.",
-                isEnabled: protectDetectedSessionsEnabled,
-                kind: .protectDetectedSessions
+        if protectableDetectedSessionCount > 0 {
+            items.append(
+                MenuBarItem(
+                    title: protectDetectedSessionsTitle(count: protectableDetectedSessionCount),
+                    detail: protectDetectedSessionsDetail(count: protectableDetectedSessionCount),
+                    isEnabled: true,
+                    kind: .protectDetectedSessions
+                )
             )
-        )
+        }
+
+        if currentState == .active {
+            items.append(
+                MenuBarItem(
+                    title: "Stop Keeping Awake",
+                    detail: "Lets the Mac sleep until new agent activity starts.",
+                    isEnabled: true,
+                    kind: .releaseProtection
+                )
+            )
+        }
+
+        items.append(separatorItem())
 
         items.append(
             MenuBarItem(
-                title: closedLidModeStatus,
+                title: closedLidStatusTitle(closedLidModeStatus),
                 detail: closedLidModeDetail,
                 isEnabled: false,
                 kind: .diagnostic
             )
         )
 
-        items += [
-            MenuBarItem(
-                title: "Enable Closed-Lid Mode",
-                detail: "Requires macOS administrator approval.",
-                isEnabled: enableClosedLidModeEnabled,
-                kind: .closedLidEnable
-            ),
-            MenuBarItem(
-                title: "Disable Closed-Lid Mode",
-                detail: "Restores only AgentWake-owned closed-lid state.",
-                isEnabled: disableClosedLidModeEnabled,
-                kind: .closedLidDisable
+        if disableClosedLidModeEnabled {
+            items.append(
+                MenuBarItem(
+                    title: "Turn Off Lid-Closed Awake",
+                    detail: "Restores only AgentWake-owned closed-lid state.",
+                    isEnabled: true,
+                    kind: .closedLidDisable
+                )
             )
-        ]
+        } else if enableClosedLidModeEnabled {
+            items.append(
+                MenuBarItem(
+                    title: "Turn On Lid-Closed Awake",
+                    detail: "Prevents sleep when the lid closes. Requires macOS administrator approval.",
+                    isEnabled: true,
+                    kind: .closedLidEnable
+                )
+            )
+        }
 
-        items += integrationStatuses.map { snapshot in
-            let title = "\(snapshot.displayName): \(snapshot.status.displayTitle)"
-            let detail = snapshot.failureReason ?? snapshot.settingsFile
-            return MenuBarItem(
-                title: title,
-                detail: detail,
-                isEnabled: false,
-                kind: .integrationStatus(snapshot.agentID)
+        let integrationIssues = integrationStatuses.filter { $0.status != .installed }
+        if !integrationIssues.isEmpty {
+            items.append(separatorItem())
+            items += integrationIssues.map { snapshot in
+                let title = "\(snapshot.displayName): \(snapshot.status.displayTitle)"
+                let detail = snapshot.failureReason ?? snapshot.settingsFile
+                return MenuBarItem(
+                    title: title,
+                    detail: detail,
+                    isEnabled: false,
+                    kind: .integrationStatus(snapshot.agentID)
+                )
+            }
+            items.append(
+                MenuBarItem(
+                    title: "Repair Integrations...",
+                    isEnabled: true,
+                    kind: .repairIntegrations
+                )
             )
         }
 
         items += [
+            separatorItem(),
             MenuBarItem(
-                title: "Refresh Status",
+                title: "Refresh",
                 isEnabled: true,
                 kind: .refreshStatus
-            ),
-            MenuBarItem(
-                title: "Repair Integrations...",
-                isEnabled: true,
-                kind: .repairIntegrations
-            ),
+            )
+        ]
+
+        items += [
             MenuBarItem(
                 title: "Settings...",
                 isEnabled: true,
                 kind: .settings
             ),
+            separatorItem(),
             MenuBarItem(
                 title: "Quit AgentWake",
                 isEnabled: true,
@@ -150,6 +183,49 @@ public enum MenuBarModel {
             statusItemTitle: currentState.statusItemTitle,
             items: items
         )
+    }
+
+    private static func statusTitle(currentState: AgentWakeState, sessionSummary: String?) -> String {
+        if currentState == .active,
+           let sessionSummary,
+           statusIncludesSessionSummary(currentState: currentState, sessionSummary: sessionSummary) {
+            return "Status: \(sessionSummary)"
+        }
+
+        return "Status: \(currentState.menuTitle)"
+    }
+
+    private static func protectDetectedSessionsTitle(count: Int) -> String {
+        return count == 1 ? "Keep Awake" : "Keep \(count) Awake"
+    }
+
+    private static func protectDetectedSessionsDetail(count: Int) -> String {
+        return "Keeps the Mac awake for found sessions."
+    }
+
+    private static func closedLidStatusTitle(_ status: String) -> String {
+        switch status {
+        case "Closed-Lid Mode off":
+            return "Lid-Closed Awake: Off"
+        case "Closed-Lid Mode enabled", "Closed-Lid Mode already enabled":
+            return "Lid-Closed Awake: On"
+        case "Closed-Lid Mode ownership pending":
+            return "Lid-Closed Awake: Finishing Setup"
+        case "Closed-Lid Mode enabled outside AgentWake":
+            return "Lid-Closed Awake: On Outside AgentWake"
+        case "Closed-Lid Mode status unknown":
+            return "Lid-Closed Awake: Unknown"
+        default:
+            return status
+        }
+    }
+
+    private static func statusIncludesSessionSummary(currentState: AgentWakeState, sessionSummary: String?) -> Bool {
+        currentState == .active && sessionSummary?.contains("keeping awake") == true
+    }
+
+    private static func separatorItem() -> MenuBarItem {
+        MenuBarItem(title: "", isEnabled: false, kind: .separator)
     }
 }
 

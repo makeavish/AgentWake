@@ -74,12 +74,16 @@ public struct AgentProcessDetector: Sendable {
     }
 
     public func observations(in snapshots: [ProcessSnapshot]) -> [AgentProcessObservation] {
-        snapshots.compactMap { snapshot in
-            observation(for: snapshot)
+        let snapshotsByPID = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.pid, $0) })
+        return snapshots.compactMap { snapshot in
+            observation(for: snapshot, snapshotsByPID: snapshotsByPID)
         }
     }
 
-    private func observation(for snapshot: ProcessSnapshot) -> AgentProcessObservation? {
+    private func observation(
+        for snapshot: ProcessSnapshot,
+        snapshotsByPID: [Int32: ProcessSnapshot]
+    ) -> AgentProcessObservation? {
         for configuration in agentConfigurations where configuration.isEnabled {
             guard let kind = AgentKind(agentID: configuration.id) else {
                 continue
@@ -89,7 +93,7 @@ public struct AgentProcessDetector: Sendable {
             guard !snapshot.matchingExecutableNames.isDisjoint(with: executableNames) else {
                 continue
             }
-            guard !shouldExclude(snapshot: snapshot, for: kind) else {
+            guard !shouldExclude(snapshot: snapshot, for: kind, snapshotsByPID: snapshotsByPID) else {
                 continue
             }
 
@@ -107,8 +111,17 @@ public struct AgentProcessDetector: Sendable {
         return nil
     }
 
-    private func shouldExclude(snapshot: ProcessSnapshot, for kind: AgentKind) -> Bool {
+    private func shouldExclude(
+        snapshot: ProcessSnapshot,
+        for kind: AgentKind,
+        snapshotsByPID: [Int32: ProcessSnapshot]
+    ) -> Bool {
         guard kind == .codexCLI, let executablePath = snapshot.executablePath else {
+            return false
+        }
+
+        if executablePath.contains(".app/Contents/Resources/codex"),
+           isPrimaryCodexDesktopAppServer(snapshot: snapshot, snapshotsByPID: snapshotsByPID) {
             return false
         }
 
@@ -117,6 +130,20 @@ public struct AgentProcessDetector: Sendable {
             "/.vscode/extensions/openai.chatgpt-"
         ]
         return appServerPathFragments.contains { executablePath.contains($0) }
+    }
+
+    private func isPrimaryCodexDesktopAppServer(
+        snapshot: ProcessSnapshot,
+        snapshotsByPID: [Int32: ProcessSnapshot]
+    ) -> Bool {
+        guard let parentPID = snapshot.parentPID,
+              let parent = snapshotsByPID[parentPID],
+              parent.processName == "Codex",
+              parent.executablePath?.hasSuffix("/Contents/MacOS/Codex") == true else {
+            return false
+        }
+
+        return true
     }
 }
 

@@ -8,7 +8,7 @@ struct MenuBarModelTests {
     @Test func snapshotIncludesRuntimeDiagnostics() {
         let snapshot = MenuBarModel.snapshot(
             currentState: .idle,
-            sessionSummary: "Sessions: none seen",
+            sessionSummary: "No sessions",
             integrationStatuses: [
                 IntegrationStatusSnapshot(
                     agentID: "claude-code",
@@ -18,14 +18,43 @@ struct MenuBarModelTests {
             ]
         )
 
-        #expect(snapshot.items.map(\.title).contains("Sessions: none seen"))
+        #expect(snapshot.items.map(\.title).contains("No sessions"))
         #expect(snapshot.items.map(\.title).contains(ClosedLidModeAvailability.unavailableTitle))
-        #expect(snapshot.items.map(\.title).contains("Claude Code: Installed"))
-        #expect(snapshot.items.map(\.title).contains("Protect Detected Sessions"))
-        #expect(snapshot.items.map(\.title).contains("Enable Closed-Lid Mode"))
-        #expect(snapshot.items.map(\.title).contains("Disable Closed-Lid Mode"))
-        #expect(snapshot.items.map(\.title).contains("Refresh Status"))
-        #expect(snapshot.items.map(\.title).contains("Repair Integrations..."))
+        #expect(!snapshot.items.map(\.title).contains("Keep Awake"))
+        #expect(snapshot.items.map(\.title).contains("Turn On Lid-Closed Awake"))
+        #expect(snapshot.items.map(\.title).contains("Refresh"))
+        #expect(!snapshot.items.map(\.title).contains("Claude Code: Installed"))
+        #expect(!snapshot.items.map(\.title).contains("Repair Integrations..."))
+
+        let protectableSnapshot = MenuBarModel.snapshot(
+            currentState: .idle,
+            protectableDetectedSessionCount: 2
+        )
+        #expect(protectableSnapshot.items.contains {
+            $0.title == "Keep 2 Awake" && $0.isEnabled
+        })
+
+        let activeSnapshot = MenuBarModel.snapshot(
+            currentState: .active,
+            sessionSummary: "1 keeping awake, 2 found"
+        )
+        #expect(activeSnapshot.items.first?.title == "Status: 1 keeping awake, 2 found")
+        #expect(activeSnapshot.items.contains {
+            $0.title == "Stop Keeping Awake" && $0.isEnabled
+        })
+
+        let degradedSnapshot = MenuBarModel.snapshot(
+            currentState: .idle,
+            integrationStatuses: [
+                IntegrationStatusSnapshot(
+                    agentID: "codex-cli",
+                    displayName: "Codex CLI",
+                    status: .failed
+                )
+            ]
+        )
+        #expect(degradedSnapshot.items.map(\.title).contains("Codex CLI: Needs repair"))
+        #expect(degradedSnapshot.items.map(\.title).contains("Repair Integrations..."))
     }
 
     @Test func snapshotNamesTheCurrentState() {
@@ -33,7 +62,7 @@ struct MenuBarModelTests {
 
         #expect(snapshot.currentState == .bagMode)
         #expect(snapshot.statusItemTitle == "AgentWake")
-        #expect(snapshot.items.first?.title == "Current: \(ClosedLidModeAvailability.unavailableTitle)")
+        #expect(snapshot.items.first?.title == "Status: \(ClosedLidModeAvailability.unavailableTitle)")
         #expect(snapshot.items.first?.detail == ClosedLidModeAvailability.settingsDetail)
     }
 
@@ -76,7 +105,7 @@ final class MenuBarModelTests: XCTestCase {
     func testSnapshotIncludesRuntimeDiagnostics() {
         let snapshot = MenuBarModel.snapshot(
             currentState: .idle,
-            sessionSummary: "Sessions: none seen",
+            sessionSummary: "No sessions",
             integrationStatuses: [
                 IntegrationStatusSnapshot(
                     agentID: "claude-code",
@@ -86,14 +115,43 @@ final class MenuBarModelTests: XCTestCase {
             ]
         )
 
-        XCTAssertTrue(snapshot.items.map(\.title).contains("Sessions: none seen"))
+        XCTAssertTrue(snapshot.items.map(\.title).contains("No sessions"))
         XCTAssertTrue(snapshot.items.map(\.title).contains(ClosedLidModeAvailability.unavailableTitle))
-        XCTAssertTrue(snapshot.items.map(\.title).contains("Claude Code: Installed"))
-        XCTAssertTrue(snapshot.items.map(\.title).contains("Protect Detected Sessions"))
-        XCTAssertTrue(snapshot.items.map(\.title).contains("Enable Closed-Lid Mode"))
-        XCTAssertTrue(snapshot.items.map(\.title).contains("Disable Closed-Lid Mode"))
-        XCTAssertTrue(snapshot.items.map(\.title).contains("Refresh Status"))
-        XCTAssertTrue(snapshot.items.map(\.title).contains("Repair Integrations..."))
+        XCTAssertFalse(snapshot.items.map(\.title).contains("Keep Awake"))
+        XCTAssertTrue(snapshot.items.map(\.title).contains("Turn On Lid-Closed Awake"))
+        XCTAssertTrue(snapshot.items.map(\.title).contains("Refresh"))
+        XCTAssertFalse(snapshot.items.map(\.title).contains("Claude Code: Installed"))
+        XCTAssertFalse(snapshot.items.map(\.title).contains("Repair Integrations..."))
+
+        let protectableSnapshot = MenuBarModel.snapshot(
+            currentState: .idle,
+            protectableDetectedSessionCount: 2
+        )
+        XCTAssertTrue(protectableSnapshot.items.contains {
+            $0.title == "Keep 2 Awake" && $0.isEnabled
+        })
+
+        let activeSnapshot = MenuBarModel.snapshot(
+            currentState: .active,
+            sessionSummary: "1 keeping awake, 2 found"
+        )
+        XCTAssertEqual(activeSnapshot.items.first?.title, "Status: 1 keeping awake, 2 found")
+        XCTAssertTrue(activeSnapshot.items.contains {
+            $0.title == "Stop Keeping Awake" && $0.isEnabled
+        })
+
+        let degradedSnapshot = MenuBarModel.snapshot(
+            currentState: .idle,
+            integrationStatuses: [
+                IntegrationStatusSnapshot(
+                    agentID: "codex-cli",
+                    displayName: "Codex CLI",
+                    status: .failed
+                )
+            ]
+        )
+        XCTAssertTrue(degradedSnapshot.items.map(\.title).contains("Codex CLI: Needs repair"))
+        XCTAssertTrue(degradedSnapshot.items.map(\.title).contains("Repair Integrations..."))
     }
 
     func testSnapshotNamesTheCurrentState() {
@@ -101,7 +159,7 @@ final class MenuBarModelTests: XCTestCase {
 
         XCTAssertEqual(snapshot.currentState, .bagMode)
         XCTAssertEqual(snapshot.statusItemTitle, "AgentWake")
-        XCTAssertEqual(snapshot.items.first?.title, "Current: \(ClosedLidModeAvailability.unavailableTitle)")
+        XCTAssertEqual(snapshot.items.first?.title, "Status: \(ClosedLidModeAvailability.unavailableTitle)")
         XCTAssertEqual(snapshot.items.first?.detail, ClosedLidModeAvailability.settingsDetail)
     }
 
