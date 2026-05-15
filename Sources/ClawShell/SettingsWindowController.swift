@@ -1,4 +1,5 @@
 import AppKit
+import ClawShellCore
 
 @MainActor
 final class SettingsWindowController: NSWindowController {
@@ -43,7 +44,7 @@ private final class SettingsViewController: NSViewController {
         titleLabel.setAccessibilityLabel("ClawShell Settings")
 
         let subtitleLabel = NSTextField(
-            wrappingLabelWithString: "Core controls will appear here as agent detection, integrations, and sleep assertions land."
+            wrappingLabelWithString: "Normal sleep protection is available. \(BagModeAvailability.settingsDetail)"
         )
         subtitleLabel.textColor = .secondaryLabelColor
 

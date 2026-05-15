@@ -307,11 +307,11 @@ private func runControlRouterSurfacesHelperCommandOutcomes() throws {
     let defaultRepair = try defaultRouter.route(.helperRepair, receivedAt: receivedAt)
     let defaultUninstall = try defaultRouter.route(.helperUninstall, receivedAt: receivedAt)
 
-    try check(defaultStatus.message == "Helper status unavailable: no helper is installed", "Expected default helper status outcome")
-    try check(defaultEnable.message == "Helper enable unavailable: no helper is installed", "Expected default helper enable outcome")
-    try check(defaultDisable.message == "Helper disable unavailable: no helper is installed", "Expected default helper disable outcome")
-    try check(defaultRepair.message == "Helper repair unavailable: no helper is installed", "Expected default helper repair outcome")
-    try check(defaultUninstall.message == "Helper uninstall unavailable: no helper is installed", "Expected default helper uninstall outcome")
+    try check(defaultStatus.message == BagModeAvailability.helperCommandMessage("status"), "Expected default helper status outcome")
+    try check(defaultEnable.message == BagModeAvailability.helperCommandMessage("enable"), "Expected default helper enable outcome")
+    try check(defaultDisable.message == BagModeAvailability.helperCommandMessage("disable"), "Expected default helper disable outcome")
+    try check(defaultRepair.message == BagModeAvailability.helperCommandMessage("repair"), "Expected default helper repair outcome")
+    try check(defaultUninstall.message == BagModeAvailability.helperCommandMessage("uninstall"), "Expected default helper uninstall outcome")
 
     let router = DefaultControlCommandRouter(
         helperStatusProvider: {

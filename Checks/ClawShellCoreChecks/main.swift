@@ -93,8 +93,8 @@ struct ClawShellCoreChecks {
         }
 
         try check(
-            placeholderTitles == ["Idle", "Active", "Bag Mode", "Paused"],
-            "Expected menu placeholders for idle, active, Bag Mode, and paused"
+            placeholderTitles == ["Idle", "Active", BagModeAvailability.unavailableTitle, "Paused"],
+            "Expected menu placeholders for idle, active, unavailable Bag Mode, and paused"
         )
     }
 
@@ -102,9 +102,12 @@ struct ClawShellCoreChecks {
         let snapshot = MenuBarModel.snapshot(currentState: .bagMode)
 
         try check(snapshot.currentState == .bagMode, "Expected Bag Mode as current state")
-        try check(snapshot.statusItemTitle == "ClawShell Bag", "Expected Bag Mode status item title")
-        try check(snapshot.items.first?.title == "Current: Bag Mode", "Expected current-state menu row")
-        try check(snapshot.items.first?.detail == "Closed-lid guarded mode", "Expected Bag Mode placeholder detail")
+        try check(snapshot.statusItemTitle == "ClawShell Bag Unavailable", "Expected Bag Mode unavailable status item title")
+        try check(
+            snapshot.items.first?.title == "Current: \(BagModeAvailability.unavailableTitle)",
+            "Expected current-state menu row"
+        )
+        try check(snapshot.items.first?.detail == BagModeAvailability.settingsDetail, "Expected Bag Mode unavailable detail")
     }
 
     private static func lifecycleComponentsCanStartAndStopTogether() throws {
@@ -1129,23 +1132,23 @@ struct ClawShellCoreChecks {
         let defaultUninstall = try defaultRouter.route(.helperUninstall, receivedAt: receivedAt)
 
         try check(
-            defaultStatus.message == "Helper status unavailable: no helper is installed",
+            defaultStatus.message == BagModeAvailability.helperCommandMessage("status"),
             "Expected default helper status outcome"
         )
         try check(
-            defaultEnable.message == "Helper enable unavailable: no helper is installed",
+            defaultEnable.message == BagModeAvailability.helperCommandMessage("enable"),
             "Expected default helper enable outcome"
         )
         try check(
-            defaultDisable.message == "Helper disable unavailable: no helper is installed",
+            defaultDisable.message == BagModeAvailability.helperCommandMessage("disable"),
             "Expected default helper disable outcome"
         )
         try check(
-            defaultRepair.message == "Helper repair unavailable: no helper is installed",
+            defaultRepair.message == BagModeAvailability.helperCommandMessage("repair"),
             "Expected default helper repair outcome"
         )
         try check(
-            defaultUninstall.message == "Helper uninstall unavailable: no helper is installed",
+            defaultUninstall.message == BagModeAvailability.helperCommandMessage("uninstall"),
             "Expected default helper uninstall outcome"
         )
 

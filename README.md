@@ -43,6 +43,8 @@ Gemini CLI, Cursor, VS Code, and custom binaries are planned for later versions.
 ## Safety Model
 
 Closed-lid battery support is treated as a guarded mode, not a blanket promise that every situation is safe.
+Bag Mode is currently unavailable in the app until helper lifecycle and live
+temperature-provider validation are complete.
 
 Planned safeguards include:
 

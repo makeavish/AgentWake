@@ -201,15 +201,15 @@ public final class ClawShellServices {
                 resolvedAssertionManager.reconcile()
                 return "Integration event accepted: \(event.agent.rawValue) \(event.event.rawValue)"
             }, helperStatusProvider: {
-                "Helper status unavailable: no helper is installed"
+                BagModeAvailability.helperCommandMessage("status")
             }, helperEnableBagModeHandler: { _ in
-                "Helper enable unavailable: no helper is installed"
+                BagModeAvailability.helperCommandMessage("enable")
             }, helperDisableBagModeHandler: { _ in
-                "Helper disable unavailable: no helper is installed"
+                BagModeAvailability.helperCommandMessage("disable")
             }, helperRepairHandler: { _ in
-                "Helper repair unavailable: no helper is installed"
+                BagModeAvailability.helperCommandMessage("repair")
             }, helperUninstallHandler: { _ in
-                "Helper uninstall unavailable: no helper is installed"
+                BagModeAvailability.helperCommandMessage("uninstall")
             }, uninstallHandler: { removeHelper, removeIntegrations, receivedAt in
                 var outcomes = ["Uninstall requested"]
                 if removeIntegrations {

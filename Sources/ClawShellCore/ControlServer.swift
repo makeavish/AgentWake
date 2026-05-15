@@ -340,11 +340,11 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         integrationRemoveHandler: @escaping (String, Date) throws -> String = { agentID, _ in "Remove integration requested: \(agentID)" },
         integrationEnableAutoHandler: @escaping (String, Date) throws -> String = { agentID, _ in "Auto-integration enabled: \(agentID)" },
         integrationEventHandler: @escaping (HookAdapterEvent, Date) -> String = { event, _ in "Integration event accepted: \(event.agent.rawValue) \(event.event.rawValue)" },
-        helperStatusProvider: @escaping () -> String = { "Helper status unavailable: no helper is installed" },
-        helperEnableBagModeHandler: @escaping (Date) throws -> String = { _ in "Helper enable unavailable: no helper is installed" },
-        helperDisableBagModeHandler: @escaping (Date) throws -> String = { _ in "Helper disable unavailable: no helper is installed" },
-        helperRepairHandler: @escaping (Date) throws -> String = { _ in "Helper repair unavailable: no helper is installed" },
-        helperUninstallHandler: @escaping (Date) throws -> String = { _ in "Helper uninstall unavailable: no helper is installed" },
+        helperStatusProvider: @escaping () -> String = { BagModeAvailability.helperCommandMessage("status") },
+        helperEnableBagModeHandler: @escaping (Date) throws -> String = { _ in BagModeAvailability.helperCommandMessage("enable") },
+        helperDisableBagModeHandler: @escaping (Date) throws -> String = { _ in BagModeAvailability.helperCommandMessage("disable") },
+        helperRepairHandler: @escaping (Date) throws -> String = { _ in BagModeAvailability.helperCommandMessage("repair") },
+        helperUninstallHandler: @escaping (Date) throws -> String = { _ in BagModeAvailability.helperCommandMessage("uninstall") },
         uninstallHandler: @escaping (Bool, Bool, Date) throws -> String = { removeHelper, removeIntegrations, _ in
             "Uninstall requested removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations)"
         }

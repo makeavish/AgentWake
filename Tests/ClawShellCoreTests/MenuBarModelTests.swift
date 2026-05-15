@@ -17,16 +17,16 @@ struct MenuBarModelTests {
         }
 
         #expect(placeholderStates == ClawShellState.allCases)
-        #expect(placeholderTitles(in: snapshot) == ["Idle", "Active", "Bag Mode", "Paused"])
+        #expect(placeholderTitles(in: snapshot) == ["Idle", "Active", BagModeAvailability.unavailableTitle, "Paused"])
     }
 
     @Test func snapshotNamesTheCurrentState() {
         let snapshot = MenuBarModel.snapshot(currentState: .bagMode)
 
         #expect(snapshot.currentState == .bagMode)
-        #expect(snapshot.statusItemTitle == "ClawShell Bag")
-        #expect(snapshot.items.first?.title == "Current: Bag Mode")
-        #expect(snapshot.items.first?.detail == "Closed-lid guarded mode")
+        #expect(snapshot.statusItemTitle == "ClawShell Bag Unavailable")
+        #expect(snapshot.items.first?.title == "Current: \(BagModeAvailability.unavailableTitle)")
+        #expect(snapshot.items.first?.detail == BagModeAvailability.settingsDetail)
     }
 
     @Test func lifecycleComponentsCanStartAndStopTogether() throws {
@@ -60,16 +60,16 @@ final class MenuBarModelTests: XCTestCase {
         }
 
         XCTAssertEqual(placeholderStates, ClawShellState.allCases)
-        XCTAssertEqual(placeholderTitles(in: snapshot), ["Idle", "Active", "Bag Mode", "Paused"])
+        XCTAssertEqual(placeholderTitles(in: snapshot), ["Idle", "Active", BagModeAvailability.unavailableTitle, "Paused"])
     }
 
     func testSnapshotNamesTheCurrentState() {
         let snapshot = MenuBarModel.snapshot(currentState: .bagMode)
 
         XCTAssertEqual(snapshot.currentState, .bagMode)
-        XCTAssertEqual(snapshot.statusItemTitle, "ClawShell Bag")
-        XCTAssertEqual(snapshot.items.first?.title, "Current: Bag Mode")
-        XCTAssertEqual(snapshot.items.first?.detail, "Closed-lid guarded mode")
+        XCTAssertEqual(snapshot.statusItemTitle, "ClawShell Bag Unavailable")
+        XCTAssertEqual(snapshot.items.first?.title, "Current: \(BagModeAvailability.unavailableTitle)")
+        XCTAssertEqual(snapshot.items.first?.detail, BagModeAvailability.settingsDetail)
     }
 
     func testLifecycleComponentsCanStartAndStopTogether() throws {

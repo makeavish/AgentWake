@@ -17,7 +17,7 @@ public enum ClawShellState: String, CaseIterable, Equatable, Identifiable, Senda
         case .active:
             "Active"
         case .bagMode:
-            "Bag Mode"
+            BagModeAvailability.unavailableTitle
         case .paused:
             "Paused"
         }
@@ -30,7 +30,7 @@ public enum ClawShellState: String, CaseIterable, Equatable, Identifiable, Senda
         case .active:
             "ClawShell Active"
         case .bagMode:
-            "ClawShell Bag"
+            "ClawShell Bag Unavailable"
         case .paused:
             "ClawShell Paused"
         }
@@ -43,7 +43,7 @@ public enum ClawShellState: String, CaseIterable, Equatable, Identifiable, Senda
         case .active:
             "Agent session detected"
         case .bagMode:
-            "Closed-lid guarded mode"
+            BagModeAvailability.settingsDetail
         case .paused:
             "Sleep protection paused"
         }
