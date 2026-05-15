@@ -30,6 +30,7 @@ public enum ControlCommand: Equatable, Sendable, Codable {
     case status
     case pause(duration: TimeInterval)
     case releaseNow
+    case protectDetectedSessions
     case list
     case add(binary: String)
     case integrationsList
@@ -68,6 +69,8 @@ public enum ControlCommand: Equatable, Sendable, Codable {
             self = .pause(duration: try container.decode(TimeInterval.self, forKey: .duration))
         case "releaseNow":
             self = .releaseNow
+        case "protectDetectedSessions":
+            self = .protectDetectedSessions
         case "list":
             self = .list
         case "add":
@@ -123,6 +126,8 @@ public enum ControlCommand: Equatable, Sendable, Codable {
             try container.encode(duration, forKey: .duration)
         case .releaseNow:
             try container.encode("releaseNow", forKey: .name)
+        case .protectDetectedSessions:
+            try container.encode("protectDetectedSessions", forKey: .name)
         case .list:
             try container.encode("list", forKey: .name)
         case .add(let binary):
@@ -335,6 +340,7 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
     public var listProvider: () -> String
     public var pauseHandler: (TimeInterval, Date) -> Void
     public var releaseNowHandler: (Date) -> Void
+    public var protectDetectedSessionsHandler: (Date) -> String
     public var integrationsListProvider: () -> String
     public var integrationsStatusProvider: () -> String
     public var integrationRemoveHandler: (String, Date) throws -> String
@@ -368,6 +374,7 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         closedLidStatusProvider: @escaping () -> String = { ClosedLidModeAvailability.helperCommandMessage("status") },
         closedLidEnableHandler: @escaping (Date) throws -> String = { _ in ClosedLidModeAvailability.helperCommandMessage("enable") },
         closedLidDisableHandler: @escaping (Date) throws -> String = { _ in ClosedLidModeAvailability.helperCommandMessage("disable") },
+        protectDetectedSessionsHandler: @escaping (Date) -> String = { _ in "No detected sessions to protect" },
         uninstallHandler: @escaping (Bool, Bool, Date) throws -> String = { removeHelper, removeIntegrations, _ in
             "Uninstall requested removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations)"
         }
@@ -376,6 +383,7 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         self.listProvider = listProvider
         self.pauseHandler = pauseHandler
         self.releaseNowHandler = releaseNowHandler
+        self.protectDetectedSessionsHandler = protectDetectedSessionsHandler
         self.integrationsListProvider = integrationsListProvider
         self.integrationsStatusProvider = integrationsStatusProvider
         self.integrationRemoveHandler = integrationRemoveHandler
@@ -402,6 +410,8 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         case .releaseNow:
             releaseNowHandler(receivedAt)
             return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Release requested")
+        case .protectDetectedSessions:
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: protectDetectedSessionsHandler(receivedAt))
         case .list:
             return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: listProvider())
         case .add(let binary):

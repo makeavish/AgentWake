@@ -169,6 +169,24 @@ public final class AgentSessionStateMachine {
         pauseAllExpiresAt = nil
     }
 
+    @discardableResult
+    public func protectDetectedProcessSessions(at now: Date) -> Int {
+        refreshExpirations(at: now)
+
+        var protectedCount = 0
+        for index in sessions.indices where isProtectableProcessOnlySession(sessions[index]) {
+            sessions[index].state = .active
+            sessions[index].holdWhileOpen = true
+            sessions[index].lastActivityAt = now
+            sessions[index].standingByExpiresAt = nil
+            sessions[index].provisionalHoldExpiresAt = nil
+            sessions[index].lastEvent = SessionEvent(kind: .manualProtectDetected, occurredAt: now)
+            protectedCount += 1
+        }
+
+        return protectedCount
+    }
+
     public func setSafetyCutoffActive(_ isActive: Bool) {
         safetyCutoffActive = isActive
     }
@@ -282,9 +300,29 @@ public final class AgentSessionStateMachine {
         case .safetyCutoff:
             setSafetyCutoffActive(true)
 
+        case .manualProtectDetected:
+            guard isProtectableProcessOnlySession(sessions[index]) else {
+                return
+            }
+
+            sessions[index].state = .active
+            sessions[index].holdWhileOpen = true
+            sessions[index].lastActivityAt = now
+            sessions[index].standingByExpiresAt = nil
+            sessions[index].provisionalHoldExpiresAt = nil
+            sessions[index].lastEvent = SessionEvent(kind: kind, occurredAt: now)
+
         case .matchingProcessStarted, .graceExpired:
             return
         }
+    }
+
+    private func isProtectableProcessOnlySession(_ session: AgentSession) -> Bool {
+        session.source == .processScan
+            && session.state != .finished
+            && !session.hasIntegratedEvidence
+            && !session.holdWhileOpen
+            && session.key.processRuntimeIdentity != nil
     }
 
     private func firstIntegrationSessionIndex(matching event: HookAdapterEvent) -> Array<AgentSession>.Index? {

@@ -68,6 +68,7 @@ final class MenuBarApp: NSObject {
             sessionSummary: services.agentMonitor.sessionSummaryMessage(),
             closedLidModeStatus: closedLidModeStatusLine,
             closedLidModeDetail: closedLidModeStatusDetail,
+            protectDetectedSessionsEnabled: services.agentMonitor.protectableDetectedSessionCount > 0,
             enableClosedLidModeEnabled: canEnableClosedLidMode,
             disableClosedLidModeEnabled: canDisableClosedLidMode,
             integrationStatuses: services.integrationManager.snapshots()
@@ -102,6 +103,8 @@ final class MenuBarApp: NSObject {
                 menu.addItem(.separator())
             case .diagnostic, .integrationStatus:
                 menu.addItem(disabledMenuItem(for: item))
+            case .protectDetectedSessions:
+                menu.addItem(actionMenuItem(for: item, action: #selector(protectDetectedSessions)))
             case .closedLidEnable:
                 menu.addItem(actionMenuItem(for: item, action: #selector(enableClosedLidMode)))
             case .closedLidDisable:
@@ -160,6 +163,26 @@ final class MenuBarApp: NSObject {
         let failures = repairAgentIntegrations()
         refreshStatusNow()
         presentRepairFailuresIfNeeded(failures)
+    }
+
+    @objc private func protectDetectedSessions() {
+        let protectedCount = services.agentMonitor.protectDetectedSessions(at: Date())
+        services.assertionManager.reconcile()
+        refreshState()
+
+        if protectedCount > 0 {
+            presentMessage(
+                title: "Detected sessions protected",
+                message: "AgentWake is protecting \(protectedCount) detected session\(protectedCount == 1 ? "" : "s") until the process exits.",
+                style: .informational
+            )
+        } else {
+            presentMessage(
+                title: "No detected sessions",
+                message: "AgentWake did not find any unprotected detected sessions.",
+                style: .informational
+            )
+        }
     }
 
     @objc private func enableClosedLidMode() {

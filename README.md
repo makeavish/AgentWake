@@ -13,6 +13,7 @@ AgentWake is in early design. There is no public release yet.
 The first public version is planned to focus on:
 
 - Detecting active agent sessions automatically
+- Letting you manually protect already-running detected sessions
 - Holding normal macOS sleep while agents are working
 - Showing exactly why sleep is currently being held
 - Releasing sleep prevention when agent work finishes or times out

@@ -347,20 +347,21 @@ private func runProcessOnlyDetectionDoesNotProtectWithoutIntegration() throws {
         "Expected process-only session not to protect on the next poll"
     )
 
-    machine.applyIntegrationEvent(
-        HookAdapterEvent(
-            agent: .claudeCode,
-            host: "claude-code",
-            event: .toolStarted,
-            pid: 34,
-            processStartTime: baseline.addingTimeInterval(-30),
-            integrationSessionId: "claude-after-release"
-        ),
-        at: baseline.addingTimeInterval(3)
-    )
+    let protectedCount = machine.protectDetectedProcessSessions(at: baseline.addingTimeInterval(3))
+    try check(protectedCount == 1, "Expected manual action to protect one detected process")
     try check(
         machine.aggregateHoldState(at: baseline.addingTimeInterval(3)).shouldHold,
-        "Expected a real integration event to start protection"
+        "Expected manual protection to hold while the process remains open"
+    )
+    try check(
+        machine.sessions.first?.lastEvent?.kind == .manualProtectDetected,
+        "Expected manual protection event to be recorded"
+    )
+
+    machine.applyProcessObservations([], at: baseline.addingTimeInterval(4))
+    try check(
+        !machine.aggregateHoldState(at: baseline.addingTimeInterval(4)).shouldHold,
+        "Expected manually protected detected session to release when the process exits"
     )
 }
 

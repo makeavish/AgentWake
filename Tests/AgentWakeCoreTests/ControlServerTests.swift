@@ -250,6 +250,8 @@ private func runCLIParsesCommandsAndSendsThroughClient() throws {
     try check(client.commands.last == .pause(duration: 3_600), "Expected pause command")
     _ = try cli.run(arguments: ["agentwake", "release", "now"])
     try check(client.commands.last == .releaseNow, "Expected release now command")
+    _ = try cli.run(arguments: ["agentwake", "protect", "detected"])
+    try check(client.commands.last == .protectDetectedSessions, "Expected protect detected command")
     _ = try cli.run(arguments: ["agentwake", "list"])
     try check(client.commands.last == .list, "Expected list command")
     _ = try cli.run(arguments: ["agentwake", "add", "/usr/local/bin/agent"])
@@ -294,6 +296,9 @@ private func runCLIRejectsExtraArgumentsAndUnknownFlags() throws {
     try expectThrows(ControlServerError.invalidRequest("release requires `now`")) {
         _ = try cli.parse(arguments: ["release", "now", "again"])
     }
+    try expectThrows(ControlServerError.invalidRequest("protect requires `detected`")) {
+        _ = try cli.parse(arguments: ["protect", "seen"])
+    }
     try expectThrows(ControlServerError.invalidRequest("integrations list takes no arguments")) {
         _ = try cli.parse(arguments: ["integrations", "list", "--verbose"])
     }
@@ -325,6 +330,7 @@ private func runControlRouterSurfacesHelperCommandOutcomes() throws {
     let defaultClosedLidStatus = try defaultRouter.route(.closedLidStatus, receivedAt: receivedAt)
     let defaultClosedLidEnable = try defaultRouter.route(.closedLidEnable, receivedAt: receivedAt)
     let defaultClosedLidDisable = try defaultRouter.route(.closedLidDisable, receivedAt: receivedAt)
+    let defaultProtectDetected = try defaultRouter.route(.protectDetectedSessions, receivedAt: receivedAt)
 
     try check(defaultStatus.message == ClosedLidModeAvailability.helperCommandMessage("status"), "Expected default helper status outcome")
     try check(defaultEnable.message == ClosedLidModeAvailability.helperCommandMessage("enable"), "Expected default helper enable outcome")
@@ -334,6 +340,7 @@ private func runControlRouterSurfacesHelperCommandOutcomes() throws {
     try check(defaultClosedLidStatus.message == ClosedLidModeAvailability.helperCommandMessage("status"), "Expected default closed-lid status outcome")
     try check(defaultClosedLidEnable.message == ClosedLidModeAvailability.helperCommandMessage("enable"), "Expected default closed-lid enable outcome")
     try check(defaultClosedLidDisable.message == ClosedLidModeAvailability.helperCommandMessage("disable"), "Expected default closed-lid disable outcome")
+    try check(defaultProtectDetected.message == "No detected sessions to protect", "Expected default protect-detected outcome")
 
     let router = DefaultControlCommandRouter(
         helperStatusProvider: {
@@ -360,6 +367,9 @@ private func runControlRouterSurfacesHelperCommandOutcomes() throws {
         closedLidDisableHandler: { receivedAt in
             "Closed-Lid disable checked at \(Int(receivedAt.timeIntervalSince1970))"
         },
+        protectDetectedSessionsHandler: { receivedAt in
+            "Protect detected checked at \(Int(receivedAt.timeIntervalSince1970))"
+        },
         uninstallHandler: { removeHelper, removeIntegrations, receivedAt in
             "Uninstall removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations) at \(Int(receivedAt.timeIntervalSince1970))"
         }
@@ -373,6 +383,7 @@ private func runControlRouterSurfacesHelperCommandOutcomes() throws {
     let closedLidStatus = try router.route(.closedLidStatus, receivedAt: receivedAt)
     let closedLidEnable = try router.route(.closedLidEnable, receivedAt: receivedAt)
     let closedLidDisable = try router.route(.closedLidDisable, receivedAt: receivedAt)
+    let protectDetected = try router.route(.protectDetectedSessions, receivedAt: receivedAt)
     let uninstall = try router.route(.uninstall(removeHelper: true, removeIntegrations: true), receivedAt: receivedAt)
 
     try check(status.accepted, "Expected helper status to be accepted")
@@ -384,6 +395,7 @@ private func runControlRouterSurfacesHelperCommandOutcomes() throws {
     try check(closedLidStatus.message == "Closed-Lid Mode off", "Expected closed-lid status provider output")
     try check(closedLidEnable.message == "Closed-Lid enable checked at 9000", "Expected closed-lid enable handler output")
     try check(closedLidDisable.message == "Closed-Lid disable checked at 9000", "Expected closed-lid disable handler output")
+    try check(protectDetected.message == "Protect detected checked at 9000", "Expected protect-detected handler output")
     try check(
         uninstall.message == "Uninstall removeHelper=true removeIntegrations=true at 9000",
         "Expected uninstall handler output"

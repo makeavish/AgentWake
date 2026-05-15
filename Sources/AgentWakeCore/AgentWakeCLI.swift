@@ -39,6 +39,12 @@ public struct AgentWakeCLI {
                 throw ControlServerError.invalidRequest("release requires `now`")
             }
             return .releaseNow
+        case "protect":
+            try requireArgumentCount(arguments, 2, usage: "protect requires `detected`")
+            guard arguments.dropFirst().first == "detected" else {
+                throw ControlServerError.invalidRequest("protect requires `detected`")
+            }
+            return .protectDetectedSessions
         case "list":
             try requireArgumentCount(arguments, 1, usage: "list takes no arguments")
             return .list

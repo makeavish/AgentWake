@@ -91,6 +91,7 @@ struct AgentWakeCoreChecks {
         try check(titles.contains("Sessions: none seen"), "Expected session summary in menu")
         try check(titles.contains(ClosedLidModeAvailability.unavailableTitle), "Expected Closed-Lid Mode boundary in menu")
         try check(titles.contains("Claude Code: Installed"), "Expected integration status in menu")
+        try check(titles.contains("Protect Detected Sessions"), "Expected protect detected sessions action in menu")
         try check(titles.contains("Enable Closed-Lid Mode"), "Expected Closed-Lid Mode enable action in menu")
         try check(titles.contains("Disable Closed-Lid Mode"), "Expected Closed-Lid Mode disable action in menu")
         try check(titles.contains("Refresh Status"), "Expected refresh action in menu")
@@ -457,20 +458,21 @@ struct AgentWakeCoreChecks {
             "Expected process-only session not to protect on the next poll"
         )
 
-        machine.applyIntegrationEvent(
-            HookAdapterEvent(
-                agent: .claudeCode,
-                host: "claude-code",
-                event: .toolStarted,
-                pid: 34,
-                processStartTime: baseline.addingTimeInterval(-30),
-                integrationSessionId: "claude-after-release"
-            ),
-            at: baseline.addingTimeInterval(3)
-        )
+        let protectedCount = machine.protectDetectedProcessSessions(at: baseline.addingTimeInterval(3))
+        try check(protectedCount == 1, "Expected manual action to protect one detected process")
         try check(
             machine.aggregateHoldState(at: baseline.addingTimeInterval(3)).shouldHold,
-            "Expected a real integration event to start protection"
+            "Expected manual protection to hold while the process remains open"
+        )
+        try check(
+            machine.sessions.first?.lastEvent?.kind == .manualProtectDetected,
+            "Expected manual protection event to be recorded"
+        )
+
+        machine.applyProcessObservations([], at: baseline.addingTimeInterval(4))
+        try check(
+            !machine.aggregateHoldState(at: baseline.addingTimeInterval(4)).shouldHold,
+            "Expected manually protected detected session to release when the process exits"
         )
     }
 
@@ -1492,6 +1494,7 @@ struct AgentWakeCoreChecks {
         let defaultClosedLidStatus = try defaultRouter.route(.closedLidStatus, receivedAt: receivedAt)
         let defaultClosedLidEnable = try defaultRouter.route(.closedLidEnable, receivedAt: receivedAt)
         let defaultClosedLidDisable = try defaultRouter.route(.closedLidDisable, receivedAt: receivedAt)
+        let defaultProtectDetected = try defaultRouter.route(.protectDetectedSessions, receivedAt: receivedAt)
 
         try check(
             defaultStatus.message == ClosedLidModeAvailability.helperCommandMessage("status"),
@@ -1525,6 +1528,10 @@ struct AgentWakeCoreChecks {
             defaultClosedLidDisable.message == ClosedLidModeAvailability.helperCommandMessage("disable"),
             "Expected default closed-lid disable outcome"
         )
+        try check(
+            defaultProtectDetected.message == "No detected sessions to protect",
+            "Expected default protect-detected outcome"
+        )
 
         let router = DefaultControlCommandRouter(
             helperStatusProvider: {
@@ -1551,6 +1558,9 @@ struct AgentWakeCoreChecks {
             closedLidDisableHandler: { receivedAt in
                 "Closed-Lid disable checked at \(Int(receivedAt.timeIntervalSince1970))"
             },
+            protectDetectedSessionsHandler: { receivedAt in
+                "Protect detected checked at \(Int(receivedAt.timeIntervalSince1970))"
+            },
             uninstallHandler: { removeHelper, removeIntegrations, receivedAt in
                 "Uninstall removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations) at \(Int(receivedAt.timeIntervalSince1970))"
             }
@@ -1564,6 +1574,7 @@ struct AgentWakeCoreChecks {
         let closedLidStatus = try router.route(.closedLidStatus, receivedAt: receivedAt)
         let closedLidEnable = try router.route(.closedLidEnable, receivedAt: receivedAt)
         let closedLidDisable = try router.route(.closedLidDisable, receivedAt: receivedAt)
+        let protectDetected = try router.route(.protectDetectedSessions, receivedAt: receivedAt)
         let uninstall = try router.route(.uninstall(removeHelper: true, removeIntegrations: true), receivedAt: receivedAt)
 
         try check(status.accepted, "Expected helper status to be accepted")
@@ -1575,6 +1586,7 @@ struct AgentWakeCoreChecks {
         try check(closedLidStatus.message == "Closed-Lid Mode off", "Expected closed-lid status provider output")
         try check(closedLidEnable.message == "Closed-Lid enable checked at 9000", "Expected closed-lid enable handler output")
         try check(closedLidDisable.message == "Closed-Lid disable checked at 9000", "Expected closed-lid disable handler output")
+        try check(protectDetected.message == "Protect detected checked at 9000", "Expected protect-detected handler output")
         try check(
             uninstall.message == "Uninstall removeHelper=true removeIntegrations=true at 9000",
             "Expected uninstall handler output"
@@ -1792,6 +1804,8 @@ struct AgentWakeCoreChecks {
         try check(client.commands.last == .pause(duration: 3_600), "Expected pause command")
         _ = try cli.run(arguments: ["agentwake", "release", "now"])
         try check(client.commands.last == .releaseNow, "Expected release now command")
+        _ = try cli.run(arguments: ["agentwake", "protect", "detected"])
+        try check(client.commands.last == .protectDetectedSessions, "Expected protect detected command")
         _ = try cli.run(arguments: ["agentwake", "list"])
         try check(client.commands.last == .list, "Expected list command")
         _ = try cli.run(arguments: ["agentwake", "add", "/usr/local/bin/agent"])
@@ -1835,6 +1849,9 @@ struct AgentWakeCoreChecks {
         }
         try expectThrows("Expected extra release argument to be rejected") {
             _ = try cli.parse(arguments: ["release", "now", "again"])
+        }
+        try expectThrows("Expected unknown protect target to be rejected") {
+            _ = try cli.parse(arguments: ["protect", "seen"])
         }
         try expectThrows("Expected integrations list extra argument to be rejected") {
             _ = try cli.parse(arguments: ["integrations", "list", "--verbose"])

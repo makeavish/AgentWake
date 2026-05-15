@@ -100,6 +100,20 @@ public final class AgentMonitor: AppLifecycleComponent {
         }
     }
 
+    public var protectableDetectedSessionCount: Int {
+        queue.sync {
+            stateMachine.sessions.filter { isProtectableDetectedSession($0) }.count
+        }
+    }
+
+    @discardableResult
+    public func protectDetectedSessions(at now: Date) -> Int {
+        queue.sync {
+            pollOnQueue()
+            return stateMachine.protectDetectedProcessSessions(at: now)
+        }
+    }
+
     public func releaseHeldSessions(at now: Date) {
         queue.sync {
             let heldSessionIDs = stateMachine.sessions
@@ -211,6 +225,10 @@ public final class AgentMonitor: AppLifecycleComponent {
     }
 
     private func sessionDisplayState(_ session: AgentSession, at now: Date) -> String {
+        if isManuallyProtectedDetectedSession(session) {
+            return "manually protecting"
+        }
+
         if session.contributesToHold(at: now) {
             return sessionProtectingState(session)
         }
@@ -231,6 +249,21 @@ public final class AgentMonitor: AppLifecycleComponent {
         case .finished:
             return "finished"
         }
+    }
+
+    private func isProtectableDetectedSession(_ session: AgentSession) -> Bool {
+        session.source == .processScan
+            && session.state != .finished
+            && !session.hasIntegratedEvidence
+            && !session.holdWhileOpen
+            && session.key.processRuntimeIdentity != nil
+    }
+
+    private func isManuallyProtectedDetectedSession(_ session: AgentSession) -> Bool {
+        session.source == .processScan
+            && session.holdWhileOpen
+            && !session.hasIntegratedEvidence
+            && session.state != .finished
     }
 }
 
@@ -315,6 +348,13 @@ public final class AgentWakeServices {
                 try resolvedClosedLidModeController.enable()
             }, closedLidDisableHandler: { _ in
                 try resolvedClosedLidModeController.disable()
+            }, protectDetectedSessionsHandler: { receivedAt in
+                let protectedCount = resolvedAgentMonitor.protectDetectedSessions(at: receivedAt)
+                resolvedAssertionManager.reconcile()
+                if protectedCount == 0 {
+                    return "No detected sessions to protect"
+                }
+                return "Protecting \(protectedCount) detected session\(protectedCount == 1 ? "" : "s") until the process exits"
             }, uninstallHandler: { removeHelper, removeIntegrations, receivedAt in
                 var outcomes = ["Uninstall requested"]
                 if removeIntegrations {

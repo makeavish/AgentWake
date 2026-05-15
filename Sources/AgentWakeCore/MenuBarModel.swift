@@ -3,6 +3,7 @@ import Foundation
 public enum MenuBarItemKind: Equatable, Sendable {
     case status
     case diagnostic
+    case protectDetectedSessions
     case closedLidEnable
     case closedLidDisable
     case integrationStatus(String)
@@ -53,6 +54,7 @@ public enum MenuBarModel {
         sessionSummary: String? = nil,
         closedLidModeStatus: String = ClosedLidModeAvailability.currentStatus.title,
         closedLidModeDetail: String? = ClosedLidModeAvailability.currentStatus.settingsDetail,
+        protectDetectedSessionsEnabled: Bool = false,
         enableClosedLidModeEnabled: Bool = true,
         disableClosedLidModeEnabled: Bool = true,
         integrationStatuses: [IntegrationStatusSnapshot] = []
@@ -75,6 +77,15 @@ public enum MenuBarModel {
                 )
             )
         }
+
+        items.append(
+            MenuBarItem(
+                title: "Protect Detected Sessions",
+                detail: "Manually protects currently seen agent processes until they exit.",
+                isEnabled: protectDetectedSessionsEnabled,
+                kind: .protectDetectedSessions
+            )
+        )
 
         items.append(
             MenuBarItem(

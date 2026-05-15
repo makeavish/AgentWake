@@ -6,6 +6,8 @@ First public release scope:
 
 - Keeps the Mac awake through validated normal sleep-prevention paths while
   Claude Code or Codex CLI sessions are active.
+- Can manually protect already-running detected sessions until those processes
+  exit.
 - Shows current hold state from the menu bar app and CLI.
 - Installs and reports first-class Claude Code and Codex CLI integrations where
   their local configuration surfaces are available.

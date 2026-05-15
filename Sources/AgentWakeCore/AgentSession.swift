@@ -62,6 +62,7 @@ public enum SessionEventKind: String, Codable, Equatable, Sendable {
     case graceExpired
     case keepHolding
     case releaseNow
+    case manualProtectDetected
     case pauseAll
     case safetyCutoff
 }
