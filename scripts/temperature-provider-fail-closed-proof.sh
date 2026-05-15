@@ -56,7 +56,7 @@ esac
 mkdir -p "$OUTPUT_DIR"
 
 cd "$ROOT_DIR"
-swift run ClawShellSafetyPolicyProof --output-dir "$OUTPUT_DIR"
+swift run AgentWakeSafetyPolicyProof --output-dir "$OUTPUT_DIR"
 
 config="$OUTPUT_DIR/validation-config.txt"
 cases="$OUTPUT_DIR/fail-closed-cases.tsv"

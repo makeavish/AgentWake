@@ -1,12 +1,12 @@
 # Codex Native Hooks
 
-Issue: [#23](https://github.com/makeavish/ClawShell/issues/23)
+Issue: [#23](https://github.com/makeavish/AgentWake/issues/23)
 
 Source basis: [Codex Early Signal Check](codex-early-signal-check.md)
 
 ## Installed Config
 
-ClawShell patches `~/.codex/config.toml` with one owned block marked by `com.clawshell.integration.codex-cli.v1`.
+AgentWake patches `~/.codex/config.toml` with one owned block marked by `com.agentwake.integration.codex-cli.v1`.
 
 The owned block installs:
 
@@ -24,7 +24,7 @@ Native Codex hook stdin is reduced before it reaches the control server. The ada
 - Resolved process id and process start time when available
 - Event kind
 - `session_id` or `turn_id` as the integration session id
-- HMAC-SHA256 of `cwd` using the local ClawShell salt
+- HMAC-SHA256 of `cwd` using the local AgentWake salt
 - A stable namespaced replay id derived from native occurrence ids when possible
 
 The adapter must not send prompt text, raw cwd, transcript paths, model names, permission mode, tool names, tool input, tool output, or assistant message text.
@@ -43,4 +43,4 @@ Native hooks provide integrated confidence:
 
 Legacy Codex `notify` remains completion-only fallback evidence. It can move a matching active turn to standing-by, but it must not be treated as an early activity signal.
 
-If the Codex process disappears, process reconciliation finishes the matching integrated session. If a native hook cannot be parsed or ClawShell is unavailable, the adapter exits successfully without blocking Codex.
+If the Codex process disappears, process reconciliation finishes the matching integrated session. If a native hook cannot be parsed or AgentWake is unavailable, the adapter exits successfully without blocking Codex.

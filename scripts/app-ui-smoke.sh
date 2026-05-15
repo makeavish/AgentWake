@@ -8,9 +8,9 @@ usage() {
     cat <<'EOF'
 Usage: scripts/app-ui-smoke.sh --output-dir DIR
 
-Builds and launches the staged ClawShell app bundle, then captures local
+Builds and launches the staged AgentWake app bundle, then captures local
 accessibility evidence for the menu bar item and Settings flow. This is a live
-UI smoke: it opens ClawShell and may require Accessibility permission for System
+UI smoke: it opens AgentWake and may require Accessibility permission for System
 Events.
 EOF
 }
@@ -80,7 +80,7 @@ fi
 mkdir -p "$OUTPUT_DIR/evidence"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 EVIDENCE_DIR="$OUTPUT_DIR/evidence"
-APP_BINARY="$ROOT_DIR/dist/ClawShell.app/Contents/MacOS/ClawShell"
+APP_BINARY="$ROOT_DIR/dist/AgentWake.app/Contents/MacOS/AgentWake"
 
 build_output="$(mktemp "$EVIDENCE_DIR/.build.XXXXXX")"
 if "$ROOT_DIR/script/build_and_run.sh" --verify >"$build_output" 2>&1; then
@@ -92,7 +92,7 @@ redact_metadata <"$build_output" >"$EVIDENCE_DIR/build-and-run.txt"
 rm -f "$build_output"
 printf 'exitCode=%s\n' "$build_exit" >"$EVIDENCE_DIR/build-and-run.status"
 if [[ "$build_exit" != "0" ]]; then
-    echo "ClawShell app bundle launch verification failed; inspect $EVIDENCE_DIR/build-and-run.txt" >&2
+    echo "AgentWake app bundle launch verification failed; inspect $EVIDENCE_DIR/build-and-run.txt" >&2
     exit 1
 fi
 
@@ -107,7 +107,7 @@ while read -r candidate_pid; do
             matching_count=$((matching_count + 1))
             ;;
     esac
-done < <(pgrep -x ClawShell || true)
+done < <(pgrep -x AgentWake || true)
 
 {
     printf 'appBinary=%s\n' "$APP_BINARY"
@@ -116,12 +116,12 @@ done < <(pgrep -x ClawShell || true)
 } | redact_metadata >"$EVIDENCE_DIR/staged-process.txt"
 
 if [[ "$matching_count" != "1" || -z "$expected_pid" ]]; then
-    echo "Expected exactly one staged ClawShell process; inspect $EVIDENCE_DIR/staged-process.txt" >&2
+    echo "Expected exactly one staged AgentWake process; inspect $EVIDENCE_DIR/staged-process.txt" >&2
     exit 1
 fi
 
 cli_output="$(mktemp "$EVIDENCE_DIR/.cli.XXXXXX")"
-if swift run --package-path "$ROOT_DIR" ClawShellCLI status >"$cli_output" 2>&1; then
+if swift run --package-path "$ROOT_DIR" AgentWakeCLI status >"$cli_output" 2>&1; then
     cli_exit=0
 else
     cli_exit=$?
@@ -130,17 +130,17 @@ redact_metadata <"$cli_output" >"$EVIDENCE_DIR/cli-status.txt"
 rm -f "$cli_output"
 printf 'exitCode=%s\n' "$cli_exit" >"$EVIDENCE_DIR/cli-status.status"
 if [[ "$cli_exit" != "0" ]]; then
-    echo "ClawShell CLI status failed; inspect $EVIDENCE_DIR/cli-status.txt" >&2
+    echo "AgentWake CLI status failed; inspect $EVIDENCE_DIR/cli-status.txt" >&2
     exit 1
 fi
 
 ui_output="$(mktemp "$EVIDENCE_DIR/.ui.XXXXXX")"
-if CLAWSHELL_EXPECTED_PID="$expected_pid" osascript >"$ui_output" 2>&1 <<'APPLESCRIPT'
+if AGENTWAKE_EXPECTED_PID="$expected_pid" osascript >"$ui_output" 2>&1 <<'APPLESCRIPT'
 set outputLines to {}
-set expectedPID to system attribute "CLAWSHELL_EXPECTED_PID"
+set expectedPID to system attribute "AGENTWAKE_EXPECTED_PID"
 tell application "System Events"
     set targetProcess to missing value
-    repeat with candidateProcess in (processes whose name is "ClawShell")
+    repeat with candidateProcess in (processes whose name is "AgentWake")
         if ((unix id of candidateProcess) as text) is expectedPID then
             set targetProcess to candidateProcess
             exit repeat
@@ -169,7 +169,7 @@ tell application "System Events"
                     try
                         set itemDescription to description of itemRef as text
                     end try
-                    if itemName is "ClawShell" then
+                    if itemName is "AgentWake" then
                         set statusItemFound to true
                         set outputLines to outputLines & {"statusItemName=" & itemName}
                         set outputLines to outputLines & {"statusItemDescription=" & itemDescription}
@@ -210,16 +210,16 @@ redact_metadata <"$ui_output" >"$EVIDENCE_DIR/accessibility-menu-bar.txt"
 rm -f "$ui_output"
 printf 'exitCode=%s\n' "$ui_exit" >"$EVIDENCE_DIR/accessibility-menu-bar.status"
 if [[ "$ui_exit" != "0" ]]; then
-    echo "ClawShell accessibility menu bar capture failed; inspect $EVIDENCE_DIR/accessibility-menu-bar.txt" >&2
+    echo "AgentWake accessibility menu bar capture failed; inspect $EVIDENCE_DIR/accessibility-menu-bar.txt" >&2
     exit 1
 fi
 
 settings_window_output="$(mktemp "$EVIDENCE_DIR/.settings-window.XXXXXX")"
-if CLAWSHELL_EXPECTED_PID="$expected_pid" swift - >"$settings_window_output" 2>&1 <<'SWIFT'
+if AGENTWAKE_EXPECTED_PID="$expected_pid" swift - >"$settings_window_output" 2>&1 <<'SWIFT'
 import CoreGraphics
 import Foundation
 
-let expectedPID = Int(ProcessInfo.processInfo.environment["CLAWSHELL_EXPECTED_PID"] ?? "") ?? -1
+let expectedPID = Int(ProcessInfo.processInfo.environment["AGENTWAKE_EXPECTED_PID"] ?? "") ?? -1
 var settingsWindowFound = false
 
 if let windowInfo = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] {
@@ -243,7 +243,7 @@ if let windowInfo = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as
         print("windowIsOnscreen=\(isOnscreen)")
         print("windowBounds=\(bounds)")
 
-        if windowName == "ClawShell Settings" && layer == 0 && isOnscreen && width > 0 && height > 0 {
+        if windowName == "AgentWake Settings" && layer == 0 && isOnscreen && width > 0 && height > 0 {
             settingsWindowFound = true
         }
     }
@@ -260,15 +260,15 @@ redact_metadata <"$settings_window_output" >"$EVIDENCE_DIR/settings-window.txt"
 rm -f "$settings_window_output"
 printf 'exitCode=%s\n' "$settings_window_exit" >"$EVIDENCE_DIR/settings-window.status"
 if [[ "$settings_window_exit" != "0" ]]; then
-    echo "ClawShell Settings window capture failed; inspect $EVIDENCE_DIR/settings-window.txt" >&2
+    echo "AgentWake Settings window capture failed; inspect $EVIDENCE_DIR/settings-window.txt" >&2
     exit 1
 fi
 
 status_item_found=false
 if grep -q '^statusItemFound=true$' "$EVIDENCE_DIR/accessibility-menu-bar.txt" &&
    grep -q "^unixID=$expected_pid$" "$EVIDENCE_DIR/accessibility-menu-bar.txt" &&
-   grep -q '^statusItemName=ClawShell$' "$EVIDENCE_DIR/accessibility-menu-bar.txt" &&
-   grep -q '^statusItemDescription=ClawShell status:' "$EVIDENCE_DIR/accessibility-menu-bar.txt"; then
+   grep -q '^statusItemName=AgentWake$' "$EVIDENCE_DIR/accessibility-menu-bar.txt" &&
+   grep -q '^statusItemDescription=AgentWake status:' "$EVIDENCE_DIR/accessibility-menu-bar.txt"; then
     status_item_found=true
 fi
 
@@ -289,7 +289,7 @@ if grep -q '^settingsWindowFound=true$' "$EVIDENCE_DIR/settings-window.txt"; the
 fi
 
 cli_reachable=false
-if grep -q '^ClawShell ' "$EVIDENCE_DIR/cli-status.txt"; then
+if grep -q '^AgentWake ' "$EVIDENCE_DIR/cli-status.txt"; then
     cli_reachable=true
 fi
 
@@ -320,11 +320,11 @@ mv "$OUTPUT_DIR/validation-config.redacted" "$OUTPUT_DIR/validation-config.txt"
 cat >"$OUTPUT_DIR/README.md" <<'EOF'
 # App UI Smoke
 
-This package captures live local evidence that the staged ClawShell app bundle
-launches, the CLI can reach it, and macOS Accessibility exposes a ClawShell menu
+This package captures live local evidence that the staged AgentWake app bundle
+launches, the CLI can reach it, and macOS Accessibility exposes an AgentWake menu
 bar item with the current `Closed-Lid Mode unavailable` product copy. It also
 opens the menu bar Settings item and verifies that CoreGraphics reports an onscreen,
-non-empty `ClawShell Settings` window for the staged app process.
+non-empty `AgentWake Settings` window for the staged app process.
 
 Evidence files:
 
@@ -342,7 +342,7 @@ item.
 EOF
 
 if [[ "$result" != "pass" ]]; then
-    echo "ClawShell app UI smoke failed; inspect $OUTPUT_DIR" >&2
+    echo "AgentWake app UI smoke failed; inspect $OUTPUT_DIR" >&2
     exit 1
 fi
 

@@ -74,8 +74,8 @@ if [[ -e "$OUTPUT_DIR" && -n "$(find "$OUTPUT_DIR" -mindepth 1 -maxdepth 1 2>/de
     exit 73
 fi
 
-TIMEOUT_SECONDS="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS:-2}"
-MAX_LINES="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_MAX_LINES:-200}"
+TIMEOUT_SECONDS="${AGENTWAKE_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS:-2}"
+MAX_LINES="${AGENTWAKE_TEMPERATURE_ALT_SOURCE_MAX_LINES:-200}"
 
 require_positive_integer() {
     local name="$1"
@@ -86,8 +86,8 @@ require_positive_integer() {
     fi
 }
 
-require_positive_integer "CLAWSHELL_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS" "$TIMEOUT_SECONDS"
-require_positive_integer "CLAWSHELL_TEMPERATURE_ALT_SOURCE_MAX_LINES" "$MAX_LINES"
+require_positive_integer "AGENTWAKE_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS" "$TIMEOUT_SECONDS"
+require_positive_integer "AGENTWAKE_TEMPERATURE_ALT_SOURCE_MAX_LINES" "$MAX_LINES"
 
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
@@ -194,15 +194,15 @@ manifest_row() {
     printf '%s\t%s\t%s\t%s\n' "$check_id" "$status" "$path" "$note"
 }
 
-IOREG_BIN="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREG:-$(command -v ioreg 2>/dev/null || true)}"
+IOREG_BIN="${AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOREG:-$(command -v ioreg 2>/dev/null || true)}"
 if [[ -z "$IOREG_BIN" ]]; then
     IOREG_BIN="/usr/sbin/ioreg"
 fi
-HIDUTIL_BIN="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_HIDUTIL:-$(command -v hidutil 2>/dev/null || true)}"
-CLANG_BIN="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_CLANG:-$(command -v clang 2>/dev/null || true)}"
-IOHID_PROBE_BIN="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOHID_PROBE:-}"
-IOREPORT_PROBE_BIN="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREPORT_PROBE:-}"
-SDKROOT_PATH="${CLAWSHELL_TEMPERATURE_ALT_SOURCE_SDKROOT:-$(xcrun --show-sdk-path 2>/dev/null || true)}"
+HIDUTIL_BIN="${AGENTWAKE_TEMPERATURE_ALT_SOURCE_HIDUTIL:-$(command -v hidutil 2>/dev/null || true)}"
+CLANG_BIN="${AGENTWAKE_TEMPERATURE_ALT_SOURCE_CLANG:-$(command -v clang 2>/dev/null || true)}"
+IOHID_PROBE_BIN="${AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOHID_PROBE:-}"
+IOREPORT_PROBE_BIN="${AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOREPORT_PROBE:-}"
+SDKROOT_PATH="${AGENTWAKE_TEMPERATURE_ALT_SOURCE_SDKROOT:-$(xcrun --show-sdk-path 2>/dev/null || true)}"
 
 capture "smc-endpoint-inventory" "$TIMEOUT_SECONDS" "$IOREG_BIN" -r -c AppleSMCKeysEndpoint -l
 capture "smc-temp-sensor-node-inventory" "$TIMEOUT_SECONDS" "$IOREG_BIN" -r -n smctempsensor0 -l

@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="$ROOT_DIR/.build/power-validation/bag-mode-primitive-$(date -u +%Y%m%dT%H%M%SZ)"
 CASE_ID=""
 APPLY=0
-HOLD_SECONDS="${CLAWSHELL_BAG_MODE_HOLD_SECONDS:-300}"
+HOLD_SECONDS="${AGENTWAKE_BAG_MODE_HOLD_SECONDS:-300}"
 ACKNOWLEDGED=0
 CONTINUE_OUTPUT=0
 REBOOT_HELD=0
@@ -14,12 +14,12 @@ PREVIOUS_DISABLESLEEP=""
 PMSET_BIN="/usr/bin/pmset"
 TEST_PMSET=0
 
-if [[ -n "${CLAWSHELL_PMSET_BIN:-}" ]]; then
-    if [[ "${CLAWSHELL_BAG_MODE_PRIMITIVE_TEST_PMSET:-0}" != "1" ]]; then
-        echo "CLAWSHELL_PMSET_BIN is for internal validation only; unset it for real #29 evidence." >&2
+if [[ -n "${AGENTWAKE_PMSET_BIN:-}" ]]; then
+    if [[ "${AGENTWAKE_BAG_MODE_PRIMITIVE_TEST_PMSET:-0}" != "1" ]]; then
+        echo "AGENTWAKE_PMSET_BIN is for internal validation only; unset it for real #29 evidence." >&2
         exit 2
     fi
-    PMSET_BIN="$CLAWSHELL_PMSET_BIN"
+    PMSET_BIN="$AGENTWAKE_PMSET_BIN"
     TEST_PMSET=1
 fi
 
@@ -43,10 +43,10 @@ Options:
   -h, --help               Show this help
 
 Environment:
-  CLAWSHELL_BAG_MODE_HOLD_SECONDS=<seconds>
+  AGENTWAKE_BAG_MODE_HOLD_SECONDS=<seconds>
 
 Internal validation only:
-  CLAWSHELL_BAG_MODE_PRIMITIVE_TEST_PMSET=1 CLAWSHELL_PMSET_BIN=<path>
+  AGENTWAKE_BAG_MODE_PRIMITIVE_TEST_PMSET=1 AGENTWAKE_PMSET_BIN=<path>
       Runs against a fake pmset command. The matrix verifier rejects this
       output as test-only evidence.
 EOF
@@ -141,7 +141,7 @@ fi
 mkdir -p "$OUTPUT_DIR"
 
 snapshot() {
-    CLAWSHELL_PMSET_REDACT_METADATA=1 "$ROOT_DIR/scripts/pmset-snapshot.sh" "$1"
+    AGENTWAKE_PMSET_REDACT_METADATA=1 "$ROOT_DIR/scripts/pmset-snapshot.sh" "$1"
 }
 
 current_disablesleep() {
@@ -276,7 +276,7 @@ if [[ ! -f "$OUTPUT_DIR/manual-result.md" || "$CONTINUE_OUTPUT" != "1" ]]; then
 - \`during-applied/\`: captured while the candidate primitive is applied
 - \`after-lid-window/\`: captured after the manual lid-close/reopen window
 - \`after-rollback/\`: captured after rollback
-- Optional \`post-reboot/\`: capture with \`CLAWSHELL_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh <this-dir>/post-reboot\`
+- Optional \`post-reboot/\`: capture with \`AGENTWAKE_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh <this-dir>/post-reboot\`
 
 ## Manual Observations
 - Lid-close sleep blocked: yes | no | inconclusive
@@ -332,7 +332,7 @@ Restore: ${PMSET_BIN} disablesleep ${PREVIOUS_DISABLESLEEP}
 After reboot-held validation, run:
 
 sudo ${PMSET_BIN} disablesleep ${PREVIOUS_DISABLESLEEP}
-CLAWSHELL_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh "$OUTPUT_DIR/after-rollback"
+AGENTWAKE_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh "$OUTPUT_DIR/after-rollback"
 EOF
 
 cat >"$OUTPUT_DIR/README.txt" <<EOF
@@ -365,11 +365,11 @@ continue through reboot. Rollback instructions were written to:
 
 After reboot:
 1. Capture post-reboot state:
-   CLAWSHELL_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh "$OUTPUT_DIR/post-reboot"
+   AGENTWAKE_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh "$OUTPUT_DIR/post-reboot"
 2. Restore the prior value:
    sudo ${PMSET_BIN} disablesleep ${PREVIOUS_DISABLESLEEP}
 3. Capture rollback state:
-   CLAWSHELL_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh "$OUTPUT_DIR/after-rollback"
+   AGENTWAKE_PMSET_REDACT_METADATA=1 scripts/pmset-snapshot.sh "$OUTPUT_DIR/after-rollback"
 4. Fill in:
    $OUTPUT_DIR/manual-result.md
 EOF

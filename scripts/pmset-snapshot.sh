@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="${1:-"$ROOT_DIR/.build/power-snapshots/$(date -u +%Y%m%dT%H%M%SZ)"}"
-STRICT="${CLAWSHELL_PMSET_STRICT:-0}"
-REDACT_METADATA="${CLAWSHELL_PMSET_REDACT_METADATA:-0}"
+STRICT="${AGENTWAKE_PMSET_STRICT:-0}"
+REDACT_METADATA="${AGENTWAKE_PMSET_REDACT_METADATA:-0}"
 
 mkdir -p "$OUTPUT_DIR"
 

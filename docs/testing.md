@@ -1,8 +1,8 @@
 # Testing
 
-ClawShell uses two automated gates today:
+AgentWake uses two automated gates today:
 
-- `ClawShellCoreChecks` is the portable local gate. It runs on the current Command Line Tools environment even when `Testing` and `XCTest` are unavailable.
+- `AgentWakeCoreChecks` is the portable local gate. It runs on the current Command Line Tools environment even when `Testing` and `XCTest` are unavailable.
 - SwiftPM test targets are the standard test home for CI and full Xcode toolchains.
 
 Run the complete local validation script:
@@ -14,9 +14,9 @@ scripts/validate.sh
 The script runs:
 
 - `swift build`
-- `swift run ClawShellCoreChecks`
-- `swift run ClawShell --smoke-test`
-- `swift test` when the active toolchain, or a full Xcode discovered under `/Applications`, can discover both required ClawShell test targets
+- `swift run AgentWakeCoreChecks`
+- `swift run AgentWake --smoke-test`
+- `swift test` when the active toolchain, or a full Xcode discovered under `/Applications`, can discover both required AgentWake test targets
 
 If the active Command Line Tools environment cannot import `Testing` or `XCTest`,
 the script tries a discovered full Xcode by setting `DEVELOPER_DIR` for SwiftPM
@@ -27,7 +27,7 @@ coverage.
 
 ## Unit Test Matrix
 
-`Tests/ClawShellCoreTests` is the home for unit tests. The issue #9 coverage plan is registered in `IssueNineCoveragePlanTests`; rows are promoted from `pendingImplementation` as behavior-level assertions land.
+`Tests/AgentWakeCoreTests` is the home for unit tests. The issue #9 coverage plan is registered in `IssueNineCoveragePlanTests`; rows are promoted from `pendingImplementation` as behavior-level assertions land.
 
 - Session transition matrix: covered by `AgentSessionStateMachineTests`
 - PID reuse and process restart dedupe: covered by `AgentSessionStateMachineTests`
@@ -35,18 +35,18 @@ coverage.
 - Grace timer reset and non-reset rules: covered by `AgentSessionStateMachineTests`
 - Manual override precedence and persistence: covered by `AgentSessionStateMachineTests`
 - Normal assertion ownership/release and failed-release retry behavior: covered by `AssertionManagerTests`
-- Safety transitions, stale sensors, unavailable sensors, and hysteresis: covered by `BagModeSafetyPolicy` checks in `ClawShellCoreChecks`
+- Safety transitions, stale sensors, unavailable sensors, and hysteresis: covered by `BagModeSafetyPolicy` checks in `AgentWakeCoreChecks`
 - Settings migration, atomic write, corrupt settings recovery
 - Export redaction and exclusion rules
 
 ## Contract Test Matrix
 
-`Tests/ClawShellContractTests` is the home for integration and contract tests. Fixture slots already exist under `Tests/ClawShellContractTests/Fixtures/`, and the harness asserts that each slot is present as a directory.
+`Tests/AgentWakeContractTests` is the home for integration and contract tests. Fixture slots already exist under `Tests/AgentWakeContractTests/Fixtures/`, and the harness asserts that each slot is present as a directory.
 
 The registered contract coverage rows are:
 
 - Adapter redaction: fail if payloads or logs contain prompts, tool args, cwd, transcript paths, or environment values
-- Adapter no-op behavior when ClawShell is not running
+- Adapter no-op behavior when AgentWake is not running
 - Control endpoint auth failure, replay rejection, and rate limiting: covered through the Unix socket by `ControlServerTests`
 - Control endpoint peer PID identity: covered by socket tests that reject client-supplied PID rotation
 - Config patcher fixtures for Claude Code and Codex CLI: covered by `IntegrationContractTests`
@@ -57,11 +57,11 @@ The registered contract coverage rows are:
 
 The V1 integration layer has both portable checks and contract fixtures:
 
-- `HookAdapterMapper` reduces Claude Code hook stdin and Codex `notify` payloads to ClawShell's minimal event schema.
-- Adapter output is host-safe and empty on success/no-op, including when ClawShell is not running.
-- Claude Code patching preserves existing hook groups, adds only owned command handlers, and removes only handlers containing ClawShell's owner marker.
+- `HookAdapterMapper` reduces Claude Code hook stdin and Codex `notify` payloads to AgentWake's minimal event schema.
+- Adapter output is host-safe and empty on success/no-op, including when AgentWake is not running.
+- Claude Code patching preserves existing hook groups, adds only owned command handlers, and removes only handlers containing AgentWake's owner marker.
 - Codex patching owns native hook groups for `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and `Stop`, keeps the top-level `notify` fallback, forwards a previous notify command through the adapter, preserves unrelated TOML and user hooks, and restores the previous notify line on removal.
-- Native Codex hook stdin is reduced to ClawShell's minimal event schema without prompt text, raw cwd, transcript paths, tool input, tool output, or assistant text. See [codex-native-hooks.md](codex-native-hooks.md) for confidence transitions.
+- Native Codex hook stdin is reduced to AgentWake's minimal event schema without prompt text, raw cwd, transcript paths, tool input, tool output, or assistant text. See [codex-native-hooks.md](codex-native-hooks.md) for confidence transitions.
 - Integration removal persists per-agent `doNotAutoInstall` suppression and writes a local audit event.
 
 ## Local App Launch
@@ -72,13 +72,13 @@ Launch the SwiftPM AppKit app as a real `.app` bundle for manual UI checks:
 ./script/build_and_run.sh --verify
 ```
 
-The script builds `ClawShell`, stages `dist/ClawShell.app`, launches it with
+The script builds `AgentWake`, stages `dist/AgentWake.app`, launches it with
 `open -n`, and verifies the app process exists. Use this path for menu bar and
-settings-window validation. Direct `swift run ClawShell` launches the raw
+settings-window validation. Direct `swift run AgentWake` launches the raw
 executable and is reserved for smoke tests such as:
 
 ```sh
-swift run ClawShell --smoke-test
+swift run AgentWake --smoke-test
 ```
 
 For repeatable local evidence that the staged app exposes a menu bar item to
@@ -90,9 +90,9 @@ scripts/app-ui-smoke.sh \
 ```
 
 The smoke opens the staged app bundle, verifies the CLI can reach it, captures
-the `ClawShell` status item and menu copy from the accessibility tree, presses
+the `AgentWake` status item and menu copy from the accessibility tree, presses
 the `Settings...` menu item, and verifies that CoreGraphics reports an onscreen
-`ClawShell Settings` window for the staged app process. This is still a local UI
+`AgentWake Settings` window for the staged app process. This is still a local UI
 smoke, not a substitute for a human visual pass on the target display
 configuration.
 
@@ -105,9 +105,9 @@ scripts/app-clean-install-smoke.sh \
 ```
 
 The clean-install smoke builds an isolated app bundle, copies it into an
-`Applications/ClawShell.app` path under the evidence directory, launches that
+`Applications/AgentWake.app` path under the evidence directory, launches that
 copy, verifies the exact installed-copy process, verifies the CLI can reach it,
-and captures the `ClawShell` menu bar item from the accessibility tree. This is
+and captures the `AgentWake` menu bar item from the accessibility tree. This is
 not a Homebrew cask, package installer, upgrade, uninstall, Gatekeeper,
 notarization, or helper-registration lifecycle proof.
 
@@ -119,11 +119,11 @@ scripts/app-lifecycle-smoke.sh \
   --output-dir .build/app-lifecycle-smoke/local-$(date -u +%Y%m%dT%H%M%SZ)
 ```
 
-The lifecycle smoke targets only the staged `dist/ClawShell.app` process for
+The lifecycle smoke targets only the staged `dist/AgentWake.app` process for
 this repository. It verifies CLI reachability while running, verifies CLI
 not-running behavior after AppleEvent quit, SIGTERM, and a force-kill, and
 verifies the staged app can relaunch after each path. The AppleEvent quit leg
-requires the staged app to be the only `ClawShell` process before sending the
+requires the staged app to be the only `AgentWake` process before sending the
 quit event. It does not reboot the machine or exercise Bag Mode while armed.
 
 ## Packaging Consent Audit
@@ -139,7 +139,7 @@ scripts/packaging-consent-audit.sh \
 
 The audit is static and non-privileged. With `--stage-app`, it builds and stages
 an isolated app bundle under the audit output directory without opening or
-stopping ClawShell. It captures the bundle layout and `Info.plist`, scans
+stopping AgentWake. It captures the bundle layout and `Info.plist`, scans
 production app/build sources for privileged helper activation calls, and scans
 known release workflow/package/cask files for install hooks. It does not install
 a cask or package, register a helper, call `SMAppService`, open the app, or
@@ -165,7 +165,7 @@ Use the non-destructive snapshot harness before and after power-management exper
 scripts/pmset-snapshot.sh
 ```
 
-The harness captures `pmset` and power-state diagnostics without changing power settings. It must not be used as proof that ClawShell blocks clamshell sleep; it only records state for validation artifacts.
+The harness captures `pmset` and power-state diagnostics without changing power settings. It must not be used as proof that AgentWake blocks clamshell sleep; it only records state for validation artifacts.
 
 Use the normal assertion validation harness to capture `before`, `during`, and `after` snapshots around a temporary non-privileged IOPM hold:
 
@@ -186,7 +186,7 @@ scripts/timed-idle-preflight.sh
 ```
 
 Preflight is only a readiness check. It does not create validation evidence.
-When it finds non-ClawShell blockers, it prints cleanup hints for common
+When it finds non-AgentWake blockers, it prints cleanup hints for common
 assertions such as WindowServer `UserIsActive`, powerd display-on,
 sharingd/Handoff, Slack/WebRTC, coreaudiod audio activity, and Codex/Electron.
 #5 closed by explicit owner sign-off on the documented non-conclusive lifecycle
@@ -198,7 +198,7 @@ See [power-validation.md](power-validation.md) for the current normal assertion 
 
 Use the Bag Mode primitive harness for historical #7/#29 evidence and for
 final app E2E carry-forward evidence in
-[#120](https://github.com/makeavish/ClawShell/issues/120):
+[#120](https://github.com/makeavish/AgentWake/issues/120):
 
 ```sh
 sudo scripts/bag-mode-primitive-validation.sh \
@@ -364,28 +364,28 @@ The default mode builds an ad-hoc signed app/helper bundle whose LaunchDaemon
 helper runs one timeout-bounded `powermetrics` sample after registration and
 approval. New artifacts default to `powermetrics --show-initial-usage -n 1 -i
 1000 --samplers thermal`; set
-`CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE=false` only for comparison
+`AGENTWAKE_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE=false` only for comparison
 runs against the earlier command shape. Set
-`CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=<samplers>` before
+`AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=<samplers>` before
 creating the artifact to compare root-owned sampler variants such as `all`,
 `default`, `cpu_power`, or `thermal,cpu_power`. The local
 `thermal,cpu_power` diagnostic completed from the approved helper under a 5
 second diagnostic timeout, but still emitted no numeric temperature candidates,
 so treat it as comparison evidence only. Set
-`CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc` to run the diagnostic
+`AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc` to run the diagnostic
 `/usr/sbin/ioreg -r -c AppleSMCKeysEndpoint -l` source from the approved helper.
-Set `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu` to run the PMU inventory
+Set `AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu` to run the PMU inventory
 candidate `/usr/sbin/ioreg -r -c AppleARMPMUTempSensor -l`; current local
 evidence can run this source from the approved helper as root, but still sees
 PMU sensor names without numeric reading candidates.
-Set `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc-dispatcher` to run the SMC
+Set `AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc-dispatcher` to run the SMC
 sensor-dispatcher inventory candidate
 `/usr/sbin/ioreg -r -c AppleSMCSensorDispatcher -l` from the approved helper.
-Set `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=thermal-levels` to run the root-gated
+Set `AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=thermal-levels` to run the root-gated
 `/usr/bin/thermal levels` command from the approved helper as a diagnostic
 source candidate.
-Set `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreport-ans2` to bundle and run the
-native `ClawShellIOReportTemperatureProbe` from the approved helper. Current
+Set `AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreport-ans2` to bundle and run the
+native `AgentWakeIOReportTemperatureProbe` from the approved helper. Current
 local evidence captures helper-owned numeric ANS2/MSP samples under the 1s
 deadline, but the refreshed direct probe reports undefined IOReport unit
 metadata for those channels (`IOReportChannelUnit=0`). Scale,
@@ -397,7 +397,7 @@ child process on a full pipe. That mode is candidate-source evidence only until 
 parsing, freshness, cadence, timeout, coverage, and fail-closed proof. New artifacts derive a unique
 SMAppService bundle/helper identity from the output path to avoid stale
 approval/code-signing state; set
-`CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX=<lettersAndDigits>` only when a
+`AGENTWAKE_TEMPERATURE_PROVIDER_ID_SUFFIX=<lettersAndDigits>` only when a
 deterministic comparison identity is needed. Mutating registration uses the
 same prepared artifact and requires:
 
@@ -558,12 +558,12 @@ The report requires each artifact to have matching `daemonCommand`, successful
 post-approval helper stdout capture, root `uid=0`/`euid=0`, the expected
 `commandJson`, mirrored ledger JSON for that command, successful unregister,
 and service-not-found cleanup evidence. It does not edit any verifier package.
-`ClawShellCoreChecks` and
+`AgentWakeCoreChecks` and
 `ControlServerTests.cliParsesCommandsAndSendsThroughClient` plus
 `ControlServerTests.controlRouterSurfacesHelperCommandOutcomes` cover the CLI
-helper-command outcome boundary: `clawshell helper status`, `clawshell helper
-enable`, `clawshell helper disable`, `clawshell helper repair`, `clawshell
-helper uninstall`, and `clawshell uninstall --remove-helper
+helper-command outcome boundary: `agentwake helper status`, `agentwake helper
+enable`, `agentwake helper disable`, `agentwake helper repair`, `agentwake
+helper uninstall`, and `agentwake uninstall --remove-helper
 --remove-integrations` parse and route through `ControlServer` with explicit
 helper unavailable messages. The current app-level helper responses remain
 unavailable because no production helper is installed yet, so this is CLI and
@@ -586,13 +586,13 @@ tests pass.
 New artifacts derive a unique SMAppService bundle/helper identity from the
 output path, and write it to `appBundleIdentifier`, `helperLabel`, and
 `identitySuffix` in `validation-config.txt`. Set
-`CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX=<lettersAndDigits>` only when a
+`AGENTWAKE_HELPER_PROTOTYPE_ID_SUFFIX=<lettersAndDigits>` only when a
 deterministic comparison identity is needed.
 New artifacts also default the approved LaunchDaemon command to `status`. Set
-`CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND=<fixed-command>` before creating an
+`AGENTWAKE_HELPER_PROTOTYPE_DAEMON_COMMAND=<fixed-command>` before creating an
 artifact to probe `enableBagMode`, `disableBagMode`, `repair`, or `uninstall`
 as dry-run root-owned command dispatch after approval.
-Set `CLAWSHELL_HELPER_PROTOTYPE_GENERATION=<positive-integer>` before creating
+Set `AGENTWAKE_HELPER_PROTOTYPE_GENERATION=<positive-integer>` before creating
 an artifact when preparing generation N/N+1 helper-update evidence. The
 generation is recorded in `validation-config.txt`, helper stdout, and the
 mirrored dry-run ledger JSON; update verifier rows still require real installed
@@ -632,7 +632,7 @@ The summary marks rows as `ready`, `needs-review`, `missing`, or
 `not-applicable`. It is a tracker/gap report only; it never mutates
 `prototype-manifest.tsv` or `manual-result.md`, and `missing` rows still require
 new lifecycle evidence in final app E2E issue
-[#120](https://github.com/makeavish/ClawShell/issues/120).
+[#120](https://github.com/makeavish/AgentWake/issues/120).
 The validation gate covers app/helper disagreement reconciliation by requiring
 helper-side readiness alone to leave the app/CLI helper outcome row `missing`;
 `cli-helper-status-repair-uninstall` becomes ready only with a current CLI proof

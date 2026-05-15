@@ -141,8 +141,8 @@ if [[ "$APPEND_CAPTURE" == true && -z "$(find "$OUTPUT_DIR" -mindepth 1 -maxdept
     exit 73
 fi
 
-DAEMON_COMMAND="${CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND:-status}"
-HELPER_GENERATION="${CLAWSHELL_HELPER_PROTOTYPE_GENERATION:-1}"
+DAEMON_COMMAND="${AGENTWAKE_HELPER_PROTOTYPE_DAEMON_COMMAND:-status}"
+HELPER_GENERATION="${AGENTWAKE_HELPER_PROTOTYPE_GENERATION:-1}"
 ROOT_LEDGER_PATH_REL="runtime/helper-ledger.jsonl"
 
 require_positive_integer() {
@@ -177,8 +177,8 @@ require_helper_command() {
 }
 
 if [[ "$APPEND_CAPTURE" == false ]]; then
-    require_helper_command "CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND" "$DAEMON_COMMAND"
-    require_positive_integer "CLAWSHELL_HELPER_PROTOTYPE_GENERATION" "$HELPER_GENERATION"
+    require_helper_command "AGENTWAKE_HELPER_PROTOTYPE_DAEMON_COMMAND" "$DAEMON_COMMAND"
+    require_positive_integer "AGENTWAKE_HELPER_PROTOTYPE_GENERATION" "$HELPER_GENERATION"
 fi
 
 if [[ "$APPEND_CAPTURE" == false ]]; then
@@ -225,19 +225,19 @@ require_identity_suffix() {
 require_helper_label() {
     local name="$1"
     local value="$2"
-    if ! [[ "$value" =~ ^com[.]makeavish[.]ClawShell[.]HelperPrototype[.][A-Za-z][A-Za-z0-9]{0,31}[.]daemon$ ]]; then
-        echo "$name must be a ClawShell helper prototype label" >&2
+    if ! [[ "$value" =~ ^com[.]makeavish[.]AgentWake[.]HelperPrototype[.][A-Za-z][A-Za-z0-9]{0,31}[.]daemon$ ]]; then
+        echo "$name must be an AgentWake helper prototype label" >&2
         exit 73
     fi
 }
 
-if [[ -n "${CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX:-}" ]]; then
-    require_identity_suffix "CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX" "$CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX"
+if [[ -n "${AGENTWAKE_HELPER_PROTOTYPE_ID_SUFFIX:-}" ]]; then
+    require_identity_suffix "AGENTWAKE_HELPER_PROTOTYPE_ID_SUFFIX" "$AGENTWAKE_HELPER_PROTOTYPE_ID_SUFFIX"
 fi
 
-BASE_BUNDLE_ID="com.makeavish.ClawShell.HelperPrototype"
-BASE_HELPER_LABEL="com.makeavish.ClawShell.HelperPrototype"
-IDENTITY_SUFFIX="${CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX:-}"
+BASE_BUNDLE_ID="com.makeavish.AgentWake.HelperPrototype"
+BASE_HELPER_LABEL="com.makeavish.AgentWake.HelperPrototype"
+IDENTITY_SUFFIX="${AGENTWAKE_HELPER_PROTOTYPE_ID_SUFFIX:-}"
 if [[ "$APPEND_CAPTURE" == true && -f "$CONFIG_FILE" ]]; then
     HELPER_LABEL="$(config_value helperLabel "$CONFIG_FILE" || true)"
     BUNDLE_ID="$(config_value appBundleIdentifier "$CONFIG_FILE" || true)"
@@ -287,12 +287,12 @@ else
     if [[ -z "$IDENTITY_SUFFIX" ]]; then
         IDENTITY_SUFFIX="$(derive_identity_suffix)"
     fi
-    require_identity_suffix "CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX" "$IDENTITY_SUFFIX"
+    require_identity_suffix "AGENTWAKE_HELPER_PROTOTYPE_ID_SUFFIX" "$IDENTITY_SUFFIX"
     BUNDLE_ID="$BASE_BUNDLE_ID.$IDENTITY_SUFFIX"
     HELPER_LABEL="$BASE_HELPER_LABEL.$IDENTITY_SUFFIX.daemon"
 fi
-APP_NAME="ClawShellHelperPrototype"
-HELPER_NAME="ClawShellHelperPrototypeDaemon"
+APP_NAME="AgentWakeHelperPrototype"
+HELPER_NAME="AgentWakeHelperPrototypeDaemon"
 PLIST_NAME="$HELPER_LABEL.plist"
 APP_DIR="$OUTPUT_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
@@ -867,7 +867,7 @@ capture_post_approval_status() {
     capture "helper-status-after-approval" "$MACOS_DIR/$APP_NAME" status || true
     assert_controller_plist_name "helper-status-after-approval"
     capture "launchctl-status" launchctl print "system/$HELPER_LABEL" || true
-    capture "log-evidence" log show --style syslog --last "${CLAWSHELL_SMAPP_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
+    capture "log-evidence" log show --style syslog --last "${AGENTWAKE_SMAPP_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
     capture_file_snapshot "helper-bootstrap-after-approval" "$RUNTIME_DIR/helper.log" || true
     capture_file_snapshot "helper-stdout-after-approval" "$RUNTIME_DIR/helper.stdout.log" || true
     capture_file_snapshot "helper-stderr-after-approval" "$RUNTIME_DIR/helper.stderr.log" || true
@@ -917,7 +917,7 @@ capture_post_reboot_status() {
     assert_controller_plist_name "helper-status-post-reboot"
     capture "post-reboot-helper-bootstrap" launchctl print "system/$HELPER_LABEL" || true
     capture "launchctl-status-post-reboot" launchctl print "system/$HELPER_LABEL" || true
-    capture "log-evidence-post-reboot" log show --style syslog --last "${CLAWSHELL_SMAPP_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
+    capture "log-evidence-post-reboot" log show --style syslog --last "${AGENTWAKE_SMAPP_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
     capture_file_snapshot "helper-bootstrap-post-reboot" "$RUNTIME_DIR/helper.log" || true
     capture_file_snapshot "helper-stdout-post-reboot" "$RUNTIME_DIR/helper.stdout.log" || true
     capture_file_snapshot "helper-stderr-post-reboot" "$RUNTIME_DIR/helper.stderr.log" || true
@@ -962,7 +962,7 @@ capture_unregister_status() {
     capture "helper-status-after-unregister" "$MACOS_DIR/$APP_NAME" status || true
     assert_controller_plist_name "helper-status-after-unregister"
     capture "launchctl-status-after-unregister" launchctl print "system/$HELPER_LABEL" || true
-    capture "log-evidence-after-unregister" log show --style syslog --last "${CLAWSHELL_SMAPP_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
+    capture "log-evidence-after-unregister" log show --style syslog --last "${AGENTWAKE_SMAPP_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
 
     config_set_key "unregisterAttempted" "true"
     config_set_key "unregisterCaptureAttempted" "true"
@@ -998,8 +998,8 @@ xml_escape() {
 }
 
 write_controller_source() {
-    mkdir -p "$SOURCE_DIR/Sources/ClawShellHelperPrototype"
-    cat >"$SOURCE_DIR/Sources/ClawShellHelperPrototype/main.swift" <<SWIFT
+    mkdir -p "$SOURCE_DIR/Sources/AgentWakeHelperPrototype"
+    cat >"$SOURCE_DIR/Sources/AgentWakeHelperPrototype/main.swift" <<SWIFT
 import Foundation
 import ServiceManagement
 
@@ -1050,8 +1050,8 @@ SWIFT
 }
 
 write_helper_source() {
-    mkdir -p "$SOURCE_DIR/Sources/ClawShellHelperPrototypeDaemon"
-    cat >"$SOURCE_DIR/Sources/ClawShellHelperPrototypeDaemon/main.swift" <<'SWIFT'
+    mkdir -p "$SOURCE_DIR/Sources/AgentWakeHelperPrototypeDaemon"
+    cat >"$SOURCE_DIR/Sources/AgentWakeHelperPrototypeDaemon/main.swift" <<'SWIFT'
 import Foundation
 import Darwin
 
@@ -1193,7 +1193,7 @@ let actualHelperLabel = argumentValue(after: "--actual-helper-label")
 let expectedEffectiveUID = argumentValue(after: "--expected-effective-uid")
 let actualEffectiveUID = argumentValue(after: "--actual-effective-uid") ?? String(geteuid())
 let expectedHelperGeneration = argumentValue(after: "--expected-helper-generation")
-let helperGeneration = __CLAWSHELL_HELPER_GENERATION__
+let helperGeneration = __AGENTWAKE_HELPER_GENERATION__
 let actualHelperGeneration = argumentValue(after: "--actual-helper-generation") ?? String(helperGeneration)
 let approvalState = argumentValue(after: "--approval-state") ?? "approved"
 
@@ -1265,7 +1265,7 @@ if !authFailures.isEmpty {
     exit(77)
 }
 SWIFT
-    /usr/bin/sed -i '' "s/__CLAWSHELL_HELPER_GENERATION__/$HELPER_GENERATION/g" "$SOURCE_DIR/Sources/ClawShellHelperPrototypeDaemon/main.swift"
+    /usr/bin/sed -i '' "s/__AGENTWAKE_HELPER_GENERATION__/$HELPER_GENERATION/g" "$SOURCE_DIR/Sources/AgentWakeHelperPrototypeDaemon/main.swift"
 }
 
 write_package_manifest() {
@@ -1275,23 +1275,23 @@ write_package_manifest() {
 import PackageDescription
 
 let package = Package(
-    name: "ClawShellHelperPrototypePackage",
+    name: "AgentWakeHelperPrototypePackage",
     platforms: [
         .macOS(.v13)
     ],
     products: [
         .executable(
-            name: "ClawShellHelperPrototype",
-            targets: ["ClawShellHelperPrototype"]
+            name: "AgentWakeHelperPrototype",
+            targets: ["AgentWakeHelperPrototype"]
         ),
         .executable(
-            name: "ClawShellHelperPrototypeDaemon",
-            targets: ["ClawShellHelperPrototypeDaemon"]
+            name: "AgentWakeHelperPrototypeDaemon",
+            targets: ["AgentWakeHelperPrototypeDaemon"]
         )
     ],
     targets: [
-        .executableTarget(name: "ClawShellHelperPrototype"),
-        .executableTarget(name: "ClawShellHelperPrototypeDaemon")
+        .executableTarget(name: "AgentWakeHelperPrototype"),
+        .executableTarget(name: "AgentWakeHelperPrototypeDaemon")
     ]
 )
 SWIFT

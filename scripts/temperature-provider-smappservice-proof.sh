@@ -16,7 +16,7 @@ Builds a no-membership SMAppService temperature-provider proof-attempt package
 for #25. The default mode is non-mutating: it builds an ad-hoc signed app and
 LaunchDaemon helper that will run one timeout-bounded provider sample when
 registered and approved. The default source is powermetrics; set
-CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc for the diagnostic I/O Registry
+AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc for the diagnostic I/O Registry
 SMC endpoint source, ioreg-pmu for the AppleARMPMUTempSensor inventory
 candidate, ioreg-smc-dispatcher for the AppleSMCSensorDispatcher inventory
 candidate, thermal-levels for the root-gated thermal levels command, or
@@ -140,14 +140,14 @@ if [[ "$EXISTING_ARTIFACT_MODE" == true && "$OUTPUT_HAS_CONTENT" == false ]]; th
     exit 73
 fi
 
-PROVIDER_SOURCE=${CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE:-powermetrics}
-TIMEOUT_SECONDS=${CLAWSHELL_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS:-1}
-SAMPLE_RATE_MS=${CLAWSHELL_TEMPERATURE_PROVIDER_SAMPLE_RATE_MS:-1000}
-SHOW_INITIAL_USAGE=${CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE:-true}
-POWERMETRICS_SAMPLERS=${CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS:-thermal}
-FRESHNESS_SECONDS=${CLAWSHELL_TEMPERATURE_PROVIDER_FRESHNESS_SECONDS:-10}
-ACTIVE_CADENCE_SECONDS=${CLAWSHELL_TEMPERATURE_PROVIDER_ACTIVE_CADENCE_SECONDS:-5}
-IDLE_CADENCE_SECONDS=${CLAWSHELL_TEMPERATURE_PROVIDER_IDLE_CADENCE_SECONDS:-30}
+PROVIDER_SOURCE=${AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE:-powermetrics}
+TIMEOUT_SECONDS=${AGENTWAKE_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS:-1}
+SAMPLE_RATE_MS=${AGENTWAKE_TEMPERATURE_PROVIDER_SAMPLE_RATE_MS:-1000}
+SHOW_INITIAL_USAGE=${AGENTWAKE_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE:-true}
+POWERMETRICS_SAMPLERS=${AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS:-thermal}
+FRESHNESS_SECONDS=${AGENTWAKE_TEMPERATURE_PROVIDER_FRESHNESS_SECONDS:-10}
+ACTIVE_CADENCE_SECONDS=${AGENTWAKE_TEMPERATURE_PROVIDER_ACTIVE_CADENCE_SECONDS:-5}
+IDLE_CADENCE_SECONDS=${AGENTWAKE_TEMPERATURE_PROVIDER_IDLE_CADENCE_SECONDS:-30}
 
 require_positive_integer() {
     local name="$1"
@@ -218,27 +218,27 @@ require_identity_suffix() {
 require_helper_label() {
     local name="$1"
     local value="$2"
-    if ! [[ "$value" =~ ^com[.]makeavish[.]ClawShell[.]TemperatureProviderPrototype([.][A-Za-z][A-Za-z0-9]{0,31})?[.]daemon$ ]]; then
-        echo "$name must be a ClawShell temperature provider helper label" >&2
+    if ! [[ "$value" =~ ^com[.]makeavish[.]AgentWake[.]TemperatureProviderPrototype([.][A-Za-z][A-Za-z0-9]{0,31})?[.]daemon$ ]]; then
+        echo "$name must be an AgentWake temperature provider helper label" >&2
         exit 73
     fi
 }
 
-require_provider_source "CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE" "$PROVIDER_SOURCE"
-require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS" "$TIMEOUT_SECONDS"
-require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_SAMPLE_RATE_MS" "$SAMPLE_RATE_MS"
-require_bool "CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE" "$SHOW_INITIAL_USAGE"
+require_provider_source "AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE" "$PROVIDER_SOURCE"
+require_positive_integer "AGENTWAKE_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS" "$TIMEOUT_SECONDS"
+require_positive_integer "AGENTWAKE_TEMPERATURE_PROVIDER_SAMPLE_RATE_MS" "$SAMPLE_RATE_MS"
+require_bool "AGENTWAKE_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE" "$SHOW_INITIAL_USAGE"
 if [[ "$PROVIDER_SOURCE" == "powermetrics" ]]; then
-    require_powermetrics_samplers "CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS" "$POWERMETRICS_SAMPLERS"
+    require_powermetrics_samplers "AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS" "$POWERMETRICS_SAMPLERS"
 else
     POWERMETRICS_SAMPLERS="not-used"
 fi
-if [[ -n "${CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX:-}" ]]; then
-    require_identity_suffix "CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX" "$CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX"
+if [[ -n "${AGENTWAKE_TEMPERATURE_PROVIDER_ID_SUFFIX:-}" ]]; then
+    require_identity_suffix "AGENTWAKE_TEMPERATURE_PROVIDER_ID_SUFFIX" "$AGENTWAKE_TEMPERATURE_PROVIDER_ID_SUFFIX"
 fi
-require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_FRESHNESS_SECONDS" "$FRESHNESS_SECONDS"
-require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_ACTIVE_CADENCE_SECONDS" "$ACTIVE_CADENCE_SECONDS"
-require_positive_integer "CLAWSHELL_TEMPERATURE_PROVIDER_IDLE_CADENCE_SECONDS" "$IDLE_CADENCE_SECONDS"
+require_positive_integer "AGENTWAKE_TEMPERATURE_PROVIDER_FRESHNESS_SECONDS" "$FRESHNESS_SECONDS"
+require_positive_integer "AGENTWAKE_TEMPERATURE_PROVIDER_ACTIVE_CADENCE_SECONDS" "$ACTIVE_CADENCE_SECONDS"
+require_positive_integer "AGENTWAKE_TEMPERATURE_PROVIDER_IDLE_CADENCE_SECONDS" "$IDLE_CADENCE_SECONDS"
 
 if [[ -z "$CASE_ID" ]]; then
     case "$PROVIDER_SOURCE" in
@@ -293,9 +293,9 @@ derive_identity_suffix() {
     printf 'h%s' "$digest"
 }
 
-BASE_BUNDLE_ID="com.makeavish.ClawShell.TemperatureProviderPrototype"
-BASE_HELPER_LABEL="com.makeavish.ClawShell.TemperatureProviderPrototype"
-IDENTITY_SUFFIX="${CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX:-}"
+BASE_BUNDLE_ID="com.makeavish.AgentWake.TemperatureProviderPrototype"
+BASE_HELPER_LABEL="com.makeavish.AgentWake.TemperatureProviderPrototype"
+IDENTITY_SUFFIX="${AGENTWAKE_TEMPERATURE_PROVIDER_ID_SUFFIX:-}"
 if [[ "$EXISTING_ARTIFACT_MODE" == true && -f "$OUTPUT_DIR/validation-config.txt" ]]; then
     HELPER_LABEL="$(config_value helperLabel "$OUTPUT_DIR/validation-config.txt" || true)"
     BUNDLE_ID="$(config_value appBundleIdentifier "$OUTPUT_DIR/validation-config.txt" || true)"
@@ -315,12 +315,12 @@ else
     if [[ -z "$IDENTITY_SUFFIX" ]]; then
         IDENTITY_SUFFIX="$(derive_identity_suffix)"
     fi
-    require_identity_suffix "CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX" "$IDENTITY_SUFFIX"
+    require_identity_suffix "AGENTWAKE_TEMPERATURE_PROVIDER_ID_SUFFIX" "$IDENTITY_SUFFIX"
     BUNDLE_ID="$BASE_BUNDLE_ID.$IDENTITY_SUFFIX"
     HELPER_LABEL="$BASE_HELPER_LABEL.$IDENTITY_SUFFIX.daemon"
 fi
-APP_NAME="ClawShellTemperatureProviderPrototype"
-HELPER_NAME="ClawShellTemperatureProviderPrototypeDaemon"
+APP_NAME="AgentWakeTemperatureProviderPrototype"
+HELPER_NAME="AgentWakeTemperatureProviderPrototypeDaemon"
 PLIST_NAME="$HELPER_LABEL.plist"
 APP_DIR="$OUTPUT_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
@@ -348,7 +348,7 @@ if [[ "$PROVIDER_SOURCE" == "ioreport-ans2" ]]; then
     SDKROOT_PATH="$(xcrun --show-sdk-path)"
 fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IOREPORT_PROBE_NAME="ClawShellIOReportTemperatureProbe"
+IOREPORT_PROBE_NAME="AgentWakeIOReportTemperatureProbe"
 
 capture() {
     local name="$1"
@@ -576,7 +576,7 @@ capture_post_approval_status() {
     capture_file_snapshot "numeric-temperature-output" "$RUNTIME_DIR/numeric-temperature-output.txt" || true
     capture_file_snapshot "permission-behavior" "$RUNTIME_DIR/numeric-temperature-output.status" || true
     capture_file_snapshot "timeout-enforcement" "$RUNTIME_DIR/numeric-temperature-output.status" || true
-    capture "logs" log show --style syslog --last "${CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
+    capture "logs" log show --style syslog --last "${AGENTWAKE_TEMPERATURE_PROVIDER_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
 
     config_set_key "postApprovalCaptureAttempted" "true"
 
@@ -658,7 +658,7 @@ capture_unregister_status() {
     capture "temperature-provider-status-after-unregister" "$MACOS_DIR/$APP_NAME" status || true
     assert_controller_plist_name "temperature-provider-status-after-unregister"
     capture "launchctl-status-after-unregister" launchctl print "system/$HELPER_LABEL" || true
-    capture "logs-after-unregister" log show --style syslog --last "${CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
+    capture "logs-after-unregister" log show --style syslog --last "${AGENTWAKE_TEMPERATURE_PROVIDER_LOG_LAST:-10m}" --predicate "process == \"$HELPER_NAME\" || eventMessage CONTAINS \"$HELPER_LABEL\"" || true
 
     config_set_key "unregisterAttempted" "true"
     config_set_key "unregisterCaptureAttempted" "true"
@@ -701,31 +701,31 @@ write_package_manifest() {
 import PackageDescription
 
 let package = Package(
-    name: "ClawShellTemperatureProviderPrototypePackage",
+    name: "AgentWakeTemperatureProviderPrototypePackage",
     platforms: [
         .macOS(.v13)
     ],
     products: [
         .executable(
-            name: "ClawShellTemperatureProviderPrototype",
-            targets: ["ClawShellTemperatureProviderPrototype"]
+            name: "AgentWakeTemperatureProviderPrototype",
+            targets: ["AgentWakeTemperatureProviderPrototype"]
         ),
         .executable(
-            name: "ClawShellTemperatureProviderPrototypeDaemon",
-            targets: ["ClawShellTemperatureProviderPrototypeDaemon"]
+            name: "AgentWakeTemperatureProviderPrototypeDaemon",
+            targets: ["AgentWakeTemperatureProviderPrototypeDaemon"]
         )
     ],
     targets: [
-        .executableTarget(name: "ClawShellTemperatureProviderPrototype"),
-        .executableTarget(name: "ClawShellTemperatureProviderPrototypeDaemon")
+        .executableTarget(name: "AgentWakeTemperatureProviderPrototype"),
+        .executableTarget(name: "AgentWakeTemperatureProviderPrototypeDaemon")
     ]
 )
 SWIFT
 }
 
 write_controller_source() {
-    mkdir -p "$SOURCE_DIR/Sources/ClawShellTemperatureProviderPrototype"
-    cat >"$SOURCE_DIR/Sources/ClawShellTemperatureProviderPrototype/main.swift" <<SWIFT
+    mkdir -p "$SOURCE_DIR/Sources/AgentWakeTemperatureProviderPrototype"
+    cat >"$SOURCE_DIR/Sources/AgentWakeTemperatureProviderPrototype/main.swift" <<SWIFT
 import Foundation
 import ServiceManagement
 
@@ -776,8 +776,8 @@ SWIFT
 }
 
 write_helper_source() {
-    mkdir -p "$SOURCE_DIR/Sources/ClawShellTemperatureProviderPrototypeDaemon"
-    cat >"$SOURCE_DIR/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" <<'SWIFT'
+    mkdir -p "$SOURCE_DIR/Sources/AgentWakeTemperatureProviderPrototypeDaemon"
+    cat >"$SOURCE_DIR/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" <<'SWIFT'
 import Dispatch
 import Foundation
 import Darwin
@@ -849,7 +849,7 @@ case "thermal-levels":
     commandPath = thermalPath
     commandArguments = ["levels"]
 case "ioreport-ans2":
-    commandPath = executableDirectory.appendingPathComponent("ClawShellIOReportTemperatureProbe").path
+    commandPath = executableDirectory.appendingPathComponent("AgentWakeIOReportTemperatureProbe").path
     commandArguments = []
 default:
     commandPath = powermetricsPath
@@ -891,8 +891,8 @@ if FileManager.default.isExecutableFile(atPath: commandPath) {
 
     do {
         let tempDirectory = FileManager.default.temporaryDirectory
-        let stdoutURL = tempDirectory.appendingPathComponent("ClawShellTemperatureProvider-\(UUID().uuidString)-stdout")
-        let stderrURL = tempDirectory.appendingPathComponent("ClawShellTemperatureProvider-\(UUID().uuidString)-stderr")
+        let stdoutURL = tempDirectory.appendingPathComponent("AgentWakeTemperatureProvider-\(UUID().uuidString)-stdout")
+        let stderrURL = tempDirectory.appendingPathComponent("AgentWakeTemperatureProvider-\(UUID().uuidString)-stderr")
         FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
         FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
         let stdoutHandle = try FileHandle(forWritingTo: stdoutURL)

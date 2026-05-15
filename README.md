@@ -1,14 +1,14 @@
-# ClawShell
+# AgentWake
 
 Keep coding agents running while your Mac would normally sleep.
 
-ClawShell is a planned native macOS menu bar app for keeping long-running AI coding agents alive while they work, then letting the Mac return to normal sleep behavior when they are done.
+AgentWake is a planned native macOS menu bar app for keeping long-running AI coding agents alive while they work, then letting the Mac return to normal sleep behavior when they are done.
 
 It is designed for developers using tools like Claude Code and Codex CLI on a MacBook as their main machine.
 
 ## Status
 
-ClawShell is in early design. There is no public release yet.
+AgentWake is in early design. There is no public release yet.
 
 The first public version is planned to focus on:
 
@@ -23,7 +23,7 @@ The first public version is planned to focus on:
 
 Long-running coding agents can work for minutes or hours. macOS can interrupt them through idle sleep or clamshell sleep, especially when a MacBook lid is closed on battery.
 
-`caffeinate -i` helps with idle sleep, but it is easy to forget and does not track agent lifecycle. ClawShell aims to make normal sleep prevention automatic, visible, and agent-scoped without becoming a general-purpose "keep my Mac awake forever" tool.
+`caffeinate -i` helps with idle sleep, but it is easy to forget and does not track agent lifecycle. AgentWake aims to make normal sleep prevention automatic, visible, and agent-scoped without becoming a general-purpose "keep my Mac awake forever" tool.
 
 Closed-Lid Mode remains a planned guarded path after the helper and
 temperature-provider validation gates pass.
@@ -63,7 +63,7 @@ Normal sleep prevention should work without admin privileges. macOS authorizatio
 
 ## Privacy Model
 
-ClawShell is designed to be local-first.
+AgentWake is designed to be local-first.
 
 Planned privacy constraints:
 
@@ -74,8 +74,8 @@ Planned privacy constraints:
 - No tool-argument or command-body collection
 - Local logs for state changes, integration setup, helper actions, and safety cutoffs
 
-If ClawShell installs local agent integrations, the app should show what was installed, log what config changed, and provide removal controls.
-The V1 adapter contract reduces native hook payloads to a minimal event schema and discards prompts, tool arguments, raw cwd values, transcript paths, and environment data before events reach ClawShell.
+If AgentWake installs local agent integrations, the app should show what was installed, log what config changed, and provide removal controls.
+The V1 adapter contract reduces native hook payloads to a minimal event schema and discards prompts, tool arguments, raw cwd values, transcript paths, and environment data before events reach AgentWake.
 
 ## Install
 

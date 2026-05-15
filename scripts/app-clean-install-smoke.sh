@@ -3,20 +3,20 @@ set -euo pipefail
 
 OUTPUT_DIR=""
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="ClawShell"
-HOOK_ADAPTER_NAME="ClawShellHookAdapter"
-BUNDLE_ID="com.clawshell.app"
+APP_NAME="AgentWake"
+HOOK_ADAPTER_NAME="AgentWakeHookAdapter"
+BUNDLE_ID="com.makeavish.AgentWake"
 MIN_SYSTEM_VERSION="13.0"
 
 usage() {
     cat <<'EOF'
 Usage: scripts/app-clean-install-smoke.sh --output-dir DIR
 
-Builds an isolated ClawShell app bundle, copies it into a clean install root
+Builds an isolated AgentWake app bundle, copies it into a clean install root
 under the evidence directory, launches that copied app, and captures CLI and
 Accessibility evidence for the exact installed-copy process.
 
-This is a live local smoke: it opens ClawShell and may require Accessibility
+This is a live local smoke: it opens AgentWake and may require Accessibility
 permission for System Events.
 EOF
 }
@@ -108,7 +108,7 @@ copy_into_clean_install_root() {
     [[ -x "$INSTALLED_HOOK_ADAPTER_BINARY" ]]
 }
 
-all_clawshell_pids() {
+all_agentwake_pids() {
     pgrep -x "$APP_NAME" || true
 }
 
@@ -122,10 +122,10 @@ installed_pids() {
                 printf '%s\n' "$candidate_pid"
                 ;;
         esac
-    done < <(all_clawshell_pids)
+    done < <(all_agentwake_pids)
 }
 
-other_clawshell_pids() {
+other_agentwake_pids() {
     local candidate_pid candidate_command
     while read -r candidate_pid; do
         [[ -n "$candidate_pid" ]] || continue
@@ -137,7 +137,7 @@ other_clawshell_pids() {
                 printf '%s\n' "$candidate_pid"
                 ;;
         esac
-    done < <(all_clawshell_pids)
+    done < <(all_agentwake_pids)
 }
 
 stop_installed_copy() {
@@ -190,8 +190,8 @@ capture_process_snapshot() {
             printf 'installedProcessCommand[%s]=%s\n' "$installed_pid" "$(ps -p "$installed_pid" -o command= 2>/dev/null || true)"
         done < <(installed_pids)
         printf 'matchingInstalledProcessCount=%s\n' "$installed_count"
-        printf 'otherClawShellPIDs='
-        other_clawshell_pids | paste -sd ',' -
+        printf 'otherAgentWakePIDs='
+        other_agentwake_pids | paste -sd ',' -
         printf '\n'
     } | redact_metadata >"$EVIDENCE_DIR/$name.txt"
 }
@@ -206,13 +206,13 @@ single_installed_pid() {
     printf '%s\n' "$pids"
 }
 
-require_no_other_clawshell_processes() {
+require_no_other_agentwake_processes() {
     local other count
-    other="$(other_clawshell_pids)"
+    other="$(other_agentwake_pids)"
     count="$(printf '%s\n' "$other" | sed '/^$/d' | wc -l | tr -d ' ')"
     if [[ "$count" != "0" ]]; then
         capture_process_snapshot "unexpected-other-processes"
-        echo "Expected no other ClawShell processes before clean-install launch; inspect $EVIDENCE_DIR/unexpected-other-processes.txt" >&2
+        echo "Expected no other AgentWake processes before clean-install launch; inspect $EVIDENCE_DIR/unexpected-other-processes.txt" >&2
         return 1
     fi
 }
@@ -262,7 +262,7 @@ fi
 mkdir -p "$OUTPUT_DIR/evidence"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 EVIDENCE_DIR="$OUTPUT_DIR/evidence"
-SOURCE_APP_BUNDLE="$OUTPUT_DIR/staged/ClawShell.app"
+SOURCE_APP_BUNDLE="$OUTPUT_DIR/staged/AgentWake.app"
 SOURCE_APP_CONTENTS="$SOURCE_APP_BUNDLE/Contents"
 SOURCE_APP_MACOS="$SOURCE_APP_CONTENTS/MacOS"
 SOURCE_APP_BINARY="$SOURCE_APP_MACOS/$APP_NAME"
@@ -270,7 +270,7 @@ SOURCE_HOOK_ADAPTER_BINARY="$SOURCE_APP_MACOS/$HOOK_ADAPTER_NAME"
 SOURCE_INFO_PLIST="$SOURCE_APP_CONTENTS/Info.plist"
 INSTALL_ROOT="$OUTPUT_DIR/install-root"
 INSTALL_APPLICATIONS_DIR="$INSTALL_ROOT/Applications"
-INSTALLED_APP_BUNDLE="$INSTALL_APPLICATIONS_DIR/ClawShell.app"
+INSTALLED_APP_BUNDLE="$INSTALL_APPLICATIONS_DIR/AgentWake.app"
 INSTALLED_APP_BINARY="$INSTALLED_APP_BUNDLE/Contents/MacOS/$APP_NAME"
 INSTALLED_HOOK_ADAPTER_BINARY="$INSTALLED_APP_BUNDLE/Contents/MacOS/$HOOK_ADAPTER_NAME"
 CLEANUP_READY=true
@@ -295,7 +295,7 @@ if [[ "$copy_exit" != "0" ]]; then
 fi
 
 stop_installed_copy
-require_no_other_clawshell_processes
+require_no_other_agentwake_processes
 capture_process_snapshot "before-launch-processes"
 
 if ! capture_command "open-installed-copy" /usr/bin/open -n "$INSTALLED_APP_BUNDLE"; then
@@ -304,30 +304,30 @@ if ! capture_command "open-installed-copy" /usr/bin/open -n "$INSTALLED_APP_BUND
 fi
 if ! wait_for_installed_process_count 1; then
     capture_process_snapshot "after-launch-processes"
-    echo "Timed out waiting for one clean-installed ClawShell process" >&2
+    echo "Timed out waiting for one clean-installed AgentWake process" >&2
     exit 1
 fi
 if ! single_installed_pid >"$EVIDENCE_DIR/installed-app.pid"; then
     capture_process_snapshot "after-launch-processes"
-    echo "Expected exactly one clean-installed ClawShell process" >&2
+    echo "Expected exactly one clean-installed AgentWake process" >&2
     exit 1
 fi
 expected_pid="$(cat "$EVIDENCE_DIR/installed-app.pid")"
 capture_process_snapshot "after-launch-processes"
-require_no_other_clawshell_processes
+require_no_other_agentwake_processes
 
-if ! capture_command "cli-status" swift run --package-path "$ROOT_DIR" ClawShellCLI status; then
-    echo "ClawShell CLI status failed for clean-installed copy; inspect $EVIDENCE_DIR/cli-status.txt" >&2
+if ! capture_command "cli-status" swift run --package-path "$ROOT_DIR" AgentWakeCLI status; then
+    echo "AgentWake CLI status failed for clean-installed copy; inspect $EVIDENCE_DIR/cli-status.txt" >&2
     exit 1
 fi
 
 ui_output="$(mktemp "$EVIDENCE_DIR/.accessibility.XXXXXX")"
-if CLAWSHELL_EXPECTED_PID="$expected_pid" osascript >"$ui_output" 2>&1 <<'APPLESCRIPT'
+if AGENTWAKE_EXPECTED_PID="$expected_pid" osascript >"$ui_output" 2>&1 <<'APPLESCRIPT'
 set outputLines to {}
-set expectedPID to system attribute "CLAWSHELL_EXPECTED_PID"
+set expectedPID to system attribute "AGENTWAKE_EXPECTED_PID"
 tell application "System Events"
     set targetProcess to missing value
-    repeat with candidateProcess in (processes whose name is "ClawShell")
+    repeat with candidateProcess in (processes whose name is "AgentWake")
         if ((unix id of candidateProcess) as text) is expectedPID then
             set targetProcess to candidateProcess
             exit repeat
@@ -354,7 +354,7 @@ tell application "System Events"
                     try
                         set itemDescription to description of itemRef as text
                     end try
-                    if itemName is "ClawShell" then
+                    if itemName is "AgentWake" then
                         set statusItemFound to true
                         set outputLines to outputLines & {"statusItemName=" & itemName}
                         set outputLines to outputLines & {"statusItemDescription=" & itemDescription}
@@ -377,20 +377,20 @@ redact_metadata <"$ui_output" >"$EVIDENCE_DIR/accessibility-menu-bar.txt"
 rm -f "$ui_output"
 printf 'exitCode=%s\n' "$ui_exit" >"$EVIDENCE_DIR/accessibility-menu-bar.status"
 if [[ "$ui_exit" != "0" ]]; then
-    echo "ClawShell Accessibility capture failed for clean-installed copy; inspect $EVIDENCE_DIR/accessibility-menu-bar.txt" >&2
+    echo "AgentWake Accessibility capture failed for clean-installed copy; inspect $EVIDENCE_DIR/accessibility-menu-bar.txt" >&2
     exit 1
 fi
 
 cli_reachable=false
-if grep -q '^ClawShell ' "$EVIDENCE_DIR/cli-status.txt"; then
+if grep -q '^AgentWake ' "$EVIDENCE_DIR/cli-status.txt"; then
     cli_reachable=true
 fi
 
 status_item_found=false
 if grep -q '^statusItemFound=true$' "$EVIDENCE_DIR/accessibility-menu-bar.txt" &&
    grep -q "^unixID=$expected_pid$" "$EVIDENCE_DIR/accessibility-menu-bar.txt" &&
-   grep -q '^statusItemName=ClawShell$' "$EVIDENCE_DIR/accessibility-menu-bar.txt" &&
-   grep -q '^statusItemDescription=ClawShell status:' "$EVIDENCE_DIR/accessibility-menu-bar.txt"; then
+   grep -q '^statusItemName=AgentWake$' "$EVIDENCE_DIR/accessibility-menu-bar.txt" &&
+   grep -q '^statusItemDescription=AgentWake status:' "$EVIDENCE_DIR/accessibility-menu-bar.txt"; then
     status_item_found=true
 fi
 
@@ -400,7 +400,7 @@ if grep -q "installedPIDs=$expected_pid" "$EVIDENCE_DIR/after-launch-processes.t
     installed_copy_launched=true
 fi
 
-other_process_count="$(other_clawshell_pids | sed '/^$/d' | wc -l | tr -d ' ')"
+other_process_count="$(other_agentwake_pids | sed '/^$/d' | wc -l | tr -d ' ')"
 matching_installed_process_count="$(installed_pids | sed '/^$/d' | wc -l | tr -d ' ')"
 cleanup_succeeded=false
 if stop_installed_copy; then
@@ -428,7 +428,7 @@ installedAppBundle=$INSTALLED_APP_BUNDLE
 installedAppPID=$expected_pid
 launchFromCleanInstallCopy=$installed_copy_launched
 matchingInstalledProcessCount=$matching_installed_process_count
-otherClawShellProcessCount=$other_process_count
+otherAgentWakeProcessCount=$other_process_count
 cliReachable=$cli_reachable
 accessibilityStatusItemFound=$status_item_found
 cleanupSucceeded=$cleanup_succeeded
@@ -440,10 +440,10 @@ mv "$OUTPUT_DIR/validation-config.redacted" "$OUTPUT_DIR/validation-config.txt"
 cat >"$OUTPUT_DIR/README.md" <<'EOF'
 # App Clean Install Smoke
 
-This package captures live local evidence that ClawShell can be built as an
+This package captures live local evidence that AgentWake can be built as an
 isolated app bundle, copied into a clean install root under this evidence
 directory, launched from that copied location, reached by the CLI, and observed
-as a ClawShell menu bar item through macOS Accessibility.
+as an AgentWake menu bar item through macOS Accessibility.
 
 Evidence files:
 
@@ -463,7 +463,7 @@ Gatekeeper, notarization, or helper-registration lifecycle proof.
 EOF
 
 if [[ "$result" != "pass" ]]; then
-    echo "ClawShell clean-install app smoke failed; inspect $OUTPUT_DIR" >&2
+    echo "AgentWake clean-install app smoke failed; inspect $OUTPUT_DIR" >&2
     exit 1
 fi
 

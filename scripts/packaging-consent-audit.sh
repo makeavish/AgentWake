@@ -9,7 +9,7 @@ OUTPUT_DIR=""
 APP_BUNDLE=""
 STAGE_APP=false
 DEFAULT_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ROOT_DIR="${CLAWSHELL_PACKAGING_AUDIT_ROOT_DIR:-$DEFAULT_ROOT_DIR}"
+ROOT_DIR="${AGENTWAKE_PACKAGING_AUDIT_ROOT_DIR:-$DEFAULT_ROOT_DIR}"
 
 usage() {
     cat <<'EOF'
@@ -115,15 +115,15 @@ stage_app_bundle() {
     local target_macos="$target_contents/MacOS"
     local build_dir
 
-    swift build --package-path "$ROOT_DIR" --product ClawShell >/dev/null
-    swift build --package-path "$ROOT_DIR" --product ClawShellHookAdapter >/dev/null
+    swift build --package-path "$ROOT_DIR" --product AgentWake >/dev/null
+    swift build --package-path "$ROOT_DIR" --product AgentWakeHookAdapter >/dev/null
     build_dir="$(swift build --package-path "$ROOT_DIR" --show-bin-path)"
 
     rm -rf "$target_bundle"
     mkdir -p "$target_macos"
-    cp "$build_dir/ClawShell" "$target_macos/ClawShell"
-    cp "$build_dir/ClawShellHookAdapter" "$target_macos/ClawShellHookAdapter"
-    chmod +x "$target_macos/ClawShell" "$target_macos/ClawShellHookAdapter"
+    cp "$build_dir/AgentWake" "$target_macos/AgentWake"
+    cp "$build_dir/AgentWakeHookAdapter" "$target_macos/AgentWakeHookAdapter"
+    chmod +x "$target_macos/AgentWake" "$target_macos/AgentWakeHookAdapter"
 
     cat >"$target_contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -131,11 +131,11 @@ stage_app_bundle() {
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key>
-  <string>ClawShell</string>
+  <string>AgentWake</string>
   <key>CFBundleIdentifier</key>
-  <string>com.clawshell.app</string>
+  <string>com.makeavish.AgentWake</string>
   <key>CFBundleName</key>
-  <string>ClawShell</string>
+  <string>AgentWake</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>LSMinimumSystemVersion</key>
@@ -249,10 +249,10 @@ OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 EVIDENCE_DIR="$OUTPUT_DIR/evidence"
 
 if [[ "$STAGE_APP" == true ]]; then
-    APP_BUNDLE="$OUTPUT_DIR/staged/ClawShell.app"
+    APP_BUNDLE="$OUTPUT_DIR/staged/AgentWake.app"
     stage_app_bundle "$APP_BUNDLE"
 elif [[ -z "$APP_BUNDLE" ]]; then
-    APP_BUNDLE="$ROOT_DIR/dist/ClawShell.app"
+    APP_BUNDLE="$ROOT_DIR/dist/AgentWake.app"
 fi
 
 if [[ ! -d "$APP_BUNDLE" ]]; then

@@ -2,21 +2,21 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DURATION="${CLAWSHELL_TIMED_IDLE_DURATION:-90}"
-LATE_OFFSET="${CLAWSHELL_TIMED_IDLE_LATE_OFFSET:-70}"
+DURATION="${AGENTWAKE_TIMED_IDLE_DURATION:-90}"
+LATE_OFFSET="${AGENTWAKE_TIMED_IDLE_LATE_OFFSET:-70}"
 
 if ! [[ "$DURATION" =~ ^[0-9]+$ ]] || [[ "$DURATION" -le 0 ]]; then
-    echo "CLAWSHELL_TIMED_IDLE_DURATION must be a positive integer number of seconds" >&2
+    echo "AGENTWAKE_TIMED_IDLE_DURATION must be a positive integer number of seconds" >&2
     exit 1
 fi
 
 if ! [[ "$LATE_OFFSET" =~ ^[0-9]+$ ]] || [[ "$LATE_OFFSET" -le 0 ]]; then
-    echo "CLAWSHELL_TIMED_IDLE_LATE_OFFSET must be a positive integer number of seconds" >&2
+    echo "AGENTWAKE_TIMED_IDLE_LATE_OFFSET must be a positive integer number of seconds" >&2
     exit 1
 fi
 
 if [[ "$LATE_OFFSET" -ge "$DURATION" ]]; then
-    echo "CLAWSHELL_TIMED_IDLE_LATE_OFFSET must be less than CLAWSHELL_TIMED_IDLE_DURATION" >&2
+    echo "AGENTWAKE_TIMED_IDLE_LATE_OFFSET must be less than AGENTWAKE_TIMED_IDLE_DURATION" >&2
     exit 1
 fi
 
@@ -81,22 +81,22 @@ fi
 
 grep -E '^[[:space:]]+pid .* (PreventUserIdleSystemSleep|PreventSystemSleep|NoIdleSleepAssertion|UserIsActive)' \
     "$work_dir/pmset-assertions.txt" \
-    | grep -v "ClawShellPowerValidation" \
-    >"$work_dir/non-clawshell-sleep-blockers.txt" || true
-blocker_count="$(wc -l <"$work_dir/non-clawshell-sleep-blockers.txt" | tr -d '[:space:]')"
-echo "nonClawShellSleepBlockerCount=$blocker_count"
+    | grep -v "AgentWakePowerValidation" \
+    >"$work_dir/non-agentwake-sleep-blockers.txt" || true
+blocker_count="$(wc -l <"$work_dir/non-agentwake-sleep-blockers.txt" | tr -d '[:space:]')"
+echo "nonAgentWakeSleepBlockerCount=$blocker_count"
 
 if [[ "$blocker_count" != "0" ]]; then
     echo
-    echo "Non-ClawShell sleep blockers:"
-    cat "$work_dir/non-clawshell-sleep-blockers.txt"
+    echo "Non-AgentWake sleep blockers:"
+    cat "$work_dir/non-agentwake-sleep-blockers.txt"
     "$ROOT_DIR/scripts/sleep-blocker-guidance.sh" \
-        "$work_dir/non-clawshell-sleep-blockers.txt" \
-        >"$work_dir/non-clawshell-sleep-blocker-guidance.txt"
-    if [[ -s "$work_dir/non-clawshell-sleep-blocker-guidance.txt" ]]; then
+        "$work_dir/non-agentwake-sleep-blockers.txt" \
+        >"$work_dir/non-agentwake-sleep-blocker-guidance.txt"
+    if [[ -s "$work_dir/non-agentwake-sleep-blocker-guidance.txt" ]]; then
         echo
         echo "Suggested cleanup:"
-        cat "$work_dir/non-clawshell-sleep-blocker-guidance.txt"
+        cat "$work_dir/non-agentwake-sleep-blocker-guidance.txt"
     fi
 fi
 

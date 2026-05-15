@@ -8,7 +8,7 @@ set -euo pipefail
 OUTPUT_DIR=""
 CLI_PARSE_TEST_FILTER="cliParsesCommandsAndSendsThroughClient"
 ROUTER_TEST_FILTER="controlRouterSurfacesHelperCommandOutcomes"
-DEVELOPER_DIR_VALUE="${CLAWSHELL_HELPER_CLI_DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
+DEVELOPER_DIR_VALUE="${AGENTWAKE_HELPER_CLI_DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 redact_metadata() {
@@ -39,12 +39,12 @@ Usage: scripts/helper-service-cli-outcome-proof.sh --output-dir DIR
 
 Captures #27 CLI helper command routing evidence by running the
 focused ControlServer Swift test that exercises:
-- clawshell helper status
-- clawshell helper enable
-- clawshell helper disable
-- clawshell helper repair
-- clawshell helper uninstall
-- clawshell uninstall --remove-helper --remove-integrations cleanup flags
+- agentwake helper status
+- agentwake helper enable
+- agentwake helper disable
+- agentwake helper repair
+- agentwake helper uninstall
+- agentwake uninstall --remove-helper --remove-integrations cleanup flags
 
 The harness writes validation-config.txt plus evidence/ files. It does not
 install, register, approve, unregister, or contact a production helper.
@@ -104,7 +104,7 @@ EVIDENCE_DIR="$OUTPUT_DIR/evidence"
 
 if [[ ! -d "$DEVELOPER_DIR_VALUE" ]]; then
     echo "Full Xcode developer directory not found: $DEVELOPER_DIR_VALUE" >&2
-    echo "Set CLAWSHELL_HELPER_CLI_DEVELOPER_DIR to a full Xcode developer directory." >&2
+    echo "Set AGENTWAKE_HELPER_CLI_DEVELOPER_DIR to a full Xcode developer directory." >&2
     exit 2
 fi
 
@@ -142,10 +142,10 @@ duration_seconds=$((end_epoch - start_epoch))
 
 source_reference_raw="$(mktemp "$EVIDENCE_DIR/.cli-helper-source-reference.XXXXXX")"
 {
-    printf '$ rg -n %q Tests/ClawShellCoreTests/ControlServerTests.swift Sources/ClawShellCore\n' "$CLI_PARSE_TEST_FILTER|$ROUTER_TEST_FILTER"
+    printf '$ rg -n %q Tests/AgentWakeCoreTests/ControlServerTests.swift Sources/AgentWakeCore\n' "$CLI_PARSE_TEST_FILTER|$ROUTER_TEST_FILTER"
     rg -n "$CLI_PARSE_TEST_FILTER|$ROUTER_TEST_FILTER|helper status|helper enable|helper disable|helper repair|helper uninstall|remove-helper|removeIntegrations|uninstall\\(" \
-        Tests/ClawShellCoreTests/ControlServerTests.swift \
-        Sources/ClawShellCore || true
+        Tests/AgentWakeCoreTests/ControlServerTests.swift \
+        Sources/AgentWakeCore || true
 } >"$source_reference_raw" 2>&1
 redact_metadata <"$source_reference_raw" >"$source_reference_file"
 rm -f "$source_reference_raw"

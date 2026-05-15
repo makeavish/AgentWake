@@ -3,78 +3,78 @@
 import PackageDescription
 
 let package = Package(
-    name: "ClawShell",
+    name: "AgentWake",
     platforms: [
         .macOS(.v13)
     ],
     products: [
         .executable(
-            name: "ClawShell",
-            targets: ["ClawShell"]
+            name: "AgentWake",
+            targets: ["AgentWake"]
         ),
         .library(
-            name: "ClawShellCore",
-            targets: ["ClawShellCore"]
+            name: "AgentWakeCore",
+            targets: ["AgentWakeCore"]
         ),
         .executable(
-            name: "ClawShellCoreChecks",
-            targets: ["ClawShellCoreChecks"]
+            name: "AgentWakeCoreChecks",
+            targets: ["AgentWakeCoreChecks"]
         ),
         .executable(
-            name: "ClawShellPowerValidation",
-            targets: ["ClawShellPowerValidation"]
+            name: "AgentWakePowerValidation",
+            targets: ["AgentWakePowerValidation"]
         ),
         .executable(
-            name: "ClawShellSafetyPolicyProof",
-            targets: ["ClawShellSafetyPolicyProof"]
+            name: "AgentWakeSafetyPolicyProof",
+            targets: ["AgentWakeSafetyPolicyProof"]
         ),
         .executable(
-            name: "ClawShellCLI",
-            targets: ["ClawShellCLI"]
+            name: "AgentWakeCLI",
+            targets: ["AgentWakeCLI"]
         ),
         .executable(
-            name: "ClawShellHookAdapter",
-            targets: ["ClawShellHookAdapter"]
+            name: "AgentWakeHookAdapter",
+            targets: ["AgentWakeHookAdapter"]
         )
     ],
     targets: [
         .target(
-            name: "ClawShellCore"
+            name: "AgentWakeCore"
         ),
         .executableTarget(
-            name: "ClawShell",
-            dependencies: ["ClawShellCore"]
+            name: "AgentWake",
+            dependencies: ["AgentWakeCore"]
         ),
         .executableTarget(
-            name: "ClawShellCoreChecks",
-            dependencies: ["ClawShellCore"],
-            path: "Checks/ClawShellCoreChecks"
+            name: "AgentWakeCoreChecks",
+            dependencies: ["AgentWakeCore"],
+            path: "Checks/AgentWakeCoreChecks"
         ),
         .executableTarget(
-            name: "ClawShellPowerValidation",
-            dependencies: ["ClawShellCore"],
-            path: "Checks/ClawShellPowerValidation"
+            name: "AgentWakePowerValidation",
+            dependencies: ["AgentWakeCore"],
+            path: "Checks/AgentWakePowerValidation"
         ),
         .executableTarget(
-            name: "ClawShellSafetyPolicyProof",
-            dependencies: ["ClawShellCore"],
-            path: "Checks/ClawShellSafetyPolicyProof"
+            name: "AgentWakeSafetyPolicyProof",
+            dependencies: ["AgentWakeCore"],
+            path: "Checks/AgentWakeSafetyPolicyProof"
         ),
         .executableTarget(
-            name: "ClawShellCLI",
-            dependencies: ["ClawShellCore"]
+            name: "AgentWakeCLI",
+            dependencies: ["AgentWakeCore"]
         ),
         .executableTarget(
-            name: "ClawShellHookAdapter",
-            dependencies: ["ClawShellCore"]
+            name: "AgentWakeHookAdapter",
+            dependencies: ["AgentWakeCore"]
         ),
         .testTarget(
-            name: "ClawShellCoreTests",
-            dependencies: ["ClawShellCore"]
+            name: "AgentWakeCoreTests",
+            dependencies: ["AgentWakeCore"]
         ),
         .testTarget(
-            name: "ClawShellContractTests",
-            dependencies: ["ClawShellCore"],
+            name: "AgentWakeContractTests",
+            dependencies: ["AgentWakeCore"],
             resources: [
                 .copy("Fixtures")
             ]

@@ -2,9 +2,9 @@
 
 Check date: May 14, 2026
 
-Original issue: [#7](https://github.com/makeavish/ClawShell/issues/7)
+Original issue: [#7](https://github.com/makeavish/AgentWake/issues/7)
 
-Final E2E follow-up: [#120](https://github.com/makeavish/ClawShell/issues/120)
+Final E2E follow-up: [#120](https://github.com/makeavish/AgentWake/issues/120)
 
 Local readiness artifact: `.build/helper-service-readiness/recheck-20260512T105510Z`
 
@@ -33,7 +33,7 @@ Reviewed fixed-command API artifacts:
 
 ## Question
 
-Is `SMAppService` a source-backed helper path worth trying before ClawShell proves a no-membership Bag Mode helper install/update/uninstall path?
+Is `SMAppService` a source-backed helper path worth trying before AgentWake proves a no-membership Bag Mode helper install/update/uninstall path?
 
 ## Source Findings
 
@@ -118,7 +118,7 @@ to the generation 2 binary, but the daemon failed to spawn with
 ledger sample. Cleanup returned the helper label to raw status `0`.
 
 #7 now carries the helper path forward into final app E2E issue
-[#120](https://github.com/makeavish/ClawShell/issues/120): admin
+[#120](https://github.com/makeavish/AgentWake/issues/120): admin
 approval/password-flow evidence, final manifest/manual promotion of remaining
 rows, update, production restore conflict behavior, production repair/uninstall
 behavior, installed-helper/fallback failure behavior, and helper-owned Bag Mode
@@ -140,7 +140,7 @@ The design should keep these constraints:
 
 ## Required Prototype Notes
 
-Final app E2E issue [#120](https://github.com/makeavish/ClawShell/issues/120) must carry forward no-membership helper evidence:
+Final app E2E issue [#120](https://github.com/makeavish/AgentWake/issues/120) must carry forward no-membership helper evidence:
 
 - `codesign -dvvv --entitlements :-` for app and helper
 - local signing/auth model for app and helper; Developer ID designated requirements only when available
@@ -154,7 +154,7 @@ Final app E2E issue [#120](https://github.com/makeavish/ClawShell/issues/120) mu
 - uninstall behavior via `unregister()` or fallback `launchctl bootout` plus helper-owned Bag Mode cleanup
 - fixed command API evidence for `status`, `enableBagMode`, `disableBagMode`, `repair`, and `uninstall`
 - reviewed dry-run ledger schema, file ownership/mode, and sample owner token/generation/boot state; production restore conflict behavior and repair output remain open
-- CLI evidence for `clawshell helper status`, `clawshell helper enable`, `clawshell helper disable`, `clawshell helper repair`, `clawshell helper uninstall`, and `clawshell uninstall --remove-helper --remove-integrations`
+- CLI evidence for `agentwake helper status`, `agentwake helper enable`, `agentwake helper disable`, `agentwake helper repair`, `agentwake helper uninstall`, and `agentwake uninstall --remove-helper --remove-integrations`
 - local dry-run failure cases for unpaired caller, wrong bundle id, wrong label/plist path, wrong user, stale app version, denied approval, and revoked approval; production/fallback failure behavior remains open until exercised through the installed helper path
 - Homebrew cask behavior if the prototype is exercised through `brew install --cask`, `brew upgrade --cask`, or `brew uninstall --cask`; otherwise track cask semantics separately from the helper prototype
 
@@ -208,8 +208,8 @@ scripts/helper-service-smappservice-prototype.sh \
 Captured result:
 
 ```text
-appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.h06c22500e1
-helperLabel=com.makeavish.ClawShell.HelperPrototype.h06c22500e1.daemon
+appBundleIdentifier=com.makeavish.AgentWake.HelperPrototype.h06c22500e1
+helperLabel=com.makeavish.AgentWake.HelperPrototype.h06c22500e1.daemon
 identitySuffix=h06c22500e1
 registerAttempted=true
 result=fail
@@ -244,8 +244,8 @@ scripts/helper-service-smappservice-prototype.sh \
 Captured result:
 
 ```text
-appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.h5dba3aad54
-helperLabel=com.makeavish.ClawShell.HelperPrototype.h5dba3aad54.daemon
+appBundleIdentifier=com.makeavish.AgentWake.HelperPrototype.h5dba3aad54
+helperLabel=com.makeavish.AgentWake.HelperPrototype.h5dba3aad54.daemon
 identitySuffix=h5dba3aad54
 statusAfterApprovalRaw=1 (enabled)
 launchctlManagedBy=com.apple.xpc.ServiceManagement
@@ -283,7 +283,7 @@ The first command-specific follow-up artifact exercised an approved
 non-`status` helper command:
 
 ```bash
-CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND=enableBagMode \
+AGENTWAKE_HELPER_PROTOTYPE_DAEMON_COMMAND=enableBagMode \
 scripts/helper-service-smappservice-prototype.sh \
   --output-dir .build/helper-service-prototype/smappservice-command-enableBagMode-pending-20260513T051953Z \
   --register \
@@ -300,8 +300,8 @@ scripts/helper-service-smappservice-prototype.sh \
 Captured result:
 
 ```text
-appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.he7799dae30
-helperLabel=com.makeavish.ClawShell.HelperPrototype.he7799dae30.daemon
+appBundleIdentifier=com.makeavish.AgentWake.HelperPrototype.he7799dae30
+helperLabel=com.makeavish.AgentWake.HelperPrototype.he7799dae30.daemon
 identitySuffix=he7799dae30
 daemonCommand=enableBagMode
 statusAfterApprovalRaw=1 (enabled)
@@ -405,19 +405,19 @@ conflict handling or repair output.
 By default, the approved LaunchDaemon runs the fixed `status` command in
 dry-run mode. To prepare one artifact for a different approved-helper dry-run
 command dispatch probe, set
-`CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND` to one of `status`,
+`AGENTWAKE_HELPER_PROTOTYPE_DAEMON_COMMAND` to one of `status`,
 `enableBagMode`, `disableBagMode`, `repair`, or `uninstall` before creating and
 registering the artifact. The selected command is written to
 `daemonCommand=<command>` and into the LaunchDaemon `ProgramArguments`.
 To prepare future helper-update evidence, set
-`CLAWSHELL_HELPER_PROTOTYPE_GENERATION=<positive-integer>` before creating the
+`AGENTWAKE_HELPER_PROTOTYPE_GENERATION=<positive-integer>` before creating the
 artifact. The generation is written to `validation-config.txt`, the helper
 stdout payload, and the mirrored `bagModeHelperLedgerSample`. This only makes
 generation N/N+1 artifacts auditable; it does not prove update behavior until
 an installed helper update is exercised and reviewed.
 
 After generation N and generation N+1 artifacts are captured with the same
-`CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX`, compare them with:
+`AGENTWAKE_HELPER_PROTOTYPE_ID_SUFFIX`, compare them with:
 
 ```bash
 scripts/helper-service-prototype-review-update.sh \
@@ -449,7 +449,7 @@ root-owned ledger implementation.
 Each artifact gets a unique SMAppService bundle/helper identity derived from its
 output path. This avoids reusing stale macOS approval/code-signing state between
 ad-hoc helper prototype attempts. To force a deterministic suffix for
-comparison runs, set `CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX=<lettersAndDigits>`.
+comparison runs, set `AGENTWAKE_HELPER_PROTOTYPE_ID_SUFFIX=<lettersAndDigits>`.
 Append modes read the stored `helperLabel` and `identitySuffix` from the same
 artifact and reject mismatched LaunchDaemon plist labels or controller
 `plistName` output.
@@ -558,12 +558,12 @@ this as SMAppService unregister cleanup append-capture evidence only; keep
 cleanup is exercised, then run the verifier.
 
 The CLI helper-command outcome boundary is automated in
-`ClawShellCoreChecks` and
+`AgentWakeCoreChecks` and
 `ControlServerTests.cliParsesCommandsAndSendsThroughClient` plus
 `ControlServerTests.controlRouterSurfacesHelperCommandOutcomes`. The CLI parses
-`clawshell helper status`, `clawshell helper enable`, `clawshell helper
-disable`, `clawshell helper repair`, `clawshell helper uninstall`, and
-`clawshell uninstall --remove-helper --remove-integrations`, sends them through
+`agentwake helper status`, `agentwake helper enable`, `agentwake helper
+disable`, `agentwake helper repair`, `agentwake helper uninstall`, and
+`agentwake uninstall --remove-helper --remove-integrations`, sends them through
 `ControlServer`, and the router surfaces explicit helper unavailable messages.
 The current app reports helper commands as unavailable because no production
 helper is installed yet; this proves CLI and control-routing behavior only.
@@ -609,10 +609,10 @@ The verifier expects three files at the manifest root:
 evidenceFormat=helper-prototype-v1
 metadataRedacted=true
 macOSVersion=15.0
-appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.h123abc4567
-helperLabel=com.makeavish.ClawShell.HelperPrototype.h123abc4567.daemon
+appBundleIdentifier=com.makeavish.AgentWake.HelperPrototype.h123abc4567
+helperLabel=com.makeavish.AgentWake.HelperPrototype.h123abc4567.daemon
 identitySuffix=h123abc4567
-launchDaemonPlist=ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.ClawShell.HelperPrototype.h123abc4567.daemon.plist
+launchDaemonPlist=AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons/com.makeavish.AgentWake.HelperPrototype.h123abc4567.daemon.plist
 helperInstallPath=smappservice
 daemonCommand=status
 rootLedgerPath=runtime/helper-ledger.jsonl
@@ -635,8 +635,8 @@ LaunchDaemon plist filename must use the same suffix.
 ## Prototype Case
 - Case ID: apple-silicon-smappservice-local
 - macOS: 15.0
-- App bundle: /Applications/ClawShell.app
-- LaunchDaemon plist: ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist
+- App bundle: /Applications/AgentWake.app
+- LaunchDaemon plist: AgentWake.app/Contents/Library/LaunchDaemons/com.example.AgentWake.Helper.plist
 - Helper install path: smappservice
 - Helper install API/path: SMAppService.daemon(plistName:)
 
@@ -781,7 +781,7 @@ schema/ownership boundary is reviewed for dry-run evidence via the stdout mirror
 and root-owned `0600` ledger file. The local ad-hoc SMAppService path remains
 viable before Developer ID funding. The remaining production helper lifecycle
 rows now live in final app E2E issue
-[#120](https://github.com/makeavish/ClawShell/issues/120): admin
+[#120](https://github.com/makeavish/AgentWake/issues/120): admin
 approval/password flow, final post-reboot manifest/manual promotion, update,
 production restore conflict behavior, production repair/uninstall behavior,
 installed-helper/fallback failure cases, and helper-owned Bag Mode state

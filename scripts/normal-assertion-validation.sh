@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="${1:-"$ROOT_DIR/.build/power-validation/normal-assertions-$(date -u +%Y%m%dT%H%M%SZ)"}"
-DURATION="${CLAWSHELL_ASSERTION_VALIDATION_DURATION:-10}"
+DURATION="${AGENTWAKE_ASSERTION_VALIDATION_DURATION:-10}"
 READY_FILE="$OUTPUT_DIR/hold.ready"
 HOLD_LOG="$OUTPUT_DIR/hold.log"
 
@@ -11,7 +11,7 @@ mkdir -p "$OUTPUT_DIR"
 
 "$ROOT_DIR/scripts/pmset-snapshot.sh" "$OUTPUT_DIR/before"
 
-swift run ClawShellPowerValidation --duration "$DURATION" --ready-file "$READY_FILE" >"$HOLD_LOG" 2>&1 &
+swift run AgentWakePowerValidation --duration "$DURATION" --ready-file "$READY_FILE" >"$HOLD_LOG" 2>&1 &
 hold_pid="$!"
 
 cleanup() {
@@ -48,7 +48,7 @@ Normal assertion validation
 Duration: ${DURATION}s
 Phases:
 - before: pmset snapshot before assertions
-- during: pmset snapshot while ClawShellPowerValidation holds normal assertions
+- during: pmset snapshot while AgentWakePowerValidation holds normal assertions
 - after: pmset snapshot after assertions are released
 
 This harness validates non-privileged IOPM assertion visibility only. It does not prove clamshell behavior.
