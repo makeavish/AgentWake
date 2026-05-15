@@ -41,6 +41,12 @@ public final class AgentMonitor: AppLifecycleComponent {
         }
     }
 
+    public var visibleSessions: [AgentSession] {
+        queue.sync {
+            stateMachine.sessions.filter { $0.state != .finished }
+        }
+    }
+
     public var aggregateHoldState: AgentAggregateHoldState {
         queue.sync {
             stateMachine.aggregateHoldState(at: now())
@@ -139,6 +145,71 @@ public final class AgentMonitor: AppLifecycleComponent {
             stateMachine.refreshExpirations(at: timestamp)
         }
     }
+
+    public func sessionSummaryMessage() -> String {
+        queue.sync {
+            let activeSessions = stateMachine.sessions.filter { $0.state != .finished }
+            guard !activeSessions.isEmpty else {
+                return "Sessions: none detected"
+            }
+
+            let heldCount = activeSessions.filter { $0.contributesToHold(at: now()) }.count
+            let detectedCount = activeSessions.count - heldCount
+            if heldCount == activeSessions.count {
+                return "Sessions: \(activeSessions.count) holding"
+            }
+
+            if heldCount == 0 {
+                return "Sessions: \(detectedCount) detected, none holding"
+            }
+
+            return "Sessions: \(heldCount) holding, \(detectedCount) detected"
+        }
+    }
+
+    public func sessionListMessage() -> String {
+        queue.sync {
+            let activeSessions = stateMachine.sessions.filter { $0.state != .finished }
+            guard !activeSessions.isEmpty else {
+                return "No active sessions detected"
+            }
+
+            return activeSessions
+                .sorted { lhs, rhs in
+                    if lhs.agent.displayName == rhs.agent.displayName {
+                        return lhs.firstSeenAt < rhs.firstSeenAt
+                    }
+
+                    return lhs.agent.displayName < rhs.agent.displayName
+                }
+                .map { session in
+                    var parts = [
+                        "\(session.agent.displayName): \(sessionDisplayState(session, at: now()))",
+                        "source=\(session.source.rawValue)"
+                    ]
+                    if let pid = session.key.pid {
+                        parts.append("pid=\(pid)")
+                    }
+                    if let lastEvent = session.lastEvent {
+                        parts.append("lastEvent=\(lastEvent.kind.rawValue)")
+                    }
+                    return parts.joined(separator: " ")
+                }
+                .joined(separator: "\n")
+        }
+    }
+
+    private func sessionDisplayState(_ session: AgentSession, at now: Date) -> String {
+        if session.contributesToHold(at: now) {
+            return session.state.rawValue
+        }
+
+        if session.source == .processScan && session.state != .finished {
+            return "detected"
+        }
+
+        return session.state.rawValue
+    }
 }
 
 public final class ClawShellServices {
@@ -182,6 +253,8 @@ public final class ClawShellServices {
             runtimeStore: ControlRuntimeStore(paths: paths),
             router: DefaultControlCommandRouter(statusProvider: {
                 resolvedAgentMonitor.aggregateHoldState.shouldHold ? "ClawShell holding" : "ClawShell running"
+            }, listProvider: {
+                resolvedAgentMonitor.sessionListMessage()
             }, pauseHandler: { duration, receivedAt in
                 resolvedAgentMonitor.pauseAll(until: receivedAt.addingTimeInterval(duration))
                 resolvedAssertionManager.reconcile()

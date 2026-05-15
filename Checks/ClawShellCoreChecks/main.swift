@@ -4,10 +4,13 @@ import Foundation
 @main
 struct ClawShellCoreChecks {
     static func main() throws {
-        try snapshotIncludesAllPlaceholderStates()
+        try snapshotIncludesRuntimeDiagnostics()
         try snapshotNamesTheCurrentState()
+        try stateDerivesFromHoldState()
         try lifecycleComponentsCanStartAndStopTogether()
         try processDetectorMatchesBuiltInAgents()
+        try processDetectorExcludesCodexAppServerProcesses()
+        try agentMonitorSummarizesParallelSessions()
         try agentMonitorPollsSnapshotsEveryTwoSecondsByDefault()
         try agentMonitorStartUsesTimerCadence()
         try sessionStateMachineCoversProcessIdentityTransitionsAndAggregateHold()
@@ -68,46 +71,56 @@ struct ClawShellCoreChecks {
         print("ClawShellCoreChecks passed")
     }
 
-    private static func snapshotIncludesAllPlaceholderStates() throws {
-        let snapshot = MenuBarModel.snapshot(currentState: .idle)
-
-        let placeholderStates = snapshot.items.compactMap { item -> ClawShellState? in
-            guard case let .placeholderState(state) = item.kind else {
-                return nil
-            }
-
-            return state
-        }
-
-        try check(
-            placeholderStates == ClawShellState.allCases,
-            "Expected all placeholder states in declaration order"
+    private static func snapshotIncludesRuntimeDiagnostics() throws {
+        let snapshot = MenuBarModel.snapshot(
+            currentState: .idle,
+            sessionSummary: "Sessions: none detected",
+            integrationStatuses: [
+                IntegrationStatusSnapshot(
+                    agentID: "claude-code",
+                    displayName: "Claude Code",
+                    status: .installed
+                )
+            ]
         )
 
-        let placeholderTitles = snapshot.items.compactMap { item -> String? in
-            guard case .placeholderState = item.kind else {
-                return nil
-            }
-
-            return item.title
-        }
-
-        try check(
-            placeholderTitles == ["Idle", "Active", BagModeAvailability.unavailableTitle, "Paused"],
-            "Expected menu placeholders for idle, active, unavailable Bag Mode, and paused"
-        )
+        let titles = snapshot.items.map(\.title)
+        try check(titles.contains("Sessions: none detected"), "Expected session summary in menu")
+        try check(titles.contains(BagModeAvailability.unavailableTitle), "Expected Bag Mode boundary in menu")
+        try check(titles.contains("Claude Code: Installed"), "Expected integration status in menu")
+        try check(titles.contains("Refresh Status"), "Expected refresh action in menu")
+        try check(titles.contains("Repair Integrations..."), "Expected repair action in menu")
     }
 
     private static func snapshotNamesTheCurrentState() throws {
         let snapshot = MenuBarModel.snapshot(currentState: .bagMode)
 
         try check(snapshot.currentState == .bagMode, "Expected Bag Mode as current state")
-        try check(snapshot.statusItemTitle == "ClawShell Bag Unavailable", "Expected Bag Mode unavailable status item title")
+        try check(snapshot.statusItemTitle == "ClawShell", "Expected stable status item title")
         try check(
             snapshot.items.first?.title == "Current: \(BagModeAvailability.unavailableTitle)",
             "Expected current-state menu row"
         )
         try check(snapshot.items.first?.detail == BagModeAvailability.settingsDetail, "Expected Bag Mode unavailable detail")
+    }
+
+    private static func stateDerivesFromHoldState() throws {
+        try check(
+            ClawShellState.derived(from: AgentAggregateHoldState(shouldHold: false, heldSessionIDs: [])) == .idle,
+            "Expected idle hold state to derive Idle"
+        )
+        try check(
+            ClawShellState.derived(from: AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [UUID()])) == .active,
+            "Expected held session to derive Active"
+        )
+        try check(
+            ClawShellState.derived(from: AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [], isPaused: true)) == .paused,
+            "Expected pause to derive Paused"
+        )
+        try check(
+            ClawShellState.derived(from: AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [], isSafetyCutoffActive: true)) == .paused,
+            "Expected safety cutoff to derive Paused"
+        )
     }
 
     private static func lifecycleComponentsCanStartAndStopTogether() throws {
@@ -197,6 +210,90 @@ struct ClawShellCoreChecks {
         try check(observations[4].key.executablePathHashIsVerified, "Expected resolved paths to be marked verified")
     }
 
+    private static func processDetectorExcludesCodexAppServerProcesses() throws {
+        let detector = AgentProcessDetector(settings: ClawShellSettings())
+        let observations = detector.observations(
+            in: [
+                ProcessSnapshot(
+                    pid: 17,
+                    processName: "codex",
+                    executablePath: "/Applications/Codex.app/Contents/Resources/codex",
+                    processStartTime: Date(timeIntervalSince1970: 1)
+                ),
+                ProcessSnapshot(
+                    pid: 18,
+                    processName: "codex",
+                    executablePath: "/Users/tester/.vscode/extensions/openai.chatgpt-1.0/bin/macos-aarch64/codex",
+                    processStartTime: Date(timeIntervalSince1970: 1)
+                ),
+                ProcessSnapshot(
+                    pid: 19,
+                    processName: "codex",
+                    executablePath: "/opt/homebrew/bin/codex",
+                    processStartTime: Date(timeIntervalSince1970: 1)
+                )
+            ]
+        )
+
+        try check(
+            observations.map(\.snapshot.pid) == [19],
+            "Expected Codex CLI detection to exclude app-server helper processes"
+        )
+    }
+
+    private static func agentMonitorSummarizesParallelSessions() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let monitor = AgentMonitor(
+            snapshotProvider: StaticSnapshotProvider(
+                snapshotsToReturn: [
+                    ProcessSnapshot(
+                        pid: 21,
+                        processName: "claude",
+                        executablePath: "/opt/homebrew/bin/claude",
+                        processStartTime: now
+                    ),
+                    ProcessSnapshot(
+                        pid: 22,
+                        processName: "claude",
+                        executablePath: "/opt/homebrew/Caskroom/claude-code/latest/claude",
+                        processStartTime: now
+                    ),
+                    ProcessSnapshot(
+                        pid: 23,
+                        processName: "codex",
+                        executablePath: "/opt/homebrew/bin/codex",
+                        processStartTime: now
+                    )
+                ]
+            ),
+            settingsProvider: { ClawShellSettings() },
+            now: { now }
+        )
+
+        monitor.poll()
+        try check(monitor.visibleSessions.count == 3, "Expected parallel agent processes to remain distinct")
+        try check(
+            monitor.sessionSummaryMessage() == "Sessions: 3 detected, none holding",
+            "Expected process-only matches to stay diagnostic instead of claiming active holds"
+        )
+
+        monitor.applyIntegrationEvent(
+            HookAdapterEvent(
+                agent: .codexCLI,
+                host: "codex-cli",
+                event: .toolStarted,
+                pid: 23,
+                processStartTime: now,
+                integrationSessionId: "codex-turn-1"
+            ),
+            at: now.addingTimeInterval(1)
+        )
+        try check(
+            monitor.sessionSummaryMessage() == "Sessions: 1 holding, 2 detected",
+            "Expected integration-backed activity to hold while process-only sessions remain detected: \(monitor.sessionSummaryMessage())"
+        )
+    }
+
     private static func agentMonitorPollsSnapshotsEveryTwoSecondsByDefault() throws {
         let now = Date(timeIntervalSince1970: 1_000)
         let monitor = AgentMonitor(
@@ -253,7 +350,19 @@ struct ClawShellCoreChecks {
         machine.applyProcessObservations([observation(pid: 42, start: baseline)], at: baseline)
         let firstSessionID = try checkNotNil(machine.sessions.first?.id, "Expected initial process session")
         try check(machine.sessions.first?.state == .active, "Expected matching process start to create an active session")
-        try check(machine.aggregateHoldState(at: baseline).shouldHold, "Expected active session to hold")
+        try check(!machine.aggregateHoldState(at: baseline).shouldHold, "Expected process-only session to stay diagnostic")
+        machine.applyIntegrationEvent(
+            HookAdapterEvent(
+                agent: .codexCLI,
+                host: "codex-cli",
+                event: .toolStarted,
+                pid: 42,
+                processStartTime: baseline,
+                integrationSessionId: "codex-turn-42"
+            ),
+            at: baseline.addingTimeInterval(1)
+        )
+        try check(machine.aggregateHoldState(at: baseline.addingTimeInterval(1)).shouldHold, "Expected integration-backed session to hold")
 
         machine.applyProcessObservations(
             [observation(pid: 42, start: baseline, cpuPercent: 80)],
@@ -261,7 +370,7 @@ struct ClawShellCoreChecks {
         )
         try check(machine.sessions.count == 1, "Expected pid/start/path identity to dedupe")
         try check(machine.sessions[0].id == firstSessionID, "Expected deduped observation to keep session id")
-        try check(machine.sessions[0].lastActivityAt == baseline, "Expected process polling not to reset activity")
+        try check(machine.sessions[0].lastActivityAt == baseline.addingTimeInterval(1), "Expected process polling not to reset integration activity")
 
         let turnFinishedAt = baseline.addingTimeInterval(60)
         machine.applyTrustedEvent(.turnFinished, to: firstSessionID, at: turnFinishedAt)
@@ -291,6 +400,17 @@ struct ClawShellCoreChecks {
             machine.sessions.first(where: { $0.id != firstSessionID })?.id,
             "Expected restarted session id"
         )
+        machine.applyIntegrationEvent(
+            HookAdapterEvent(
+                agent: .codexCLI,
+                host: "codex-cli",
+                event: .toolStarted,
+                pid: 42,
+                processStartTime: restartedAt,
+                integrationSessionId: "codex-turn-43"
+            ),
+            at: restartedAt.addingTimeInterval(1)
+        )
         machine.applyTrustedEvent(.turnFinished, to: activeSessionID, at: restartedAt.addingTimeInterval(10))
         machine.applyTrustedEvent(.keepHolding, to: activeSessionID, at: restartedAt.addingTimeInterval(20))
         try check(
@@ -301,6 +421,15 @@ struct ClawShellCoreChecks {
 
         machine.refreshExpirations(at: restartedAt.addingTimeInterval(1_811))
         try check(!machine.aggregateHoldState(at: restartedAt.addingTimeInterval(1_811)).shouldHold, "Expected aggregate hold to release after all sessions finish or expire")
+
+        machine.applyProcessObservations(
+            [observation(pid: 42, start: restartedAt)],
+            at: restartedAt.addingTimeInterval(1_812)
+        )
+        try check(
+            machine.sessions.filter { $0.state == .active }.count == 1,
+            "Expected a re-observed live process to create a fresh active session instead of updating a finished one"
+        )
     }
 
     private static func pathLookupVolatilityDoesNotSplitSessions() throws {
@@ -382,6 +511,28 @@ struct ClawShellCoreChecks {
         )
         let claudeID = try checkNotNil(machine.sessions.first(where: { $0.agent == .claudeCode })?.id, "Expected Claude session")
         let codexID = try checkNotNil(machine.sessions.first(where: { $0.agent == .codexCLI })?.id, "Expected Codex session")
+        machine.applyIntegrationEvent(
+            HookAdapterEvent(
+                agent: .claudeCode,
+                host: "claude-code",
+                event: .toolStarted,
+                pid: 80,
+                processStartTime: baseline,
+                integrationSessionId: "claude-session"
+            ),
+            at: baseline.addingTimeInterval(1)
+        )
+        machine.applyIntegrationEvent(
+            HookAdapterEvent(
+                agent: .codexCLI,
+                host: "codex-cli",
+                event: .toolStarted,
+                pid: 81,
+                processStartTime: baseline,
+                integrationSessionId: "codex-session"
+            ),
+            at: baseline.addingTimeInterval(2)
+        )
 
         machine.applyTrustedEvent(.releaseNow, to: claudeID, at: baseline.addingTimeInterval(10))
         try check(machine.sessions.first(where: { $0.id == claudeID })?.state == .finished, "Expected releaseNow to release the selected session")
@@ -867,6 +1018,7 @@ struct ClawShellCoreChecks {
 
     private static func manualOverridePrecedenceAndPersistence() throws {
         var current = Date(timeIntervalSince1970: 5_000)
+        let monitoredProcessStart = current
         var settings = ClawShellSettings(
             manualOverrides: [
                 ManualOverride(id: "pause", kind: ManualOverrideKind.pauseAll.rawValue, expiresAt: current.addingTimeInterval(60))
@@ -879,7 +1031,7 @@ struct ClawShellCoreChecks {
                         pid: 110,
                         processName: "codex",
                         executablePath: "/opt/homebrew/bin/codex",
-                        processStartTime: current
+                        processStartTime: monitoredProcessStart
                     )
                 ]
             ),
@@ -888,6 +1040,17 @@ struct ClawShellCoreChecks {
         )
 
         monitor.poll()
+        monitor.applyIntegrationEvent(
+            HookAdapterEvent(
+                agent: .codexCLI,
+                host: "codex-cli",
+                event: .toolStarted,
+                pid: 110,
+                processStartTime: monitoredProcessStart,
+                integrationSessionId: "manual-override-codex"
+            ),
+            at: current.addingTimeInterval(1)
+        )
         try check(monitor.sessions.count == 1, "Expected process polling to create a held session")
         try check(!monitor.aggregateHoldState.shouldHold, "Expected persisted pause override to suppress held sessions")
         try check(monitor.aggregateHoldState.isPaused, "Expected persisted pause override to be visible in aggregate state")
@@ -1049,6 +1212,7 @@ struct ClawShellCoreChecks {
 
     private static func controlRouterPauseAndReleaseReconcileAssertions() throws {
         var current = Date(timeIntervalSince1970: 9_000)
+        let monitoredProcessStart = current
         let monitor = AgentMonitor(
             snapshotProvider: StaticSnapshotProvider(
                 snapshotsToReturn: [
@@ -1056,7 +1220,7 @@ struct ClawShellCoreChecks {
                         pid: 41,
                         processName: "codex",
                         executablePath: "/opt/homebrew/bin/codex",
-                        processStartTime: current
+                        processStartTime: monitoredProcessStart
                     )
                 ]
             ),
@@ -1080,6 +1244,17 @@ struct ClawShellCoreChecks {
         )
 
         monitor.start()
+        monitor.applyIntegrationEvent(
+            HookAdapterEvent(
+                agent: .codexCLI,
+                host: "codex-cli",
+                event: .toolStarted,
+                pid: 41,
+                processStartTime: monitoredProcessStart,
+                integrationSessionId: "router-codex"
+            ),
+            at: current.addingTimeInterval(1)
+        )
         manager.start()
         try check(manager.snapshot.isHolding, "Expected process-backed session to hold assertions")
 

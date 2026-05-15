@@ -5,28 +5,40 @@ import Testing
 @testable import ClawShellCore
 
 struct MenuBarModelTests {
-    @Test func snapshotIncludesAllPlaceholderStates() {
-        let snapshot = MenuBarModel.snapshot(currentState: .idle)
+    @Test func snapshotIncludesRuntimeDiagnostics() {
+        let snapshot = MenuBarModel.snapshot(
+            currentState: .idle,
+            sessionSummary: "Sessions: none detected",
+            integrationStatuses: [
+                IntegrationStatusSnapshot(
+                    agentID: "claude-code",
+                    displayName: "Claude Code",
+                    status: .installed
+                )
+            ]
+        )
 
-        let placeholderStates = snapshot.items.compactMap { item -> ClawShellState? in
-            guard case let .placeholderState(state) = item.kind else {
-                return nil
-            }
-
-            return state
-        }
-
-        #expect(placeholderStates == ClawShellState.allCases)
-        #expect(placeholderTitles(in: snapshot) == ["Idle", "Active", BagModeAvailability.unavailableTitle, "Paused"])
+        #expect(snapshot.items.map(\.title).contains("Sessions: none detected"))
+        #expect(snapshot.items.map(\.title).contains(BagModeAvailability.unavailableTitle))
+        #expect(snapshot.items.map(\.title).contains("Claude Code: Installed"))
+        #expect(snapshot.items.map(\.title).contains("Refresh Status"))
+        #expect(snapshot.items.map(\.title).contains("Repair Integrations..."))
     }
 
     @Test func snapshotNamesTheCurrentState() {
         let snapshot = MenuBarModel.snapshot(currentState: .bagMode)
 
         #expect(snapshot.currentState == .bagMode)
-        #expect(snapshot.statusItemTitle == "ClawShell Bag Unavailable")
+        #expect(snapshot.statusItemTitle == "ClawShell")
         #expect(snapshot.items.first?.title == "Current: \(BagModeAvailability.unavailableTitle)")
         #expect(snapshot.items.first?.detail == BagModeAvailability.settingsDetail)
+    }
+
+    @Test func stateDerivesFromHoldState() {
+        #expect(ClawShellState.derived(from: AgentAggregateHoldState(shouldHold: false, heldSessionIDs: [])) == .idle)
+        #expect(ClawShellState.derived(from: AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [UUID()])) == .active)
+        #expect(ClawShellState.derived(from: AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [], isPaused: true)) == .paused)
+        #expect(ClawShellState.derived(from: AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [], isSafetyCutoffActive: true)) == .paused)
     }
 
     @Test func lifecycleComponentsCanStartAndStopTogether() throws {
@@ -48,28 +60,40 @@ import XCTest
 @testable import ClawShellCore
 
 final class MenuBarModelTests: XCTestCase {
-    func testSnapshotIncludesAllPlaceholderStates() {
-        let snapshot = MenuBarModel.snapshot(currentState: .idle)
+    func testSnapshotIncludesRuntimeDiagnostics() {
+        let snapshot = MenuBarModel.snapshot(
+            currentState: .idle,
+            sessionSummary: "Sessions: none detected",
+            integrationStatuses: [
+                IntegrationStatusSnapshot(
+                    agentID: "claude-code",
+                    displayName: "Claude Code",
+                    status: .installed
+                )
+            ]
+        )
 
-        let placeholderStates = snapshot.items.compactMap { item -> ClawShellState? in
-            guard case let .placeholderState(state) = item.kind else {
-                return nil
-            }
-
-            return state
-        }
-
-        XCTAssertEqual(placeholderStates, ClawShellState.allCases)
-        XCTAssertEqual(placeholderTitles(in: snapshot), ["Idle", "Active", BagModeAvailability.unavailableTitle, "Paused"])
+        XCTAssertTrue(snapshot.items.map(\.title).contains("Sessions: none detected"))
+        XCTAssertTrue(snapshot.items.map(\.title).contains(BagModeAvailability.unavailableTitle))
+        XCTAssertTrue(snapshot.items.map(\.title).contains("Claude Code: Installed"))
+        XCTAssertTrue(snapshot.items.map(\.title).contains("Refresh Status"))
+        XCTAssertTrue(snapshot.items.map(\.title).contains("Repair Integrations..."))
     }
 
     func testSnapshotNamesTheCurrentState() {
         let snapshot = MenuBarModel.snapshot(currentState: .bagMode)
 
         XCTAssertEqual(snapshot.currentState, .bagMode)
-        XCTAssertEqual(snapshot.statusItemTitle, "ClawShell Bag Unavailable")
+        XCTAssertEqual(snapshot.statusItemTitle, "ClawShell")
         XCTAssertEqual(snapshot.items.first?.title, "Current: \(BagModeAvailability.unavailableTitle)")
         XCTAssertEqual(snapshot.items.first?.detail, BagModeAvailability.settingsDetail)
+    }
+
+    func testStateDerivesFromHoldState() {
+        XCTAssertEqual(ClawShellState.derived(from: AgentAggregateHoldState(shouldHold: false, heldSessionIDs: [])), .idle)
+        XCTAssertEqual(ClawShellState.derived(from: AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [UUID()])), .active)
+        XCTAssertEqual(ClawShellState.derived(from: AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [], isPaused: true)), .paused)
+        XCTAssertEqual(ClawShellState.derived(from: AgentAggregateHoldState(shouldHold: true, heldSessionIDs: [], isSafetyCutoffActive: true)), .paused)
     }
 
     func testLifecycleComponentsCanStartAndStopTogether() throws {
@@ -91,16 +115,6 @@ final class MenuBarModelTests: XCTestCase {
 #endif
 
 #if canImport(Testing) || canImport(XCTest)
-private func placeholderTitles(in snapshot: MenuBarSnapshot) -> [String] {
-    snapshot.items.compactMap { item -> String? in
-        guard case .placeholderState = item.kind else {
-            return nil
-        }
-
-        return item.title
-    }
-}
-
 private func makeTemporaryPaths() throws -> ClawShellPaths {
     let url = URL(fileURLWithPath: "/tmp", isDirectory: true)
         .appendingPathComponent("cs-\(UUID().uuidString.prefix(8))", isDirectory: true)

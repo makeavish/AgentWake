@@ -198,7 +198,11 @@ public struct AgentSession: Codable, Equatable, Identifiable, Sendable {
     }
 
     public func contributesToHold(at now: Date) -> Bool {
-        switch state {
+        guard source != .processScan || confidence == .integrated || key.integrationSessionId != nil || holdWhileOpen else {
+            return false
+        }
+
+        return switch state {
         case .active:
             true
         case .standingBy:

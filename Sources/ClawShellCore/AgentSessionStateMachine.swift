@@ -143,8 +143,8 @@ public final class AgentSessionStateMachine {
 
     public func applyIntegrationEvent(_ event: HookAdapterEvent, at now: Date, fallbackObservations: [AgentProcessObservation]) {
         if let pid = event.pid,
-           let processObservation = fallbackObservations.first(where: { $0.snapshot.pid == pid && $0.agent == event.agent }) {
-            applyProcessObservations([processObservation], at: now)
+           fallbackObservations.contains(where: { $0.snapshot.pid == pid && $0.agent == event.agent }) {
+            applyProcessObservations(fallbackObservations, at: now)
         }
 
         applyIntegrationEvent(event, at: now)
@@ -381,12 +381,15 @@ public final class AgentSessionStateMachine {
 
     private func firstProcessSessionIndex(matching key: SessionKey) -> Array<AgentSession>.Index? {
         if let identity = key.processIdentity,
-           let index = sessions.firstIndex(where: { $0.key.processIdentity == identity }) {
+           let index = sessions.firstIndex(where: {
+               $0.state != .finished && $0.key.processIdentity == identity
+           }) {
             return index
         }
 
         return sessions.firstIndex { session in
             guard session.source == .processScan,
+                  session.state != .finished,
                   let runtimeIdentity = key.processRuntimeIdentity,
                   session.key.processRuntimeIdentity == runtimeIdentity else {
                 return false

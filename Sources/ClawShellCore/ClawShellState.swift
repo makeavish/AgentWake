@@ -25,14 +25,8 @@ public enum ClawShellState: String, CaseIterable, Equatable, Identifiable, Senda
 
     public var statusItemTitle: String {
         switch self {
-        case .idle:
+        case .idle, .active, .bagMode, .paused:
             "ClawShell"
-        case .active:
-            "ClawShell Active"
-        case .bagMode:
-            "ClawShell Bag Unavailable"
-        case .paused:
-            "ClawShell Paused"
         }
     }
 
@@ -47,5 +41,13 @@ public enum ClawShellState: String, CaseIterable, Equatable, Identifiable, Senda
         case .paused:
             "Sleep protection paused"
         }
+    }
+
+    public static func derived(from holdState: AgentAggregateHoldState) -> ClawShellState {
+        if holdState.isPaused || holdState.isSafetyCutoffActive {
+            return .paused
+        }
+
+        return holdState.shouldHold ? .active : .idle
     }
 }

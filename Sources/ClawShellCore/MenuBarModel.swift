@@ -2,7 +2,10 @@ import Foundation
 
 public enum MenuBarItemKind: Equatable, Sendable {
     case status
-    case placeholderState(ClawShellState)
+    case diagnostic
+    case integrationStatus(String)
+    case refreshStatus
+    case repairIntegrations
     case settings
     case quit
 }
@@ -43,24 +46,61 @@ public struct MenuBarSnapshot: Equatable, Sendable {
 }
 
 public enum MenuBarModel {
-    public static func snapshot(currentState: ClawShellState) -> MenuBarSnapshot {
-        let stateItems = ClawShellState.allCases.map { state in
-            MenuBarItem(
-                title: state.menuTitle,
-                detail: state.placeholderDetail,
-                isEnabled: false,
-                kind: .placeholderState(state)
-            )
-        }
-
-        let items = [
+    public static func snapshot(
+        currentState: ClawShellState,
+        sessionSummary: String? = nil,
+        integrationStatuses: [IntegrationStatusSnapshot] = []
+    ) -> MenuBarSnapshot {
+        var items = [
             MenuBarItem(
                 title: "Current: \(currentState.menuTitle)",
                 detail: currentState.placeholderDetail,
                 isEnabled: false,
                 kind: .status
             )
-        ] + stateItems + [
+        ]
+
+        if let sessionSummary, !sessionSummary.isEmpty {
+            items.append(
+                MenuBarItem(
+                    title: sessionSummary,
+                    isEnabled: false,
+                    kind: .diagnostic
+                )
+            )
+        }
+
+        items.append(
+            MenuBarItem(
+                title: BagModeAvailability.unavailableTitle,
+                detail: BagModeAvailability.settingsDetail,
+                isEnabled: false,
+                kind: .diagnostic
+            )
+        )
+
+        items += integrationStatuses.map { snapshot in
+            let title = "\(snapshot.displayName): \(snapshot.status.displayTitle)"
+            let detail = snapshot.failureReason ?? snapshot.settingsFile
+            return MenuBarItem(
+                title: title,
+                detail: detail,
+                isEnabled: false,
+                kind: .integrationStatus(snapshot.agentID)
+            )
+        }
+
+        items += [
+            MenuBarItem(
+                title: "Refresh Status",
+                isEnabled: true,
+                kind: .refreshStatus
+            ),
+            MenuBarItem(
+                title: "Repair Integrations...",
+                isEnabled: true,
+                kind: .repairIntegrations
+            ),
             MenuBarItem(
                 title: "Settings...",
                 isEnabled: true,
@@ -78,5 +118,22 @@ public enum MenuBarModel {
             statusItemTitle: currentState.statusItemTitle,
             items: items
         )
+    }
+}
+
+public extension IntegrationInstallStatus {
+    var displayTitle: String {
+        switch self {
+        case .notInstalled:
+            "Not installed"
+        case .installed:
+            "Installed"
+        case .failed:
+            "Needs repair"
+        case .degraded:
+            "Degraded"
+        case .removed:
+            "Removed"
+        }
     }
 }

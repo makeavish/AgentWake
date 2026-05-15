@@ -317,6 +317,7 @@ public final class ControlServer: @unchecked Sendable {
 
 public struct DefaultControlCommandRouter: ControlCommandRouting {
     public var statusProvider: () -> String
+    public var listProvider: () -> String
     public var pauseHandler: (TimeInterval, Date) -> Void
     public var releaseNowHandler: (Date) -> Void
     public var integrationsListProvider: () -> String
@@ -333,6 +334,7 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
 
     public init(
         statusProvider: @escaping () -> String = { "ClawShell status unavailable" },
+        listProvider: @escaping () -> String = { "No sessions reported" },
         pauseHandler: @escaping (TimeInterval, Date) -> Void = { _, _ in },
         releaseNowHandler: @escaping (Date) -> Void = { _ in },
         integrationsListProvider: @escaping () -> String = { "Integrations: claude-code, codex-cli" },
@@ -350,6 +352,7 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         }
     ) {
         self.statusProvider = statusProvider
+        self.listProvider = listProvider
         self.pauseHandler = pauseHandler
         self.releaseNowHandler = releaseNowHandler
         self.integrationsListProvider = integrationsListProvider
@@ -376,7 +379,7 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
             releaseNowHandler(receivedAt)
             return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Release requested")
         case .list:
-            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "No sessions reported")
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: listProvider())
         case .add(let binary):
             return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: "Custom binary support is post-v1: \(binary)")
         case .integrationsList:

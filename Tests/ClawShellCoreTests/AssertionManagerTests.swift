@@ -206,6 +206,7 @@ private func runFailedReleaseRemainsTrackedAndRetriesWithoutHidingError() throws
 
 private func runControlRouterPauseAndReleaseReconcileAssertions() throws {
     var current = Date(timeIntervalSince1970: 9_000)
+    let monitoredProcessStart = current
     let monitor = AgentMonitor(
         snapshotProvider: StaticSnapshotProvider(
             snapshotsToReturn: [
@@ -213,7 +214,7 @@ private func runControlRouterPauseAndReleaseReconcileAssertions() throws {
                     pid: 41,
                     processName: "codex",
                     executablePath: "/opt/homebrew/bin/codex",
-                    processStartTime: current
+                    processStartTime: monitoredProcessStart
                 )
             ]
         ),
@@ -237,6 +238,17 @@ private func runControlRouterPauseAndReleaseReconcileAssertions() throws {
     )
 
     monitor.start()
+    monitor.applyIntegrationEvent(
+        HookAdapterEvent(
+            agent: .codexCLI,
+            host: "codex-cli",
+            event: .toolStarted,
+            pid: 41,
+            processStartTime: monitoredProcessStart,
+            integrationSessionId: "router-codex"
+        ),
+        at: current.addingTimeInterval(1)
+    )
     manager.start()
     try check(manager.snapshot.isHolding, "Expected process-backed session to hold assertions")
 

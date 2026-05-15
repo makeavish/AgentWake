@@ -297,7 +297,19 @@ private func runTransitionMatrixCoversActivityStandbyGraceAndFinish() throws {
     let sessionID = try checkNotNil(machine.sessions.first?.id, "Expected active process-backed session")
 
     try check(machine.sessions[0].state == .active, "Expected matching process start to create an active session")
-    try check(machine.aggregateHoldState(at: baseline).shouldHold, "Expected active session to hold")
+    try check(!machine.aggregateHoldState(at: baseline).shouldHold, "Expected process-only session to stay diagnostic")
+    machine.applyIntegrationEvent(
+        HookAdapterEvent(
+            agent: .codexCLI,
+            host: "codex-cli",
+            event: .toolStarted,
+            pid: 50,
+            processStartTime: baseline,
+            integrationSessionId: "codex-turn-50"
+        ),
+        at: baseline.addingTimeInterval(1)
+    )
+    try check(machine.aggregateHoldState(at: baseline.addingTimeInterval(1)).shouldHold, "Expected integration-backed session to hold")
 
     let turnFinishedAt = baseline.addingTimeInterval(10)
     machine.applyTrustedEvent(.turnFinished, to: sessionID, at: turnFinishedAt)
@@ -358,6 +370,28 @@ private func runAggregateHoldRequiresEverySessionToFinishOrExpire() throws {
 
     let claudeID = try checkNotNil(machine.sessions.first(where: { $0.agent == .claudeCode })?.id, "Expected Claude session")
     let codexID = try checkNotNil(machine.sessions.first(where: { $0.agent == .codexCLI })?.id, "Expected Codex session")
+    machine.applyIntegrationEvent(
+        HookAdapterEvent(
+            agent: .claudeCode,
+            host: "claude-code",
+            event: .toolStarted,
+            pid: 70,
+            processStartTime: baseline,
+            integrationSessionId: "claude-session"
+        ),
+        at: baseline.addingTimeInterval(1)
+    )
+    machine.applyIntegrationEvent(
+        HookAdapterEvent(
+            agent: .codexCLI,
+            host: "codex-cli",
+            event: .toolStarted,
+            pid: 71,
+            processStartTime: baseline,
+            integrationSessionId: "codex-session"
+        ),
+        at: baseline.addingTimeInterval(2)
+    )
 
     machine.applyTrustedEvent(.turnFinished, to: claudeID, at: baseline.addingTimeInterval(10))
     machine.applyTrustedEvent(.sessionFinished, to: codexID, at: baseline.addingTimeInterval(20))
@@ -378,6 +412,28 @@ private func runRemainingTransitionRowsAreExecutable() throws {
     )
     let claudeID = try checkNotNil(machine.sessions.first(where: { $0.agent == .claudeCode })?.id, "Expected Claude session")
     let codexID = try checkNotNil(machine.sessions.first(where: { $0.agent == .codexCLI })?.id, "Expected Codex session")
+    machine.applyIntegrationEvent(
+        HookAdapterEvent(
+            agent: .claudeCode,
+            host: "claude-code",
+            event: .toolStarted,
+            pid: 80,
+            processStartTime: baseline,
+            integrationSessionId: "claude-session"
+        ),
+        at: baseline.addingTimeInterval(1)
+    )
+    machine.applyIntegrationEvent(
+        HookAdapterEvent(
+            agent: .codexCLI,
+            host: "codex-cli",
+            event: .toolStarted,
+            pid: 81,
+            processStartTime: baseline,
+            integrationSessionId: "codex-session"
+        ),
+        at: baseline.addingTimeInterval(2)
+    )
 
     machine.applyTrustedEvent(.releaseNow, to: claudeID, at: baseline.addingTimeInterval(10))
     try check(machine.sessions.first(where: { $0.id == claudeID })?.state == .finished, "Expected releaseNow to release the selected session")
@@ -555,6 +611,7 @@ private func runOutOfOrderHookEventsAreIgnored() throws {
 
 private func runManualOverridePrecedenceAndPersistence() throws {
     var current = baseline
+    let monitoredProcessStart = current
     var settings = ClawShellSettings(
         manualOverrides: [
             ManualOverride(id: "pause", kind: ManualOverrideKind.pauseAll.rawValue, expiresAt: current.addingTimeInterval(60))
@@ -567,7 +624,7 @@ private func runManualOverridePrecedenceAndPersistence() throws {
                     pid: 110,
                     processName: "codex",
                     executablePath: "/opt/homebrew/bin/codex",
-                    processStartTime: current
+                    processStartTime: monitoredProcessStart
                 )
             ]
         ),
@@ -576,6 +633,17 @@ private func runManualOverridePrecedenceAndPersistence() throws {
     )
 
     monitor.poll()
+    monitor.applyIntegrationEvent(
+        HookAdapterEvent(
+            agent: .codexCLI,
+            host: "codex-cli",
+            event: .toolStarted,
+            pid: 110,
+            processStartTime: monitoredProcessStart,
+            integrationSessionId: "manual-override-codex"
+        ),
+        at: current.addingTimeInterval(1)
+    )
     try check(monitor.sessions.count == 1, "Expected process polling to create a held session")
     try check(!monitor.aggregateHoldState.shouldHold, "Expected persisted pause override to suppress held sessions")
     try check(monitor.aggregateHoldState.isPaused, "Expected persisted pause override to be visible in aggregate state")

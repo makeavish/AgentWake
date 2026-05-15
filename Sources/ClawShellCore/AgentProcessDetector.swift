@@ -89,6 +89,9 @@ public struct AgentProcessDetector: Sendable {
             guard !snapshot.matchingExecutableNames.isDisjoint(with: executableNames) else {
                 continue
             }
+            guard !shouldExclude(snapshot: snapshot, for: kind) else {
+                continue
+            }
 
             let executableIdentity = snapshot.executablePath ?? "process:\(snapshot.executableName)"
             let key = SessionKey(
@@ -102,6 +105,18 @@ public struct AgentProcessDetector: Sendable {
         }
 
         return nil
+    }
+
+    private func shouldExclude(snapshot: ProcessSnapshot, for kind: AgentKind) -> Bool {
+        guard kind == .codexCLI, let executablePath = snapshot.executablePath else {
+            return false
+        }
+
+        let appServerPathFragments = [
+            ".app/Contents/Resources/codex",
+            "/.vscode/extensions/openai.chatgpt-"
+        ]
+        return appServerPathFragments.contains { executablePath.contains($0) }
     }
 }
 
