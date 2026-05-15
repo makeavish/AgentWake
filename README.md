@@ -82,6 +82,7 @@ The V1 adapter contract reduces native hook payloads to a minimal event schema a
 No installable build is available yet.
 
 The planned primary distribution path is a Homebrew cask. Direct downloads may come later, with signing and notarization planned after the early release path is validated.
+See [CHANGELOG.md](CHANGELOG.md) for the pending v1 release scope and Bag Mode boundary.
 
 ## Development
 
