@@ -157,10 +157,8 @@ public final class AgentMonitor: AppLifecycleComponent {
 
             let timestamp = now()
             let heldCount = activeSessions.filter { $0.contributesToHold(at: timestamp) }.count
-            let provisionalCount = activeSessions.filter { $0.isProvisionalHold(at: timestamp) }.count
-            let confirmedHeldCount = heldCount - provisionalCount
             let detectedCount = activeSessions.count - heldCount
-            if heldCount == activeSessions.count && provisionalCount == 0 {
+            if heldCount == activeSessions.count {
                 return "Sessions: \(activeSessions.count) protecting"
             }
 
@@ -169,11 +167,8 @@ public final class AgentMonitor: AppLifecycleComponent {
             }
 
             var parts: [String] = []
-            if confirmedHeldCount > 0 {
-                parts.append("\(confirmedHeldCount) protecting")
-            }
-            if provisionalCount > 0 {
-                parts.append("\(provisionalCount) starting up")
+            if heldCount > 0 {
+                parts.append("\(heldCount) protecting")
             }
             if detectedCount > 0 {
                 parts.append("\(detectedCount) seen")
@@ -216,10 +211,6 @@ public final class AgentMonitor: AppLifecycleComponent {
     }
 
     private func sessionDisplayState(_ session: AgentSession, at now: Date) -> String {
-        if session.isProvisionalHold(at: now) {
-            return "starting up"
-        }
-
         if session.contributesToHold(at: now) {
             return sessionProtectingState(session)
         }

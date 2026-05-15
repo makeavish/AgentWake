@@ -25,12 +25,12 @@ struct AgentSessionStateMachineTests {
         try runAgentMonitorPollsSnapshotsEveryTwoSecondsByDefault()
     }
 
-    @Test func processOnlyStartupDetectionHoldsNewestSessionProvisionally() throws {
-        try runProcessOnlyStartupDetectionHoldsNewestSessionProvisionally()
+    @Test func processOnlyDetectionsRemainDiagnosticUntilIntegrated() throws {
+        try runProcessOnlyDetectionsRemainDiagnosticUntilIntegrated()
     }
 
-    @Test func releaseNowSuppressesProcessOnlyProvisionalRehold() throws {
-        try runReleaseNowSuppressesProcessOnlyProvisionalRehold()
+    @Test func processOnlyDetectionDoesNotProtectWithoutIntegration() throws {
+        try runProcessOnlyDetectionDoesNotProtectWithoutIntegration()
     }
 
     @Test func agentMonitorStartUsesTimerCadence() throws {
@@ -92,11 +92,11 @@ final class AgentSessionStateMachineTests: XCTestCase {
     }
 
     func testProcessOnlyStartupDetectionHoldsNewestSessionProvisionally() throws {
-        try runProcessOnlyStartupDetectionHoldsNewestSessionProvisionally()
+        try runProcessOnlyDetectionsRemainDiagnosticUntilIntegrated()
     }
 
     func testReleaseNowSuppressesProcessOnlyProvisionalRehold() throws {
-        try runReleaseNowSuppressesProcessOnlyProvisionalRehold()
+        try runProcessOnlyDetectionDoesNotProtectWithoutIntegration()
     }
 
     func testAgentMonitorStartUsesTimerCadence() throws {
@@ -282,7 +282,7 @@ private func runAgentMonitorPollsSnapshotsEveryTwoSecondsByDefault() throws {
     try check(monitor.sessions.first?.agent == .codexCLI, "Expected monitor to detect Codex CLI")
 }
 
-private func runProcessOnlyStartupDetectionHoldsNewestSessionProvisionally() throws {
+private func runProcessOnlyDetectionsRemainDiagnosticUntilIntegrated() throws {
     var currentDate = Date(timeIntervalSince1970: 2_000)
     let monitor = AgentMonitor(
         snapshotProvider: StaticSnapshotProvider(
@@ -313,22 +313,22 @@ private func runProcessOnlyStartupDetectionHoldsNewestSessionProvisionally() thr
 
     monitor.poll()
     try check(
-        monitor.sessionSummaryMessage() == "Sessions: 1 starting up, 2 seen",
-        "Expected newest startup-seen process to protect during startup while older shells remain diagnostic: \(monitor.sessionSummaryMessage())"
+        monitor.sessionSummaryMessage() == "Sessions: 3 seen, none protecting",
+        "Expected process-only detections to remain diagnostic until hook evidence arrives: \(monitor.sessionSummaryMessage())"
     )
     try check(
-        monitor.sessionListMessage().contains("Codex CLI: starting up source=processScan pid=32"),
-        "Expected process-only startup protection to be labeled starting up: \(monitor.sessionListMessage())"
+        monitor.sessionListMessage().contains("Codex CLI: seen source=processScan pid=32"),
+        "Expected process-only detection to be labeled seen: \(monitor.sessionListMessage())"
     )
 
     currentDate = currentDate.addingTimeInterval(901)
     try check(
         monitor.sessionSummaryMessage() == "Sessions: 3 seen, none protecting",
-        "Expected startup protection to expire without hook evidence: \(monitor.sessionSummaryMessage())"
+        "Expected process-only detections to stay diagnostic without hook evidence: \(monitor.sessionSummaryMessage())"
     )
 }
 
-private func runReleaseNowSuppressesProcessOnlyProvisionalRehold() throws {
+private func runProcessOnlyDetectionDoesNotProtectWithoutIntegration() throws {
     let machine = AgentSessionStateMachine(graceInterval: 900)
     let processObservation = observation(
         pid: 34,
@@ -338,14 +338,13 @@ private func runReleaseNowSuppressesProcessOnlyProvisionalRehold() throws {
     )
 
     machine.applyProcessObservations([processObservation], at: baseline)
-    let provisionalSessionID = try checkNotNil(machine.sessions.first?.id, "Expected provisional process-backed session")
-    try check(machine.aggregateHoldState(at: baseline).shouldHold, "Expected startup process to hold provisionally")
+    try check(machine.sessions.first?.id != nil, "Expected process-backed session")
+    try check(!machine.aggregateHoldState(at: baseline).shouldHold, "Expected process-only detection not to protect")
 
-    machine.applyTrustedEvent(.releaseNow, to: provisionalSessionID, at: baseline.addingTimeInterval(1))
     machine.applyProcessObservations([processObservation], at: baseline.addingTimeInterval(2))
     try check(
         !machine.aggregateHoldState(at: baseline.addingTimeInterval(2)).shouldHold,
-        "Expected released process-only session not to regain provisional hold on the next poll"
+        "Expected process-only session not to protect on the next poll"
     )
 
     machine.applyIntegrationEvent(
@@ -361,7 +360,7 @@ private func runReleaseNowSuppressesProcessOnlyProvisionalRehold() throws {
     )
     try check(
         machine.aggregateHoldState(at: baseline.addingTimeInterval(3)).shouldHold,
-        "Expected a real integration event to restore hold after an explicit process-only release"
+        "Expected a real integration event to start protection"
     )
 }
 
@@ -396,10 +395,10 @@ private func runTransitionMatrixCoversActivityStandbyGraceAndFinish() throws {
     let sessionID = try checkNotNil(machine.sessions.first?.id, "Expected active process-backed session")
 
     try check(machine.sessions[0].state == .active, "Expected matching process start to create an active session")
-    try check(machine.aggregateHoldState(at: baseline).shouldHold, "Expected process-only startup session to hold provisionally")
+    try check(!machine.aggregateHoldState(at: baseline).shouldHold, "Expected process-only session not to protect")
     try check(
         !machine.aggregateHoldState(at: baseline.addingTimeInterval(901)).shouldHold,
-        "Expected process-only provisional hold to expire without integration evidence"
+        "Expected process-only session to remain diagnostic without integration evidence"
     )
     machine.applyIntegrationEvent(
         HookAdapterEvent(

@@ -202,9 +202,8 @@ public struct AgentSession: Codable, Equatable, Identifiable, Sendable {
 
     public func contributesToHold(at now: Date) -> Bool {
         let hasConfirmedEvidence = hasIntegratedEvidence
-        let hasProvisionalProcessHold = isProvisionalHold(at: now)
 
-        guard hasConfirmedEvidence || holdWhileOpen || hasProvisionalProcessHold else {
+        guard hasConfirmedEvidence || holdWhileOpen else {
             return false
         }
 
@@ -222,11 +221,8 @@ public struct AgentSession: Codable, Equatable, Identifiable, Sendable {
         source != .processScan || confidence == .integrated || key.integrationSessionId != nil
     }
 
-    public func isProvisionalHold(at now: Date) -> Bool {
-        source == .processScan
-            && !hasIntegratedEvidence
-            && !holdWhileOpen
-            && (provisionalHoldExpiresAt.map { $0 > now } ?? false)
+    public func isProvisionalHold(at _: Date) -> Bool {
+        false
     }
 }
 
