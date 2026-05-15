@@ -802,6 +802,91 @@ if ! grep -q '^result=pass$' "$bag_mode_smoke_dir/packaging-consent-audit-stage-
     exit 1
 fi
 
+echo "==> release packaging smoke"
+scripts/package-release.sh --help >/dev/null
+for required_release_packaging_contract in \
+    'artifactFormat=clawshell-release-artifact-v1' \
+    'bagMode=unavailable' \
+    'helperInstalled=false' \
+    'CFBundleShortVersionString' \
+    'codesign --force --sign -'
+do
+    if ! grep -q -- "$required_release_packaging_contract" scripts/package-release.sh; then
+        echo "Release packaging script missing static contract: $required_release_packaging_contract" >&2
+        exit 1
+    fi
+done
+release_package_output="$bag_mode_smoke_dir/release-package"
+scripts/package-release.sh \
+    --version v0.0.0 \
+    --allow-dirty \
+    --output-dir "$release_package_output" >/dev/null
+release_package_manifest="$release_package_output/ClawShell-v0.0.0-manifest.txt"
+release_package_zip="$release_package_output/ClawShell-v0.0.0-macos.zip"
+release_package_sha="$release_package_zip.sha256"
+release_package_app="$release_package_output/ClawShell-v0.0.0/ClawShell.app"
+if [[ ! -d "$release_package_app" || ! -s "$release_package_zip" || ! -s "$release_package_sha" ]]; then
+    echo "Release packaging smoke did not produce app, zip, and checksum artifacts" >&2
+    exit 1
+fi
+if ! grep -q '^version=v0.0.0$' "$release_package_manifest" ||
+   ! grep -q '^bagMode=unavailable$' "$release_package_manifest" ||
+   ! grep -q '^helperInstalled=false$' "$release_package_manifest"; then
+    echo "Release packaging manifest missing release boundary fields" >&2
+    cat "$release_package_manifest" >&2
+    exit 1
+fi
+if ! grep -q '^dirtyTree=true$' "$release_package_manifest"; then
+    echo "Release packaging smoke did not mark dirty local smoke artifact" >&2
+    cat "$release_package_manifest" >&2
+    exit 1
+fi
+release_package_dirty_marker="$ROOT_DIR/.clawshell-validate-dirty-marker"
+rm -f "$release_package_dirty_marker"
+printf 'validate dirty-tree packaging guard\n' >"$release_package_dirty_marker"
+if scripts/package-release.sh \
+    --version v0.0.1 \
+    --output-dir "$bag_mode_smoke_dir/release-package-dirty-rejected" >/dev/null 2>"$bag_mode_smoke_error"; then
+    rm -f "$release_package_dirty_marker"
+    echo "Release packaging allowed dirty tree without --allow-dirty" >&2
+    exit 1
+fi
+rm -f "$release_package_dirty_marker"
+if ! grep -q -- "--allow-dirty" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if scripts/package-release.sh \
+    --version v0.0.1-rc.1 \
+    --allow-dirty \
+    --output-dir "$bag_mode_smoke_dir/release-package-prerelease-rejected" >/dev/null 2>"$bag_mode_smoke_error"; then
+    echo "Release packaging accepted a prerelease version for CFBundleShortVersionString" >&2
+    exit 1
+fi
+if ! grep -q "Version must look like" "$bag_mode_smoke_error"; then
+    cat "$bag_mode_smoke_error" >&2
+    exit 1
+fi
+if [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$release_package_app/Contents/Info.plist")" != "0.0.0" ]]; then
+    echo "Release packaging Info.plist did not carry the requested short version" >&2
+    /usr/bin/plutil -p "$release_package_app/Contents/Info.plist" >&2
+    exit 1
+fi
+if [[ -d "$release_package_app/Contents/Library/LaunchDaemons" ]] ||
+   /usr/libexec/PlistBuddy -c 'Print :SMPrivilegedExecutables' "$release_package_app/Contents/Info.plist" >/dev/null 2>&1; then
+    echo "Release packaging introduced privileged helper activation assets" >&2
+    exit 1
+fi
+release_package_audit="$bag_mode_smoke_dir/release-package-audit"
+scripts/packaging-consent-audit.sh \
+    --output-dir "$release_package_audit" \
+    --app-bundle "$release_package_app" >/dev/null
+if ! grep -q '^result=pass$' "$release_package_audit/validation-config.txt"; then
+    echo "Packaging consent audit did not pass the release package artifact" >&2
+    cat "$release_package_audit/validation-config.txt" >&2
+    exit 1
+fi
+
 if scripts/bag-mode-primitive-validation.sh --output-dir "$bag_mode_smoke_dir/missing-ack" --apply >"$bag_mode_smoke_error" 2>&1; then
     echo "Bag Mode primitive harness allowed --apply without acknowledgement" >&2
     exit 1

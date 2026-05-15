@@ -79,10 +79,21 @@ The V1 adapter contract reduces native hook payloads to a minimal event schema a
 
 ## Install
 
-No installable build is available yet.
+No hosted or Homebrew installable build is available yet.
 
 The planned primary distribution path is a Homebrew cask. Direct downloads may come later, with signing and notarization planned after the early release path is validated.
 See [CHANGELOG.md](CHANGELOG.md) for the pending v1 release scope and Bag Mode boundary.
+
+## Release Packaging
+
+Build a local release ZIP:
+
+```sh
+scripts/package-release.sh --version v0.1.0
+```
+
+The generated artifact is ad-hoc signed, does not install/register privileged
+helpers, and keeps Bag Mode unavailable for the v0.1.0 scope.
 
 ## Development
 

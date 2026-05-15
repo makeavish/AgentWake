@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.0.0 - pending
+## v0.1.0 - pending
 
 First public release scope:
 
