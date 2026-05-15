@@ -1,6 +1,6 @@
 # ClawShell
 
-Close the lid. The agent keeps running.
+Keep coding agents running while your Mac would normally sleep.
 
 ClawShell is a planned native macOS menu bar app for keeping long-running AI coding agents alive while they work, then letting the Mac return to normal sleep behavior when they are done.
 
@@ -14,15 +14,19 @@ The first public version is planned to focus on:
 
 - Detecting active agent sessions automatically
 - Holding normal macOS sleep while agents are working
-- Supporting closed-lid runs with guarded battery and thermal controls
 - Showing exactly why sleep is currently being held
 - Releasing sleep prevention when agent work finishes or times out
+- Showing Bag Mode as unavailable until the helper lifecycle and live
+  temperature-provider validation gates are complete
 
 ## Why
 
 Long-running coding agents can work for minutes or hours. macOS can interrupt them through idle sleep or clamshell sleep, especially when a MacBook lid is closed on battery.
 
-`caffeinate -i` helps with idle sleep, but it does not fully solve closed-lid workflows. ClawShell aims to make these runs reliable without becoming a general-purpose "keep my Mac awake forever" tool.
+`caffeinate -i` helps with idle sleep, but it is easy to forget and does not track agent lifecycle. ClawShell aims to make normal sleep prevention automatic, visible, and agent-scoped without becoming a general-purpose "keep my Mac awake forever" tool.
+
+Closed-lid Bag Mode remains a planned guarded path after the helper and
+temperature-provider validation gates pass.
 
 ## Planned First Version Support
 
