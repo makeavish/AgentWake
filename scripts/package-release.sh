@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="ClawShell"
-BUNDLE_ID="com.clawshell.app"
+APP_NAME="AgentWake"
+BUNDLE_ID="com.makeavish.AgentWake"
 MIN_SYSTEM_VERSION="13.0"
-HOOK_ADAPTER_NAME="ClawShellHookAdapter"
+HOOK_ADAPTER_NAME="AgentWakeHookAdapter"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="$ROOT_DIR/.build/release-artifacts"
@@ -16,7 +16,7 @@ usage() {
     cat <<'EOF'
 Usage: scripts/package-release.sh --version VERSION [--output-dir DIR] [--no-sign] [--allow-dirty]
 
-Builds a release ClawShell.app bundle and ZIP artifact.
+Builds a release AgentWake.app bundle and ZIP artifact.
 
 VERSION may be v0.1.0 or 0.1.0. The app bundle version uses the numeric form.
 The release artifact does not install or register privileged helpers.
@@ -164,7 +164,7 @@ fi
 /usr/bin/shasum -a 256 "$ZIP_PATH" >"$SHA_PATH"
 
 cat >"$MANIFEST_PATH" <<EOF
-artifactFormat=clawshell-release-artifact-v1
+artifactFormat=agentwake-release-artifact-v1
 appName=$APP_NAME
 bundleIdentifier=$BUNDLE_ID
 version=$TAG_VERSION

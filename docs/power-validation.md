@@ -2,7 +2,7 @@
 
 ## Normal Assertions
 
-ClawShell normal mode uses non-privileged IOPM assertions through `IOPMAssertionCreateWithName`.
+AgentWake normal mode uses non-privileged IOPM assertions through `IOPMAssertionCreateWithName`.
 
 Default assertion set:
 
@@ -24,7 +24,7 @@ Run the timed idle harness when the machine is on the target power source and th
 bash scripts/timed-idle-validation.sh
 ```
 
-By default, this holds the normal assertion for 90 seconds and captures `before`, `during-early`, `during-late`, and `after` snapshots. The harness does not change `pmset` settings. It records the active power source, the active profile's `sleep` threshold, whether the late snapshot exceeded that threshold, any non-ClawShell sleep-preventing assertions in `validation-config.txt` and `non-clawshell-late-sleep-blockers.txt`, and cleanup hints in `non-clawshell-late-sleep-blocker-guidance.txt`. Treat a run as conclusive only when `validation-config.txt` contains `conclusive=true`.
+By default, this holds the normal assertion for 90 seconds and captures `before`, `during-early`, `during-late`, and `after` snapshots. The harness does not change `pmset` settings. It records the active power source, the active profile's `sleep` threshold, whether the late snapshot exceeded that threshold, any non-AgentWake sleep-preventing assertions in `validation-config.txt` and `non-agentwake-late-sleep-blockers.txt`, and cleanup hints in `non-agentwake-late-sleep-blocker-guidance.txt`. Treat a run as conclusive only when `validation-config.txt` contains `conclusive=true`.
 
 Before attempting a clean timed-idle run, use the preflight helper from a normal terminal to check whether the active power profile can exceed the sleep threshold and whether unrelated sleep blockers are already present:
 
@@ -32,7 +32,7 @@ Before attempting a clean timed-idle run, use the preflight helper from a normal
 scripts/timed-idle-preflight.sh
 ```
 
-Preflight is advisory and does not hold assertions or create validation evidence. It exits successfully only when the active `sleep` threshold is lower than the configured late snapshot offset and no non-ClawShell sleep blockers are visible in `pmset -g assertions`. When blockers are present, it prints suggested cleanup for common cases such as WindowServer `UserIsActive`, powerd display-on, sharingd Handoff, Slack/WebRTC, coreaudiod audio activity, Codex/Electron, and generic app assertions. Treat system daemons as symptoms: clear the owning activity instead of killing WindowServer, powerd, sharingd, or coreaudiod.
+Preflight is advisory and does not hold assertions or create validation evidence. It exits successfully only when the active `sleep` threshold is lower than the configured late snapshot offset and no non-AgentWake sleep blockers are visible in `pmset -g assertions`. When blockers are present, it prints suggested cleanup for common cases such as WindowServer `UserIsActive`, powerd display-on, sharingd Handoff, Slack/WebRTC, coreaudiod audio activity, Codex/Electron, and generic app assertions. Treat system daemons as symptoms: clear the owning activity instead of killing WindowServer, powerd, sharingd, or coreaudiod.
 
 ## Manual Result Matrix
 
@@ -73,19 +73,19 @@ back with `--output-dir <baseline-dir> --apply --continue`. The harness keeps
 the original `before/` snapshot and refreshes `validation-config.txt` to
 apply-mode metadata before capturing the mutating snapshots.
 
-Latest local normal assertion smoke: `scripts/normal-assertion-validation.sh` was run for a short hold while the machine was on battery. The sanitized `during` snapshot showed a ClawShell-owned `PreventUserIdleSystemSleep` assertion, and the `after` snapshot no longer contained ClawShell-owned assertions.
+Latest local normal assertion smoke: `scripts/normal-assertion-validation.sh` was run for a short hold while the machine was on battery. The sanitized `during` snapshot showed an AgentWake-owned `PreventUserIdleSystemSleep` assertion, and the `after` snapshot no longer contained AgentWake-owned assertions.
 
 Sanitized excerpt:
 
 ```text
 during/pmset-assertions.txt:
-pid <redacted>(ClawShellPowerValidation): PreventUserIdleSystemSleep named: "ClawShell is protecting agent work from sleep"
+pid <redacted>(AgentWakePowerValidation): PreventUserIdleSystemSleep named: "AgentWake is protecting agent work from sleep"
 
 after/pmset-assertions.txt:
-<no ClawShellPowerValidation assertions present>
+<no AgentWakePowerValidation assertions present>
 ```
 
-Latest battery timed snapshot: `.build/power-validation/battery-timed-idle-20260510T165231Z` was captured while the machine was on battery with `sleep = 1` minute and a 90 second ClawShell hold. This is a legacy/confounded snapshot from before the timed harness wrote `validation-config.txt` and `non-clawshell-late-sleep-blockers.txt`, so treat it as lifecycle evidence only, not a clean/conclusive idle-sleep result.
+Latest battery timed snapshot: `.build/power-validation/battery-timed-idle-20260510T165231Z` was captured while the machine was on battery with `sleep = 1` minute and a 90 second AgentWake hold. This is a legacy/confounded snapshot from before the timed harness wrote `validation-config.txt` and `non-agentwake-late-sleep-blockers.txt`, so treat it as lifecycle evidence only, not a clean/conclusive idle-sleep result.
 
 Sanitized battery evidence:
 
@@ -95,20 +95,20 @@ during-late/pmset-battery.txt: Now drawing from 'Battery Power'
 after/pmset-battery.txt: Now drawing from 'Battery Power'
 hold.log: Holding normal assertions for 90 seconds
 hold.log: Assertions: PreventUserIdleSystemSleep
-during-late/pmset-assertions.txt: ClawShellPowerValidation PreventUserIdleSystemSleep present
-after/pmset-assertions.txt: no ClawShell assertion present
+during-late/pmset-assertions.txt: AgentWakePowerValidation PreventUserIdleSystemSleep present
+after/pmset-assertions.txt: no AgentWake assertion present
 during-late blockers: WindowServer UserIsActive, Comet/audio, Codex/Electron, powerd, sharingd, coreaudiod
 ```
 
-Latest AC timed run: `.build/power-validation/battery-accounted-20260510T1709Z` was captured while the machine was on AC with `sleep = 1` minute and a 90 second ClawShell hold. The directory name is misleading; the run's `validation-config.txt` recorded `activePowerSource=AC Power`:
+Latest AC timed run: `.build/power-validation/battery-accounted-20260510T1709Z` was captured while the machine was on AC with `sleep = 1` minute and a 90 second AgentWake hold. The directory name is misleading; the run's `validation-config.txt` recorded `activePowerSource=AC Power`:
 
 ```text
 activePowerSource=AC Power
 activeSleepThresholdSeconds=60
 idleSleepThresholdExceeded=true
-lateClawShellAssertion=present
-afterClawShellAssertion=missing
-nonClawShellLateSleepBlockerCount=3
+lateAgentWakeAssertion=present
+afterAgentWakeAssertion=missing
+nonAgentWakeLateSleepBlockerCount=3
 conclusive=false
 ```
 

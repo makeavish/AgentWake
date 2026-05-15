@@ -3,9 +3,9 @@ set -euo pipefail
 
 OUTPUT_DIR=""
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="ClawShell"
-HOOK_ADAPTER_NAME="ClawShellHookAdapter"
-BUNDLE_ID="com.clawshell.app"
+APP_NAME="AgentWake"
+HOOK_ADAPTER_NAME="AgentWakeHookAdapter"
+BUNDLE_ID="com.makeavish.AgentWake"
 MIN_SYSTEM_VERSION="13.0"
 APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
@@ -18,9 +18,9 @@ usage() {
     cat <<'EOF'
 Usage: scripts/app-lifecycle-smoke.sh --output-dir DIR
 
-Builds and launches the staged ClawShell app bundle, then captures live local
+Builds and launches the staged AgentWake app bundle, then captures live local
 evidence for AppleEvent quit/relaunch, SIGTERM/relaunch, and force-kill/relaunch
-behavior. This opens ClawShell and terminates only the staged app process owned
+behavior. This opens AgentWake and terminates only the staged app process owned
 by this repository.
 EOF
 }
@@ -114,11 +114,11 @@ staged_pids() {
                 printf '%s\n' "$candidate_pid"
                 ;;
         esac
-    done < <(pgrep -x ClawShell || true)
+    done < <(pgrep -x AgentWake || true)
 }
 
-clawshell_pids() {
-    pgrep -x ClawShell || true
+agentwake_pids() {
+    pgrep -x AgentWake || true
 }
 
 stop_existing_staged_app() {
@@ -141,7 +141,7 @@ stop_existing_staged_app() {
     fi
 
     remaining="$(staged_pids | paste -sd ',' -)"
-    echo "Could not stop staged ClawShell process(es): $remaining" >&2
+    echo "Could not stop staged AgentWake process(es): $remaining" >&2
     return 1
 }
 
@@ -156,7 +156,7 @@ signal_staged_pid() {
         "$APP_BINARY"*)
             ;;
         *)
-            echo "Refusing to send $signal_name during $label; PID $pid is not the staged ClawShell process" >&2
+            echo "Refusing to send $signal_name during $label; PID $pid is not the staged AgentWake process" >&2
             return 1
             ;;
     esac
@@ -178,26 +178,26 @@ signal_staged_pid() {
 appleevent_quit_staged_pid() {
     local pid="$1"
     local label="$2"
-    local command clawshell_processes clawshell_process_count temp_output exit_code
+    local command agentwake_processes agentwake_process_count temp_output exit_code
 
     command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
     case "$command" in
         "$APP_BINARY"*)
             ;;
         *)
-            echo "Refusing AppleEvent quit during $label; PID $pid is not the staged ClawShell process" >&2
+            echo "Refusing AppleEvent quit during $label; PID $pid is not the staged AgentWake process" >&2
             return 1
             ;;
     esac
 
-    clawshell_processes="$(clawshell_pids)"
-    clawshell_process_count="$(printf '%s\n' "$clawshell_processes" | sed '/^$/d' | wc -l | tr -d ' ')"
-    if [[ "$clawshell_process_count" != "1" || "$clawshell_processes" != "$pid" ]]; then
+    agentwake_processes="$(agentwake_pids)"
+    agentwake_process_count="$(printf '%s\n' "$agentwake_processes" | sed '/^$/d' | wc -l | tr -d ' ')"
+    if [[ "$agentwake_process_count" != "1" || "$agentwake_processes" != "$pid" ]]; then
         {
             printf 'expectedPID=%s\n' "$pid"
-            printf 'clawshellPIDs=%s\n' "$(printf '%s\n' "$clawshell_processes" | paste -sd ',' -)"
+            printf 'agentwakePIDs=%s\n' "$(printf '%s\n' "$agentwake_processes" | paste -sd ',' -)"
         } >"$EVIDENCE_DIR/$label-appleevent-quit-preflight.txt"
-        echo "Refusing AppleEvent quit during $label; expected the staged app to be the only ClawShell process" >&2
+        echo "Refusing AppleEvent quit during $label; expected the staged app to be the only AgentWake process" >&2
         return 1
     fi
 
@@ -248,25 +248,25 @@ capture_process_snapshot() {
 
 run_cli_status() {
     local name="$1"
-    capture_command "$name" swift run --package-path "$ROOT_DIR" ClawShellCLI status
+    capture_command "$name" swift run --package-path "$ROOT_DIR" AgentWakeCLI status
 }
 
 expect_cli_running() {
     local name="$1"
     if ! run_cli_status "$name"; then
-        echo "Expected ClawShell CLI status to reach the app during $name" >&2
+        echo "Expected AgentWake CLI status to reach the app during $name" >&2
         return 1
     fi
-    grep -q '^ClawShell ' "$EVIDENCE_DIR/$name.txt"
+    grep -q '^AgentWake ' "$EVIDENCE_DIR/$name.txt"
 }
 
 expect_cli_not_running() {
     local name="$1"
     if run_cli_status "$name"; then
-        echo "Expected ClawShell CLI status to fail after stop during $name" >&2
+        echo "Expected AgentWake CLI status to fail after stop during $name" >&2
         return 1
     fi
-    grep -q 'ClawShell is not running' "$EVIDENCE_DIR/$name.txt"
+    grep -q 'AgentWake is not running' "$EVIDENCE_DIR/$name.txt"
 }
 
 launch_staged_app() {
@@ -277,12 +277,12 @@ launch_staged_app() {
     fi
     if ! wait_for_staged_process_count 1; then
         capture_process_snapshot "$name-processes"
-        echo "Timed out waiting for one staged ClawShell process during $name" >&2
+        echo "Timed out waiting for one staged AgentWake process during $name" >&2
         return 1
     fi
     if ! single_staged_pid >"$EVIDENCE_DIR/$name.pid"; then
         capture_process_snapshot "$name-processes"
-        echo "Expected exactly one staged ClawShell process during $name" >&2
+        echo "Expected exactly one staged AgentWake process during $name" >&2
         return 1
     fi
     capture_process_snapshot "$name-processes"
@@ -391,14 +391,14 @@ mv "$OUTPUT_DIR/validation-config.redacted" "$OUTPUT_DIR/validation-config.txt"
 cat >"$OUTPUT_DIR/README.md" <<'EOF'
 # App Lifecycle Smoke
 
-This package captures live local evidence that the staged ClawShell app bundle
+This package captures live local evidence that the staged AgentWake app bundle
 can launch, quit through AppleEvent, relaunch, stop after SIGTERM, relaunch,
 tolerate a force-kill, and relaunch again while the CLI reachability state
 follows the process lifecycle.
 
 This smoke only targets the staged app process whose command starts with
-`dist/ClawShell.app/Contents/MacOS/ClawShell`. It does not terminate unrelated
-ClawShell installs, does not reboot the machine, and does not exercise Bag Mode
+`dist/AgentWake.app/Contents/MacOS/AgentWake`. It does not terminate unrelated
+AgentWake installs, does not reboot the machine, and does not exercise Bag Mode
 while armed.
 EOF
 

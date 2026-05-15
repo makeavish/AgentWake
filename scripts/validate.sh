@@ -24,8 +24,8 @@ discover_swift_test_developer_dir() {
     local candidate
     local selected_developer_dir
 
-    if [[ -n "${CLAWSHELL_SWIFT_TEST_DEVELOPER_DIR:-}" ]] &&
-       candidate="$(normalize_xcode_developer_dir "$CLAWSHELL_SWIFT_TEST_DEVELOPER_DIR")"; then
+    if [[ -n "${AGENTWAKE_SWIFT_TEST_DEVELOPER_DIR:-}" ]] &&
+       candidate="$(normalize_xcode_developer_dir "$AGENTWAKE_SWIFT_TEST_DEVELOPER_DIR")"; then
         printf '%s\n' "$candidate"
         return 0
     fi
@@ -95,19 +95,19 @@ swift --version
 echo "==> swift build"
 swift build
 
-echo "==> swift run ClawShellCoreChecks"
-swift run ClawShellCoreChecks
+echo "==> swift run AgentWakeCoreChecks"
+swift run AgentWakeCoreChecks
 
 echo "==> safety policy fail-closed proof"
 scripts/temperature-provider-fail-closed-proof.sh \
     --output-dir .build/temperature-provider-fail-closed-proof/validate-smoke
 
-echo "==> swift run ClawShell --smoke-test"
-swift run ClawShell --smoke-test
+echo "==> swift run AgentWake --smoke-test"
+swift run AgentWake --smoke-test
 
 echo "==> contract fixture slot check"
 for slot in adapters cli config-patchers control-server power; do
-    if [[ ! -d "Tests/ClawShellContractTests/Fixtures/$slot" ]]; then
+    if [[ ! -d "Tests/AgentWakeContractTests/Fixtures/$slot" ]]; then
         echo "Missing contract fixture slot directory: $slot" >&2
         exit 1
     fi
@@ -127,12 +127,12 @@ swift_test_classifier_known="$swift_test_classifier_dir/known.err"
 swift_test_classifier_mixed="$swift_test_classifier_dir/mixed.err"
 cat >"$swift_test_classifier_known" <<'EOF'
 error: emit-module command failed with exit code 1 (use -v to see invocation)
-/tmp/Test.swift:1:8: error: This toolchain does not provide Testing or XCTest. Run `swift run ClawShellCoreChecks` for portable checks.
+/tmp/Test.swift:1:8: error: This toolchain does not provide Testing or XCTest. Run `swift run AgentWakeCoreChecks` for portable checks.
 error: fatalError
 EOF
 cat >"$swift_test_classifier_mixed" <<'EOF'
 error: emit-module command failed with exit code 1 (use -v to see invocation)
-/tmp/Test.swift:1:8: error: This toolchain does not provide Testing or XCTest. Run `swift run ClawShellCoreChecks` for portable checks.
+/tmp/Test.swift:1:8: error: This toolchain does not provide Testing or XCTest. Run `swift run AgentWakeCoreChecks` for portable checks.
 /tmp/Other.swift:2:4: error: cannot find 'brokenSymbol' in scope
 EOF
 if ! swift_test_unavailable_only "$swift_test_classifier_known"; then
@@ -318,7 +318,7 @@ func readBoundedData(from url: URL, limit: Int) -> (Data, Bool) {
     return (data, false)
 }
 
-let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("clawshell-bounded-output-\(UUID().uuidString)")
+let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agentwake-bounded-output-\(UUID().uuidString)")
 try Data(repeating: 65, count: 2_000_005).write(to: url)
 defer {
     try? FileManager.default.removeItem(at: url)
@@ -396,12 +396,12 @@ exit 1
 EOF
 chmod +x "$timed_idle_fake_bin/pmset"
 if PATH="$timed_idle_fake_bin:$PATH" scripts/timed-idle-preflight.sh >"$timed_idle_guidance_output" 2>"$timed_idle_guidance_error"; then
-    echo "Timed idle preflight passed despite fake non-ClawShell blockers" >&2
+    echo "Timed idle preflight passed despite fake non-AgentWake blockers" >&2
     cat "$timed_idle_guidance_output" >&2
     exit 1
 fi
 if ! grep -q '^idleSleepThresholdExceeded=true$' "$timed_idle_guidance_output" ||
-   ! grep -q '^nonClawShellSleepBlockerCount=8$' "$timed_idle_guidance_output"; then
+   ! grep -q '^nonAgentWakeSleepBlockerCount=8$' "$timed_idle_guidance_output"; then
     echo "Timed idle preflight did not record expected threshold and blocker count" >&2
     cat "$timed_idle_guidance_output" >&2
     exit 1
@@ -571,8 +571,8 @@ if ! grep -q 'cleanupSucceeded=' scripts/app-clean-install-smoke.sh; then
     exit 1
 fi
 for required_app_clean_install_contract in \
-    'require_no_other_clawshell_processes' \
-    'CLAWSHELL_EXPECTED_PID' \
+    'require_no_other_agentwake_processes' \
+    'AGENTWAKE_EXPECTED_PID' \
     'installedProcessCommand' \
     'matchingInstalledProcessCount=' \
     'accessibilityStatusItemFound='
@@ -608,7 +608,7 @@ fi
 
 echo "==> packaging consent audit smoke"
 packaging_audit_fixture="$bag_mode_smoke_dir/packaging-consent-audit"
-packaging_audit_app="$packaging_audit_fixture/ClawShell.app"
+packaging_audit_app="$packaging_audit_fixture/AgentWake.app"
 mkdir -p "$packaging_audit_app/Contents/MacOS"
 cat >"$packaging_audit_app/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -616,18 +616,18 @@ cat >"$packaging_audit_app/Contents/Info.plist" <<'EOF'
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key>
-  <string>ClawShell</string>
+  <string>AgentWake</string>
   <key>CFBundleIdentifier</key>
-  <string>com.clawshell.app</string>
+  <string>com.makeavish.AgentWake</string>
   <key>CFBundleName</key>
-  <string>ClawShell</string>
+  <string>AgentWake</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
 </dict>
 </plist>
 EOF
-printf '#!/usr/bin/env bash\n' >"$packaging_audit_app/Contents/MacOS/ClawShell"
-chmod +x "$packaging_audit_app/Contents/MacOS/ClawShell"
+printf '#!/usr/bin/env bash\n' >"$packaging_audit_app/Contents/MacOS/AgentWake"
+chmod +x "$packaging_audit_app/Contents/MacOS/AgentWake"
 packaging_audit_pass="$packaging_audit_fixture/pass"
 scripts/packaging-consent-audit.sh \
     --output-dir "$packaging_audit_pass" \
@@ -646,7 +646,7 @@ if ! grep -q '^result=pass$' "$packaging_audit_no_rg/validation-config.txt"; the
     cat "$packaging_audit_no_rg/validation-config.txt" >&2
     exit 1
 fi
-packaging_audit_review_app="$packaging_audit_fixture/ClawShell-review.app"
+packaging_audit_review_app="$packaging_audit_fixture/AgentWake-review.app"
 cp -R "$packaging_audit_app" "$packaging_audit_review_app"
 mkdir -p "$packaging_audit_review_app/Contents/Library/LaunchDaemons"
 printf 'helper plist fixture\n' >"$packaging_audit_review_app/Contents/Library/LaunchDaemons/com.example.helper.plist"
@@ -663,7 +663,7 @@ if ! grep -q '^result=needs-review$' "$packaging_audit_review/validation-config.
     cat "$packaging_audit_review/validation-config.txt" >&2
     exit 1
 fi
-packaging_audit_privileged_app="$packaging_audit_fixture/ClawShell-privileged.app"
+packaging_audit_privileged_app="$packaging_audit_fixture/AgentWake-privileged.app"
 mkdir -p "$packaging_audit_privileged_app/Contents/MacOS"
 cat >"$packaging_audit_privileged_app/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -671,11 +671,11 @@ cat >"$packaging_audit_privileged_app/Contents/Info.plist" <<'EOF'
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key>
-  <string>ClawShell</string>
+  <string>AgentWake</string>
   <key>CFBundleIdentifier</key>
-  <string>com.clawshell.app</string>
+  <string>com.makeavish.AgentWake</string>
   <key>CFBundleName</key>
-  <string>ClawShell</string>
+  <string>AgentWake</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>SMPrivilegedExecutables</key>
@@ -686,8 +686,8 @@ cat >"$packaging_audit_privileged_app/Contents/Info.plist" <<'EOF'
 </dict>
 </plist>
 EOF
-printf '#!/usr/bin/env bash\n' >"$packaging_audit_privileged_app/Contents/MacOS/ClawShell"
-chmod +x "$packaging_audit_privileged_app/Contents/MacOS/ClawShell"
+printf '#!/usr/bin/env bash\n' >"$packaging_audit_privileged_app/Contents/MacOS/AgentWake"
+chmod +x "$packaging_audit_privileged_app/Contents/MacOS/AgentWake"
 packaging_audit_privileged="$packaging_audit_fixture/privileged"
 if scripts/packaging-consent-audit.sh \
     --output-dir "$packaging_audit_privileged" \
@@ -701,11 +701,11 @@ if ! grep -q '^smPrivilegedExecutablesPresent=true$' "$packaging_audit_privilege
     cat "$packaging_audit_privileged/validation-config.txt" >&2
     exit 1
 fi
-packaging_audit_invalid_plist_app="$packaging_audit_fixture/ClawShell-invalid-plist.app"
+packaging_audit_invalid_plist_app="$packaging_audit_fixture/AgentWake-invalid-plist.app"
 mkdir -p "$packaging_audit_invalid_plist_app/Contents/MacOS"
 printf 'not a plist\n' >"$packaging_audit_invalid_plist_app/Contents/Info.plist"
-printf '#!/usr/bin/env bash\n' >"$packaging_audit_invalid_plist_app/Contents/MacOS/ClawShell"
-chmod +x "$packaging_audit_invalid_plist_app/Contents/MacOS/ClawShell"
+printf '#!/usr/bin/env bash\n' >"$packaging_audit_invalid_plist_app/Contents/MacOS/AgentWake"
+chmod +x "$packaging_audit_invalid_plist_app/Contents/MacOS/AgentWake"
 packaging_audit_invalid_plist="$packaging_audit_fixture/invalid-plist"
 if scripts/packaging-consent-audit.sh \
     --output-dir "$packaging_audit_invalid_plist" \
@@ -725,7 +725,7 @@ mkdir -p "$packaging_audit_fake_root/Sources" "$packaging_audit_fake_root/script
 printf '// no package\n' >"$packaging_audit_fake_root/Package.swift"
 printf 'SMAppService.daemon(plistName: "com.example.helper.plist").register()\n' >"$packaging_audit_fake_root/Sources/App.swift"
 packaging_audit_source="$packaging_audit_fixture/source-match"
-if CLAWSHELL_PACKAGING_AUDIT_ROOT_DIR="$packaging_audit_fake_root" \
+if AGENTWAKE_PACKAGING_AUDIT_ROOT_DIR="$packaging_audit_fake_root" \
     scripts/packaging-consent-audit.sh \
         --output-dir "$packaging_audit_source" \
         --app-bundle "$packaging_audit_app" >/dev/null 2>"$bag_mode_smoke_error"; then
@@ -741,9 +741,9 @@ fi
 packaging_audit_artifact_root="$packaging_audit_fixture/artifact-root"
 mkdir -p "$packaging_audit_artifact_root/Sources" "$packaging_audit_artifact_root/script" "$packaging_audit_artifact_root/Casks"
 printf '// no package\n' >"$packaging_audit_artifact_root/Package.swift"
-printf '# cask fixture\n' >"$packaging_audit_artifact_root/Casks/clawshell.rb"
+printf '# cask fixture\n' >"$packaging_audit_artifact_root/Casks/agentwake.rb"
 packaging_audit_artifact="$packaging_audit_fixture/release-artifact"
-if CLAWSHELL_PACKAGING_AUDIT_ROOT_DIR="$packaging_audit_artifact_root" \
+if AGENTWAKE_PACKAGING_AUDIT_ROOT_DIR="$packaging_audit_artifact_root" \
     scripts/packaging-consent-audit.sh \
         --output-dir "$packaging_audit_artifact" \
         --app-bundle "$packaging_audit_app" >/dev/null 2>"$bag_mode_smoke_error"; then
@@ -759,9 +759,9 @@ fi
 packaging_audit_content_root="$packaging_audit_fixture/content-root"
 mkdir -p "$packaging_audit_content_root/Sources" "$packaging_audit_content_root/script" "$packaging_audit_content_root/.github/workflows"
 printf '// no package\n' >"$packaging_audit_content_root/Package.swift"
-printf 'steps:\n  - run: brew install --cask clawshell\n' >"$packaging_audit_content_root/.github/workflows/release.yml"
+printf 'steps:\n  - run: brew install --cask agentwake\n' >"$packaging_audit_content_root/.github/workflows/release.yml"
 packaging_audit_content="$packaging_audit_fixture/release-content"
-if CLAWSHELL_PACKAGING_AUDIT_ROOT_DIR="$packaging_audit_content_root" \
+if AGENTWAKE_PACKAGING_AUDIT_ROOT_DIR="$packaging_audit_content_root" \
     scripts/packaging-consent-audit.sh \
         --output-dir "$packaging_audit_content" \
         --app-bundle "$packaging_audit_app" >/dev/null 2>"$bag_mode_smoke_error"; then
@@ -783,7 +783,7 @@ if ! grep -q '^result=pass$' "$packaging_audit_stage/validation-config.txt"; the
     cat "$packaging_audit_stage/validation-config.txt" >&2
     exit 1
 fi
-if ! grep -q 'appBundle=.*/staged/ClawShell.app$' "$packaging_audit_stage/validation-config.txt"; then
+if ! grep -q 'appBundle=.*/staged/AgentWake.app$' "$packaging_audit_stage/validation-config.txt"; then
     echo "Packaging consent audit --stage-app did not audit the isolated staged bundle" >&2
     cat "$packaging_audit_stage/validation-config.txt" >&2
     exit 1
@@ -805,7 +805,7 @@ fi
 echo "==> release packaging smoke"
 scripts/package-release.sh --help >/dev/null
 for required_release_packaging_contract in \
-    'artifactFormat=clawshell-release-artifact-v1' \
+    'artifactFormat=agentwake-release-artifact-v1' \
     'bagMode=unavailable' \
     'helperInstalled=false' \
     'CFBundleShortVersionString' \
@@ -821,10 +821,10 @@ scripts/package-release.sh \
     --version v0.0.0 \
     --allow-dirty \
     --output-dir "$release_package_output" >/dev/null
-release_package_manifest="$release_package_output/ClawShell-v0.0.0-manifest.txt"
-release_package_zip="$release_package_output/ClawShell-v0.0.0-macos.zip"
+release_package_manifest="$release_package_output/AgentWake-v0.0.0-manifest.txt"
+release_package_zip="$release_package_output/AgentWake-v0.0.0-macos.zip"
 release_package_sha="$release_package_zip.sha256"
-release_package_app="$release_package_output/ClawShell-v0.0.0/ClawShell.app"
+release_package_app="$release_package_output/AgentWake-v0.0.0/AgentWake.app"
 if [[ ! -d "$release_package_app" || ! -s "$release_package_zip" || ! -s "$release_package_sha" ]]; then
     echo "Release packaging smoke did not produce app, zip, and checksum artifacts" >&2
     exit 1
@@ -841,7 +841,7 @@ if ! grep -q '^dirtyTree=true$' "$release_package_manifest"; then
     cat "$release_package_manifest" >&2
     exit 1
 fi
-release_package_dirty_marker="$ROOT_DIR/.clawshell-validate-dirty-marker"
+release_package_dirty_marker="$ROOT_DIR/.agentwake-validate-dirty-marker"
 rm -f "$release_package_dirty_marker"
 printf 'validate dirty-tree packaging guard\n' >"$release_package_dirty_marker"
 if scripts/package-release.sh \
@@ -942,14 +942,14 @@ esac
 EOF
 cat >"$bag_mode_apply_bin/pmset" <<'EOF'
 #!/usr/bin/env bash
-state_file="${CLAWSHELL_FAKE_PMSET_STATE:?}"
-log_file="${CLAWSHELL_FAKE_PMSET_LOG:?}"
+state_file="${AGENTWAKE_FAKE_PMSET_STATE:?}"
+log_file="${AGENTWAKE_FAKE_PMSET_LOG:?}"
 printf '%s\n' "$*" >>"$log_file"
 if [[ "${1:-}" == "-g" && "${2:-}" == "custom" ]]; then
     printf 'Battery Power:\n'
-    if [[ "${CLAWSHELL_FAKE_PMSET_EMPTY_DISABLESLEEP_ON_READ:-0}" == "1" ]]; then
+    if [[ "${AGENTWAKE_FAKE_PMSET_EMPTY_DISABLESLEEP_ON_READ:-0}" == "1" ]]; then
         printf ' disablesleep\n'
-    elif [[ "${CLAWSHELL_FAKE_PMSET_OMIT_DISABLESLEEP_ON_READ:-0}" != "1" ]]; then
+    elif [[ "${AGENTWAKE_FAKE_PMSET_OMIT_DISABLESLEEP_ON_READ:-0}" != "1" ]]; then
         printf ' disablesleep %s\n' "$(cat "$state_file")"
     fi
     exit 0
@@ -977,10 +977,10 @@ scripts/bag-mode-primitive-validation.sh \
     --output-dir "$bag_mode_apply_transition" \
     --case-id validate-apply-transition >/dev/null
 PATH="$bag_mode_apply_bin:$PATH" \
-CLAWSHELL_BAG_MODE_PRIMITIVE_TEST_PMSET=1 \
-CLAWSHELL_PMSET_BIN="$bag_mode_apply_bin/pmset" \
-CLAWSHELL_FAKE_PMSET_STATE="$bag_mode_apply_state" \
-CLAWSHELL_FAKE_PMSET_LOG="$bag_mode_apply_log" \
+AGENTWAKE_BAG_MODE_PRIMITIVE_TEST_PMSET=1 \
+AGENTWAKE_PMSET_BIN="$bag_mode_apply_bin/pmset" \
+AGENTWAKE_FAKE_PMSET_STATE="$bag_mode_apply_state" \
+AGENTWAKE_FAKE_PMSET_LOG="$bag_mode_apply_log" \
     scripts/bag-mode-primitive-validation.sh \
         --output-dir "$bag_mode_apply_transition" \
         --case-id validate-apply-transition \
@@ -1046,11 +1046,11 @@ scripts/bag-mode-primitive-validation.sh \
     --output-dir "$bag_mode_apply_missing_transition" \
     --case-id validate-apply-missing-disablesleep >/dev/null
 PATH="$bag_mode_apply_bin:$PATH" \
-CLAWSHELL_BAG_MODE_PRIMITIVE_TEST_PMSET=1 \
-CLAWSHELL_PMSET_BIN="$bag_mode_apply_bin/pmset" \
-CLAWSHELL_FAKE_PMSET_STATE="$bag_mode_apply_missing_state" \
-CLAWSHELL_FAKE_PMSET_LOG="$bag_mode_apply_missing_log" \
-CLAWSHELL_FAKE_PMSET_OMIT_DISABLESLEEP_ON_READ=1 \
+AGENTWAKE_BAG_MODE_PRIMITIVE_TEST_PMSET=1 \
+AGENTWAKE_PMSET_BIN="$bag_mode_apply_bin/pmset" \
+AGENTWAKE_FAKE_PMSET_STATE="$bag_mode_apply_missing_state" \
+AGENTWAKE_FAKE_PMSET_LOG="$bag_mode_apply_missing_log" \
+AGENTWAKE_FAKE_PMSET_OMIT_DISABLESLEEP_ON_READ=1 \
     scripts/bag-mode-primitive-validation.sh \
         --output-dir "$bag_mode_apply_missing_transition" \
         --case-id validate-apply-missing-disablesleep \
@@ -1088,11 +1088,11 @@ scripts/bag-mode-primitive-validation.sh \
     --case-id validate-apply-empty-disablesleep >/dev/null
 set +e
 PATH="$bag_mode_apply_bin:$PATH" \
-CLAWSHELL_BAG_MODE_PRIMITIVE_TEST_PMSET=1 \
-CLAWSHELL_PMSET_BIN="$bag_mode_apply_bin/pmset" \
-CLAWSHELL_FAKE_PMSET_STATE="$bag_mode_apply_empty_state" \
-CLAWSHELL_FAKE_PMSET_LOG="$bag_mode_apply_empty_log" \
-CLAWSHELL_FAKE_PMSET_EMPTY_DISABLESLEEP_ON_READ=1 \
+AGENTWAKE_BAG_MODE_PRIMITIVE_TEST_PMSET=1 \
+AGENTWAKE_PMSET_BIN="$bag_mode_apply_bin/pmset" \
+AGENTWAKE_FAKE_PMSET_STATE="$bag_mode_apply_empty_state" \
+AGENTWAKE_FAKE_PMSET_LOG="$bag_mode_apply_empty_log" \
+AGENTWAKE_FAKE_PMSET_EMPTY_DISABLESLEEP_ON_READ=1 \
     scripts/bag-mode-primitive-validation.sh \
         --output-dir "$bag_mode_apply_empty_transition" \
         --case-id validate-apply-empty-disablesleep \
@@ -1614,7 +1614,7 @@ if ! grep -q 'not a directory' "$bag_mode_smoke_error"; then
 fi
 
 temperature_bad_env_dir="$bag_mode_smoke_dir/temperature-bad-env"
-if CLAWSHELL_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS=abc \
+if AGENTWAKE_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS=abc \
     scripts/temperature-provider-validation.sh --output-dir "$temperature_bad_env_dir" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature provider harness accepted an invalid timeout value" >&2
     exit 1
@@ -1632,7 +1632,7 @@ sleep 5
 EOF
 chmod +x "$temperature_timeout_bin/pmset"
 temperature_timeout_dir="$bag_mode_smoke_dir/temperature-timeout"
-CLAWSHELL_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS=1 \
+AGENTWAKE_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS=1 \
 PATH="$temperature_timeout_bin:$PATH" scripts/temperature-provider-validation.sh --output-dir "$temperature_timeout_dir" >/dev/null
 if ! grep -q '^timedOut=true$' "$temperature_timeout_dir/pmset-therm.status"; then
     echo "Temperature provider harness did not record timeout for hanging pmset command" >&2
@@ -1666,8 +1666,8 @@ EOF
 chmod +x "$temperature_fake_bin/swift" "$temperature_fake_bin/pmset" "$temperature_fake_bin/powermetrics" "$temperature_fake_bin/ioreg"
 
 temperature_fake_dir="$bag_mode_smoke_dir/temperature-fake"
-CLAWSHELL_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS=5 \
-CLAWSHELL_TEMPERATURE_PROVIDER_PROCESSINFO_TIMEOUT_SECONDS=5 \
+AGENTWAKE_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS=5 \
+AGENTWAKE_TEMPERATURE_PROVIDER_PROCESSINFO_TIMEOUT_SECONDS=5 \
 PATH="$temperature_fake_bin:$PATH" scripts/temperature-provider-validation.sh --output-dir "$temperature_fake_dir" >/dev/null
 if ! grep -q '^processInfoThermalState=fair$' "$temperature_fake_dir/validation-config.txt"; then
     echo "Temperature provider harness did not parse fake ProcessInfo output" >&2
@@ -1688,7 +1688,7 @@ fi
 
 echo "==> temperature provider alternate source probe smoke"
 temperature_alt_source_dir="$bag_mode_smoke_dir/temperature-alt-source"
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS=5 \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS=5 \
     scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_dir" >/dev/null
 for required_file in \
     validation-config.txt \
@@ -1811,7 +1811,7 @@ if ! grep -q 'Output directory is not empty' "$bag_mode_smoke_error"; then
     exit 1
 fi
 temperature_alt_source_bad_env="$bag_mode_smoke_dir/temperature-alt-source-bad-env"
-if CLAWSHELL_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS=abc \
+if AGENTWAKE_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS=abc \
     scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_bad_env" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature alternate source probe accepted an invalid timeout value" >&2
     exit 1
@@ -1821,7 +1821,7 @@ if [[ -e "$temperature_alt_source_bad_env" ]]; then
     exit 1
 fi
 temperature_alt_source_bad_lines="$bag_mode_smoke_dir/temperature-alt-source-bad-lines"
-if CLAWSHELL_TEMPERATURE_ALT_SOURCE_MAX_LINES=abc \
+if AGENTWAKE_TEMPERATURE_ALT_SOURCE_MAX_LINES=abc \
     scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_bad_lines" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature alternate source probe accepted an invalid max-lines value" >&2
     exit 1
@@ -1980,9 +1980,9 @@ PROBE
 EOF
 chmod +x "$temperature_alt_source_fake_bin/ioreport-probe"
 temperature_alt_source_fake="$bag_mode_smoke_dir/temperature-alt-source-fake"
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS=5 \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOHID_PROBE="$temperature_alt_source_fake_bin/iohid-probe" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREPORT_PROBE="$temperature_alt_source_fake_bin/ioreport-probe" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS=5 \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOHID_PROBE="$temperature_alt_source_fake_bin/iohid-probe" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOREPORT_PROBE="$temperature_alt_source_fake_bin/ioreport-probe" \
 PATH="$temperature_alt_source_fake_bin:$PATH" \
     scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_fake" >/dev/null
 for expected_key in \
@@ -2158,10 +2158,10 @@ exit 0
 EOF
 chmod +x "$temperature_alt_source_zero_bin/iohid-probe-zero" "$temperature_alt_source_zero_bin/ioreport-probe-zero" "$temperature_alt_source_zero_bin/ioreg" "$temperature_alt_source_zero_bin/hidutil"
 temperature_alt_source_fake_zero="$bag_mode_smoke_dir/temperature-alt-source-fake-zero-iohid"
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOHID_PROBE="$temperature_alt_source_zero_bin/iohid-probe-zero" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREPORT_PROBE="$temperature_alt_source_zero_bin/ioreport-probe-zero" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREG="$temperature_alt_source_zero_bin/ioreg" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_HIDUTIL="$temperature_alt_source_zero_bin/hidutil" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOHID_PROBE="$temperature_alt_source_zero_bin/iohid-probe-zero" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOREPORT_PROBE="$temperature_alt_source_zero_bin/ioreport-probe-zero" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOREG="$temperature_alt_source_zero_bin/ioreg" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_HIDUTIL="$temperature_alt_source_zero_bin/hidutil" \
     scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_fake_zero" >/dev/null
 if ! grep -q '^iohidProbeAvailable=true$' "$temperature_alt_source_fake_zero/validation-config.txt"; then
     echo "Temperature alternate source probe did not record zero-service IOHID probe availability" >&2
@@ -2195,10 +2195,10 @@ exit 42
 EOF
 chmod +x "$temperature_alt_source_failed_ioreport_bin/ioreport-probe-failed"
 temperature_alt_source_failed_ioreport="$bag_mode_smoke_dir/temperature-alt-source-failed-ioreport"
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOHID_PROBE="$temperature_alt_source_zero_bin/iohid-probe-zero" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREPORT_PROBE="$temperature_alt_source_failed_ioreport_bin/ioreport-probe-failed" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREG="$temperature_alt_source_zero_bin/ioreg" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_HIDUTIL="$temperature_alt_source_zero_bin/hidutil" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOHID_PROBE="$temperature_alt_source_zero_bin/iohid-probe-zero" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOREPORT_PROBE="$temperature_alt_source_failed_ioreport_bin/ioreport-probe-failed" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOREG="$temperature_alt_source_zero_bin/ioreg" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_HIDUTIL="$temperature_alt_source_zero_bin/hidutil" \
     scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_failed_ioreport" >/dev/null
 for expected_key in \
     ioreportProbeAvailable=false \
@@ -2237,10 +2237,10 @@ PROBE
 EOF
 chmod +x "$temperature_alt_source_bad_scale_bin/ioreport-probe-bad-scale"
 temperature_alt_source_bad_scale="$bag_mode_smoke_dir/temperature-alt-source-bad-scale"
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOHID_PROBE="$temperature_alt_source_zero_bin/iohid-probe-zero" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREPORT_PROBE="$temperature_alt_source_bad_scale_bin/ioreport-probe-bad-scale" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREG="$temperature_alt_source_zero_bin/ioreg" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_HIDUTIL="$temperature_alt_source_zero_bin/hidutil" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOHID_PROBE="$temperature_alt_source_zero_bin/iohid-probe-zero" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOREPORT_PROBE="$temperature_alt_source_bad_scale_bin/ioreport-probe-bad-scale" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOREG="$temperature_alt_source_zero_bin/ioreg" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_HIDUTIL="$temperature_alt_source_zero_bin/hidutil" \
     scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_bad_scale" >/dev/null
 for expected_key in \
     ioreportProbeAvailable=true \
@@ -2275,10 +2275,10 @@ PROBE
 EOF
 chmod +x "$temperature_alt_source_line_disagree_bin/ioreport-probe-line-disagree"
 temperature_alt_source_line_disagree="$bag_mode_smoke_dir/temperature-alt-source-line-disagree"
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOHID_PROBE="$temperature_alt_source_zero_bin/iohid-probe-zero" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREPORT_PROBE="$temperature_alt_source_line_disagree_bin/ioreport-probe-line-disagree" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREG="$temperature_alt_source_zero_bin/ioreg" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_HIDUTIL="$temperature_alt_source_zero_bin/hidutil" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOHID_PROBE="$temperature_alt_source_zero_bin/iohid-probe-zero" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOREPORT_PROBE="$temperature_alt_source_line_disagree_bin/ioreport-probe-line-disagree" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOREG="$temperature_alt_source_zero_bin/ioreg" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_HIDUTIL="$temperature_alt_source_zero_bin/hidutil" \
     scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_line_disagree" >/dev/null
 for expected_key in \
     ioreportProbeAvailable=true \
@@ -2302,7 +2302,7 @@ temperature_alt_source_hanging_marker="$bag_mode_smoke_dir/temperature-alt-sourc
 cat >"$temperature_alt_source_hanging_clang_bin/hanging-clang" <<'EOF'
 #!/usr/bin/env bash
 trap '' TERM
-sh -c 'trap "" TERM; tail -f "$1" >/dev/null' sh "$CLAWSHELL_FAKE_CLANG_MARKER" &
+sh -c 'trap "" TERM; tail -f "$1" >/dev/null' sh "$AGENTWAKE_FAKE_CLANG_MARKER" &
 wait
 EOF
 cat >"$temperature_alt_source_hanging_clang_bin/ioreg" <<'EOF'
@@ -2315,11 +2315,11 @@ exit 0
 EOF
 chmod +x "$temperature_alt_source_hanging_clang_bin/hanging-clang" "$temperature_alt_source_hanging_clang_bin/ioreg" "$temperature_alt_source_hanging_clang_bin/hidutil"
 temperature_alt_source_hanging_clang="$bag_mode_smoke_dir/temperature-alt-source-hanging-clang"
-CLAWSHELL_FAKE_CLANG_MARKER="$temperature_alt_source_hanging_marker" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS=1 \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_CLANG="$temperature_alt_source_hanging_clang_bin/hanging-clang" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_IOREG="$temperature_alt_source_hanging_clang_bin/ioreg" \
-CLAWSHELL_TEMPERATURE_ALT_SOURCE_HIDUTIL="$temperature_alt_source_hanging_clang_bin/hidutil" \
+AGENTWAKE_FAKE_CLANG_MARKER="$temperature_alt_source_hanging_marker" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_TIMEOUT_SECONDS=1 \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_CLANG="$temperature_alt_source_hanging_clang_bin/hanging-clang" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_IOREG="$temperature_alt_source_hanging_clang_bin/ioreg" \
+AGENTWAKE_TEMPERATURE_ALT_SOURCE_HIDUTIL="$temperature_alt_source_hanging_clang_bin/hidutil" \
     scripts/temperature-provider-alt-source-probe.sh --output-dir "$temperature_alt_source_hanging_clang" >/dev/null
 if ! grep -q '^timedOut=true$' "$temperature_alt_source_hanging_clang/evidence/iohid-service-probe-build.status"; then
     echo "Temperature alternate source probe did not time out hanging IOHID compiler" >&2
@@ -2383,7 +2383,7 @@ if ! grep -q 'Output directory is not empty' "$bag_mode_smoke_error"; then
 fi
 
 temperature_helper_bad_env_dir="$bag_mode_smoke_dir/temperature-helper-bad-env"
-if CLAWSHELL_TEMPERATURE_HELPER_READINESS_TIMEOUT_SECONDS=abc \
+if AGENTWAKE_TEMPERATURE_HELPER_READINESS_TIMEOUT_SECONDS=abc \
     scripts/temperature-provider-helper-readiness.sh --output-dir "$temperature_helper_bad_env_dir" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature helper readiness harness accepted an invalid timeout value" >&2
     exit 1
@@ -2421,7 +2421,7 @@ fi
 EOF
 chmod +x "$temperature_helper_timeout_bin/pmset" "$temperature_helper_timeout_bin/powermetrics" "$temperature_helper_timeout_bin/sudo"
 temperature_helper_timeout_dir="$bag_mode_smoke_dir/temperature-helper-timeout"
-CLAWSHELL_TEMPERATURE_HELPER_READINESS_TIMEOUT_SECONDS=1 \
+AGENTWAKE_TEMPERATURE_HELPER_READINESS_TIMEOUT_SECONDS=1 \
 PATH="$temperature_helper_timeout_bin:$PATH" \
     scripts/temperature-provider-helper-readiness.sh --output-dir "$temperature_helper_timeout_dir" >/dev/null
 if ! grep -q '^timedOut=true$' "$temperature_helper_timeout_dir/powermetrics-helper-sample.status"; then
@@ -2463,7 +2463,7 @@ EOF
 chmod +x "$temperature_helper_fake_bin/pmset" "$temperature_helper_fake_bin/powermetrics" "$temperature_helper_fake_bin/sudo"
 
 temperature_helper_password_dir="$bag_mode_smoke_dir/temperature-helper-password-required"
-CLAWSHELL_TEMPERATURE_HELPER_READINESS_TIMEOUT_SECONDS=5 \
+AGENTWAKE_TEMPERATURE_HELPER_READINESS_TIMEOUT_SECONDS=5 \
 PATH="$temperature_helper_fake_bin:$PATH" \
     scripts/temperature-provider-helper-readiness.sh --output-dir "$temperature_helper_password_dir" >/dev/null
 if ! grep -q '^sudoNonInteractiveAvailable=false$' "$temperature_helper_password_dir/validation-config.txt"; then
@@ -2505,7 +2505,7 @@ EOF
 chmod +x "$temperature_helper_fake_bin/sudo"
 
 temperature_helper_available_dir="$bag_mode_smoke_dir/temperature-helper-available"
-CLAWSHELL_TEMPERATURE_HELPER_READINESS_TIMEOUT_SECONDS=5 \
+AGENTWAKE_TEMPERATURE_HELPER_READINESS_TIMEOUT_SECONDS=5 \
 PATH="$temperature_helper_fake_bin:$PATH" \
     scripts/temperature-provider-helper-readiness.sh --output-dir "$temperature_helper_available_dir" >/dev/null
 if ! grep -q '^sudoNonInteractiveAvailable=true$' "$temperature_helper_available_dir/validation-config.txt"; then
@@ -2626,7 +2626,7 @@ if ! grep -q 'Output directory is not empty' "$bag_mode_smoke_error"; then
     exit 1
 fi
 temperature_powermetrics_bad_env="$bag_mode_smoke_dir/temperature-powermetrics-bad-env"
-if CLAWSHELL_TEMPERATURE_PROOF_TIMEOUT_SECONDS=abc \
+if AGENTWAKE_TEMPERATURE_PROOF_TIMEOUT_SECONDS=abc \
     scripts/temperature-provider-powermetrics-proof.sh --output-dir "$temperature_powermetrics_bad_env" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature powermetrics proof attempt accepted an invalid timeout value" >&2
     exit 1
@@ -2738,7 +2738,7 @@ chmod +x \
     "$temperature_powermetrics_timeout_bin/sudo" \
     "$temperature_powermetrics_timeout_bin/swift"
 temperature_powermetrics_timeout="$bag_mode_smoke_dir/temperature-powermetrics-timeout"
-CLAWSHELL_TEMPERATURE_PROOF_TIMEOUT_SECONDS=1 \
+AGENTWAKE_TEMPERATURE_PROOF_TIMEOUT_SECONDS=1 \
 PATH="$temperature_powermetrics_timeout_bin:$PATH" \
     scripts/temperature-provider-powermetrics-proof.sh --output-dir "$temperature_powermetrics_timeout" >/dev/null
 if ! grep -q '^timedOut=true$' "$temperature_powermetrics_timeout/evidence/numeric-temperature-output.status"; then
@@ -2804,7 +2804,7 @@ chmod +x \
     "$temperature_powermetrics_fake_bin/sudo" \
     "$temperature_powermetrics_fake_bin/swift"
 temperature_powermetrics_available="$bag_mode_smoke_dir/temperature-powermetrics-available"
-CLAWSHELL_TEMPERATURE_PROOF_TIMEOUT_SECONDS=5 \
+AGENTWAKE_TEMPERATURE_PROOF_TIMEOUT_SECONDS=5 \
 PATH="$temperature_powermetrics_fake_bin:$PATH" \
     scripts/temperature-provider-powermetrics-proof.sh --output-dir "$temperature_powermetrics_available" >/dev/null
 if ! grep -q '^helperOwned=false$' "$temperature_powermetrics_available/validation-config.txt"; then
@@ -2849,8 +2849,8 @@ for required_file in \
     manual-result.md \
     provider-manifest.tsv \
     README.md \
-    ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype \
-    ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon \
+    AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeTemperatureProviderPrototype \
+    AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeTemperatureProviderPrototypeDaemon \
     evidence/provider-command-or-api.txt \
     evidence/processinfo-supplemental-signal.txt \
     evidence/helper-ownership-model.txt \
@@ -2889,12 +2889,12 @@ case "$temperature_smappservice_provider_prepare_identity" in
         exit 1
         ;;
 esac
-if [[ "$temperature_smappservice_provider_prepare_label" != "com.makeavish.ClawShell.TemperatureProviderPrototype.$temperature_smappservice_provider_prepare_identity.daemon" ]]; then
+if [[ "$temperature_smappservice_provider_prepare_label" != "com.makeavish.AgentWake.TemperatureProviderPrototype.$temperature_smappservice_provider_prepare_identity.daemon" ]]; then
     echo "Temperature SMAppService provider harness did not derive helper label from identity suffix" >&2
     cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
     exit 1
 fi
-if [[ "$temperature_smappservice_provider_prepare_bundle" != "com.makeavish.ClawShell.TemperatureProviderPrototype.$temperature_smappservice_provider_prepare_identity" ]]; then
+if [[ "$temperature_smappservice_provider_prepare_bundle" != "com.makeavish.AgentWake.TemperatureProviderPrototype.$temperature_smappservice_provider_prepare_identity" ]]; then
     echo "Temperature SMAppService provider harness did not derive bundle id from identity suffix" >&2
     cat "$temperature_smappservice_provider_prepare/validation-config.txt" >&2
     exit 1
@@ -2946,7 +2946,7 @@ if ! grep -q '"thermal"' "$temperature_smappservice_provider_prepare/evidence/pr
     exit 1
 fi
 temperature_smappservice_provider_no_initial="$bag_mode_smoke_dir/temperature-smappservice-provider-no-initial"
-CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE=false \
+AGENTWAKE_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE=false \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_no_initial" >/dev/null
 if ! grep -q '^showInitialUsage=false$' "$temperature_smappservice_provider_no_initial/validation-config.txt"; then
     echo "Temperature SMAppService provider harness did not record disabled initial-usage mode" >&2
@@ -2966,7 +2966,7 @@ if [[ "$temperature_smappservice_provider_no_initial_label" == "$temperature_sma
     exit 1
 fi
 temperature_smappservice_provider_all_samplers="$bag_mode_smoke_dir/temperature-smappservice-provider-all-samplers"
-CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=all \
+AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=all \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_all_samplers" >/dev/null
 if ! grep -q '^powermetricsSamplers=all$' "$temperature_smappservice_provider_all_samplers/validation-config.txt"; then
     echo "Temperature SMAppService provider harness did not record explicit powermetrics samplers" >&2
@@ -2979,16 +2979,16 @@ if ! grep -q -- '--powermetrics-samplers' "$temperature_smappservice_provider_al
     cat "$temperature_smappservice_provider_all_samplers/evidence/provider-command-or-api.txt" >&2
     exit 1
 fi
-if ! grep -q 'let powermetricsSamplers = argumentValue(after: "--powermetrics-samplers") ?? "thermal"' "$temperature_smappservice_provider_all_samplers/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'let providerSource = argumentValue(after: "--provider-source") ?? "powermetrics"' "$temperature_smappservice_provider_all_samplers/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'var arguments = \["-n", "1", "-i", "\\(sampleRateMs)", "--samplers", powermetricsSamplers\]' "$temperature_smappservice_provider_all_samplers/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
+if ! grep -q 'let powermetricsSamplers = argumentValue(after: "--powermetrics-samplers") ?? "thermal"' "$temperature_smappservice_provider_all_samplers/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'let providerSource = argumentValue(after: "--provider-source") ?? "powermetrics"' "$temperature_smappservice_provider_all_samplers/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'var arguments = \["-n", "1", "-i", "\\(sampleRateMs)", "--samplers", powermetricsSamplers\]' "$temperature_smappservice_provider_all_samplers/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift"; then
     echo "Temperature SMAppService provider helper source did not consume the configured powermetrics sampler argument" >&2
-    cat "$temperature_smappservice_provider_all_samplers/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
+    cat "$temperature_smappservice_provider_all_samplers/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" >&2
     exit 1
 fi
 temperature_smappservice_provider_ioreg_smc="$bag_mode_smoke_dir/temperature-smappservice-provider-ioreg-smc"
-CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc \
-    CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
+AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc \
+    AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_ioreg_smc" >/dev/null
 if ! grep -q '^providerSource=ioreg-smc$' "$temperature_smappservice_provider_ioreg_smc/validation-config.txt"; then
     echo "Temperature SMAppService provider harness did not record ioreg-smc provider source" >&2
@@ -3011,33 +3011,33 @@ if ! grep -q -- '--provider-source' "$temperature_smappservice_provider_ioreg_sm
     cat "$temperature_smappservice_provider_ioreg_smc/evidence/provider-command-or-api.txt" >&2
     exit 1
 fi
-if ! grep -q 'case "ioreg-smc"' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'AppleSMCKeysEndpoint' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
+if ! grep -q 'case "ioreg-smc"' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'AppleSMCKeysEndpoint' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift"; then
     echo "Temperature SMAppService provider helper source did not include ioreg-smc command path" >&2
-    cat "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
+    cat "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" >&2
     exit 1
 fi
-if ! grep -q 'readBoundedData' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'outputByteLimit = 2_000_000' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'read(upToCount: limit + 1)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'FileHandle(forWritingTo: stdoutURL)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'String(decoding: stdoutData.0, as: UTF8.self)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'stdoutBytes=\\(stdoutByteCount)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
+if ! grep -q 'readBoundedData' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'outputByteLimit = 2_000_000' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'read(upToCount: limit + 1)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'FileHandle(forWritingTo: stdoutURL)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'String(decoding: stdoutData.0, as: UTF8.self)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'stdoutBytes=\\(stdoutByteCount)' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift"; then
     echo "Temperature SMAppService provider helper source did not include bounded file-backed output capture" >&2
-    cat "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
+    cat "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" >&2
     exit 1
 fi
-if ! grep -q 'ioregSMCNumericTemperatureAnalysis' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'AppleSmartBatteryManager' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'numericTemperatureRejectedBatteryContextCount' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'ioreg-smc-battery-context-only' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
+if ! grep -q 'ioregSMCNumericTemperatureAnalysis' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'AppleSmartBatteryManager' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'numericTemperatureRejectedBatteryContextCount' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'ioreg-smc-battery-context-only' "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift"; then
     echo "Temperature SMAppService provider helper source did not reject ioreg-smc battery-context temperature candidates" >&2
-    cat "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
+    cat "$temperature_smappservice_provider_ioreg_smc/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" >&2
     exit 1
 fi
 temperature_smappservice_provider_ioreg_pmu="$bag_mode_smoke_dir/temperature-smappservice-provider-ioreg-pmu"
-CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu \
-    CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
+AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu \
+    AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_ioreg_pmu" >/dev/null
 if ! grep -q '^providerSource=ioreg-pmu$' "$temperature_smappservice_provider_ioreg_pmu/validation-config.txt"; then
     echo "Temperature SMAppService provider harness did not record ioreg-pmu provider source" >&2
@@ -3060,15 +3060,15 @@ if ! grep -q -- '--provider-source' "$temperature_smappservice_provider_ioreg_pm
     cat "$temperature_smappservice_provider_ioreg_pmu/evidence/provider-command-or-api.txt" >&2
     exit 1
 fi
-if ! grep -q 'case "ioreg-pmu"' "$temperature_smappservice_provider_ioreg_pmu/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'AppleARMPMUTempSensor' "$temperature_smappservice_provider_ioreg_pmu/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
+if ! grep -q 'case "ioreg-pmu"' "$temperature_smappservice_provider_ioreg_pmu/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'AppleARMPMUTempSensor' "$temperature_smappservice_provider_ioreg_pmu/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift"; then
     echo "Temperature SMAppService provider helper source did not include ioreg-pmu command path" >&2
-    cat "$temperature_smappservice_provider_ioreg_pmu/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
+    cat "$temperature_smappservice_provider_ioreg_pmu/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" >&2
     exit 1
 fi
 temperature_smappservice_provider_ioreg_smc_dispatcher="$bag_mode_smoke_dir/temperature-smappservice-provider-ioreg-smc-dispatcher"
-CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc-dispatcher \
-    CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
+AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc-dispatcher \
+    AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_ioreg_smc_dispatcher" >/dev/null
 if ! grep -q '^providerSource=ioreg-smc-dispatcher$' "$temperature_smappservice_provider_ioreg_smc_dispatcher/validation-config.txt"; then
     echo "Temperature SMAppService provider harness did not record ioreg-smc-dispatcher provider source" >&2
@@ -3091,15 +3091,15 @@ if ! grep -q -- '--provider-source' "$temperature_smappservice_provider_ioreg_sm
     cat "$temperature_smappservice_provider_ioreg_smc_dispatcher/evidence/provider-command-or-api.txt" >&2
     exit 1
 fi
-if ! grep -q 'case "ioreg-smc-dispatcher"' "$temperature_smappservice_provider_ioreg_smc_dispatcher/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'AppleSMCSensorDispatcher' "$temperature_smappservice_provider_ioreg_smc_dispatcher/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
+if ! grep -q 'case "ioreg-smc-dispatcher"' "$temperature_smappservice_provider_ioreg_smc_dispatcher/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'AppleSMCSensorDispatcher' "$temperature_smappservice_provider_ioreg_smc_dispatcher/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift"; then
     echo "Temperature SMAppService provider helper source did not include ioreg-smc-dispatcher command path" >&2
-    cat "$temperature_smappservice_provider_ioreg_smc_dispatcher/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
+    cat "$temperature_smappservice_provider_ioreg_smc_dispatcher/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" >&2
     exit 1
 fi
 temperature_smappservice_provider_thermal_levels="$bag_mode_smoke_dir/temperature-smappservice-provider-thermal-levels"
-CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=thermal-levels \
-    CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
+AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=thermal-levels \
+    AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_thermal_levels" >/dev/null
 if ! grep -q '^providerSource=thermal-levels$' "$temperature_smappservice_provider_thermal_levels/validation-config.txt"; then
     echo "Temperature SMAppService provider harness did not record thermal-levels provider source" >&2
@@ -3122,16 +3122,16 @@ if ! grep -q -- '--provider-source' "$temperature_smappservice_provider_thermal_
     cat "$temperature_smappservice_provider_thermal_levels/evidence/provider-command-or-api.txt" >&2
     exit 1
 fi
-if ! grep -q 'case "thermal-levels"' "$temperature_smappservice_provider_thermal_levels/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'let thermalPath = "/usr/bin/thermal"' "$temperature_smappservice_provider_thermal_levels/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -Fq 'commandArguments = ["levels"]' "$temperature_smappservice_provider_thermal_levels/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
+if ! grep -q 'case "thermal-levels"' "$temperature_smappservice_provider_thermal_levels/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'let thermalPath = "/usr/bin/thermal"' "$temperature_smappservice_provider_thermal_levels/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -Fq 'commandArguments = ["levels"]' "$temperature_smappservice_provider_thermal_levels/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift"; then
     echo "Temperature SMAppService provider helper source did not include thermal-levels command path" >&2
-    cat "$temperature_smappservice_provider_thermal_levels/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
+    cat "$temperature_smappservice_provider_thermal_levels/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" >&2
     exit 1
 fi
 temperature_smappservice_provider_ioreport_ans2="$bag_mode_smoke_dir/temperature-smappservice-provider-ioreport-ans2"
-CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreport-ans2 \
-    CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
+AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreport-ans2 \
+    AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_ioreport_ans2" >/dev/null
 if ! grep -q '^providerSource=ioreport-ans2$' "$temperature_smappservice_provider_ioreport_ans2/validation-config.txt"; then
     echo "Temperature SMAppService provider harness did not record ioreport-ans2 provider source" >&2
@@ -3154,33 +3154,33 @@ if ! grep -q -- '--provider-source' "$temperature_smappservice_provider_ioreport
     cat "$temperature_smappservice_provider_ioreport_ans2/evidence/provider-command-or-api.txt" >&2
     exit 1
 fi
-if [[ ! -x "$temperature_smappservice_provider_ioreport_ans2/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellIOReportTemperatureProbe" ]]; then
+if [[ ! -x "$temperature_smappservice_provider_ioreport_ans2/AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeIOReportTemperatureProbe" ]]; then
     echo "Temperature SMAppService provider harness did not bundle the IOReport probe executable" >&2
-    ls -la "$temperature_smappservice_provider_ioreport_ans2/ClawShellTemperatureProviderPrototype.app/Contents/MacOS" >&2
+    ls -la "$temperature_smappservice_provider_ioreport_ans2/AgentWakeTemperatureProviderPrototype.app/Contents/MacOS" >&2
     exit 1
 fi
-if ! grep -q 'case "ioreport-ans2"' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'ClawShellIOReportTemperatureProbe' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'ioreportProbeFormatObserved' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'ioreportTemperatureLineCounts' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'ioreportLineCounts.sampleCount == ioreportSampleCount' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'ioreportLineCounts.scaleVerifiedCount == ioreportSampleCount' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'ioreportScaleVerified' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'ioreportReportedScaleVerified' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'ioreportReportedScaleVerifiedCount == ioreportSampleCount' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'let ioreportScaleVerifiedCount = ioreportSampleAccepted ? ioreportLineCounts.scaleVerifiedCount : 0' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'ioreportSampleCount > 0' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'ioreportTemperatureScaleVerified' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'let ioreportSampleAccepted = providerSource == "ioreport-ans2" &&' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q '!stdoutTruncated &&' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q '!stderrTruncated &&' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" || \
-    ! grep -q 'stderrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift"; then
+if ! grep -q 'case "ioreport-ans2"' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'AgentWakeIOReportTemperatureProbe' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'ioreportProbeFormatObserved' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'ioreportTemperatureLineCounts' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'ioreportLineCounts.sampleCount == ioreportSampleCount' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'ioreportLineCounts.scaleVerifiedCount == ioreportSampleCount' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'ioreportScaleVerified' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'ioreportReportedScaleVerified' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'ioreportReportedScaleVerifiedCount == ioreportSampleCount' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'let ioreportScaleVerifiedCount = ioreportSampleAccepted ? ioreportLineCounts.scaleVerifiedCount : 0' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'ioreportSampleCount > 0' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'ioreportTemperatureScaleVerified' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'let ioreportSampleAccepted = providerSource == "ioreport-ans2" &&' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q '!stdoutTruncated &&' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q '!stderrTruncated &&' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" || \
+    ! grep -q 'stderrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty' "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift"; then
     echo "Temperature SMAppService provider helper source did not include ioreport-ans2 command path" >&2
-    cat "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/ClawShellTemperatureProviderPrototypeDaemon/main.swift" >&2
+    cat "$temperature_smappservice_provider_ioreport_ans2/source-package/Sources/AgentWakeTemperatureProviderPrototypeDaemon/main.swift" >&2
     exit 1
 fi
 temperature_smappservice_provider_multi_samplers="$bag_mode_smoke_dir/temperature-smappservice-provider-multi-samplers"
-CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=thermal,cpu_power \
+AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=thermal,cpu_power \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_multi_samplers" >/dev/null
 if ! grep -q '^powermetricsSamplers=thermal,cpu_power$' "$temperature_smappservice_provider_multi_samplers/validation-config.txt"; then
     echo "Temperature SMAppService provider harness did not record comma-separated powermetrics samplers" >&2
@@ -3194,19 +3194,19 @@ if ! grep -q -- '--powermetrics-samplers' "$temperature_smappservice_provider_mu
     exit 1
 fi
 temperature_smappservice_provider_manual_identity="$bag_mode_smoke_dir/temperature-smappservice-provider-manual-identity"
-CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX=manual01 \
+AGENTWAKE_TEMPERATURE_PROVIDER_ID_SUFFIX=manual01 \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_manual_identity" >/dev/null
 if ! grep -q '^identitySuffix=manual01$' "$temperature_smappservice_provider_manual_identity/validation-config.txt"; then
     echo "Temperature SMAppService provider harness did not record explicit identity suffix" >&2
     cat "$temperature_smappservice_provider_manual_identity/validation-config.txt" >&2
     exit 1
 fi
-if ! grep -q '^helperLabel=com.makeavish.ClawShell.TemperatureProviderPrototype.manual01.daemon$' "$temperature_smappservice_provider_manual_identity/validation-config.txt"; then
+if ! grep -q '^helperLabel=com.makeavish.AgentWake.TemperatureProviderPrototype.manual01.daemon$' "$temperature_smappservice_provider_manual_identity/validation-config.txt"; then
     echo "Temperature SMAppService provider harness did not derive helper label from explicit identity suffix" >&2
     cat "$temperature_smappservice_provider_manual_identity/validation-config.txt" >&2
     exit 1
 fi
-if ! grep -q '^appBundleIdentifier=com.makeavish.ClawShell.TemperatureProviderPrototype.manual01$' "$temperature_smappservice_provider_manual_identity/validation-config.txt"; then
+if ! grep -q '^appBundleIdentifier=com.makeavish.AgentWake.TemperatureProviderPrototype.manual01$' "$temperature_smappservice_provider_manual_identity/validation-config.txt"; then
     echo "Temperature SMAppService provider harness did not derive bundle id from explicit identity suffix" >&2
     cat "$temperature_smappservice_provider_manual_identity/validation-config.txt" >&2
     exit 1
@@ -3293,7 +3293,7 @@ fi
 temperature_smappservice_provider_missing_plist="$bag_mode_smoke_dir/temperature-smappservice-provider-missing-plist"
 cp -R "$temperature_smappservice_provider_prepare" "$temperature_smappservice_provider_missing_plist"
 temperature_smappservice_provider_missing_plist_label="$(awk -F= '$1 == "helperLabel" { print $2; found = 1 } END { exit !found }' "$temperature_smappservice_provider_missing_plist/validation-config.txt")"
-rm -f "$temperature_smappservice_provider_missing_plist/ClawShellTemperatureProviderPrototype.app/Contents/Library/LaunchDaemons/$temperature_smappservice_provider_missing_plist_label.plist"
+rm -f "$temperature_smappservice_provider_missing_plist/AgentWakeTemperatureProviderPrototype.app/Contents/Library/LaunchDaemons/$temperature_smappservice_provider_missing_plist_label.plist"
 if scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_missing_plist" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature SMAppService provider harness accepted existing artifact without LaunchDaemon plist" >&2
     exit 1
@@ -3305,8 +3305,8 @@ fi
 temperature_smappservice_provider_mismatched_plist_label="$bag_mode_smoke_dir/temperature-smappservice-provider-mismatched-plist-label"
 cp -R "$temperature_smappservice_provider_prepare" "$temperature_smappservice_provider_mismatched_plist_label"
 temperature_smappservice_provider_mismatched_plist_label_value="$(awk -F= '$1 == "helperLabel" { print $2; found = 1 } END { exit !found }' "$temperature_smappservice_provider_mismatched_plist_label/validation-config.txt")"
-plutil -replace Label -string "com.makeavish.ClawShell.TemperatureProviderPrototype.stale.daemon" \
-    "$temperature_smappservice_provider_mismatched_plist_label/ClawShellTemperatureProviderPrototype.app/Contents/Library/LaunchDaemons/$temperature_smappservice_provider_mismatched_plist_label_value.plist"
+plutil -replace Label -string "com.makeavish.AgentWake.TemperatureProviderPrototype.stale.daemon" \
+    "$temperature_smappservice_provider_mismatched_plist_label/AgentWakeTemperatureProviderPrototype.app/Contents/Library/LaunchDaemons/$temperature_smappservice_provider_mismatched_plist_label_value.plist"
 if scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_mismatched_plist_label" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature SMAppService provider harness accepted existing artifact with mismatched LaunchDaemon Label" >&2
     exit 1
@@ -3340,10 +3340,10 @@ temperature_smappservice_provider_register_fake_label="$(awk -F= '$1 == "helperL
     printf '%s\n' '    ;;'
     printf '%s\n' '  *) exit 64 ;;'
     printf '%s\n' 'esac'
-} >"$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype"
-printf '#!/usr/bin/env bash\nexit 0\n' >"$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon"
-chmod +x "$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype" \
-    "$temperature_smappservice_provider_register_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon"
+} >"$temperature_smappservice_provider_register_fake/AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeTemperatureProviderPrototype"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$temperature_smappservice_provider_register_fake/AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeTemperatureProviderPrototypeDaemon"
+chmod +x "$temperature_smappservice_provider_register_fake/AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeTemperatureProviderPrototype" \
+    "$temperature_smappservice_provider_register_fake/AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeTemperatureProviderPrototypeDaemon"
 scripts/temperature-provider-smappservice-proof.sh \
     --output-dir "$temperature_smappservice_provider_register_fake" \
     --register \
@@ -3383,8 +3383,8 @@ if [[ ! -s "$temperature_smappservice_provider_register_fake/register-capture.md
 fi
 temperature_smappservice_provider_register_symlink_executable="$bag_mode_smoke_dir/temperature-smappservice-provider-register-symlink-executable"
 cp -R "$temperature_smappservice_provider_register_fake" "$temperature_smappservice_provider_register_symlink_executable"
-rm -f "$temperature_smappservice_provider_register_symlink_executable/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype"
-ln -s /bin/echo "$temperature_smappservice_provider_register_symlink_executable/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype"
+rm -f "$temperature_smappservice_provider_register_symlink_executable/AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeTemperatureProviderPrototype"
+ln -s /bin/echo "$temperature_smappservice_provider_register_symlink_executable/AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeTemperatureProviderPrototype"
 if scripts/temperature-provider-smappservice-proof.sh \
     --output-dir "$temperature_smappservice_provider_register_symlink_executable" \
     --register \
@@ -3442,7 +3442,7 @@ if ! grep -q "Output directory is not empty" "$bag_mode_smoke_error"; then
     exit 1
 fi
 temperature_smappservice_provider_bad_env="$bag_mode_smoke_dir/temperature-smappservice-provider-bad-env"
-if CLAWSHELL_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS=abc \
+if AGENTWAKE_TEMPERATURE_PROVIDER_TIMEOUT_SECONDS=abc \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_bad_env" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature SMAppService provider harness accepted an invalid timeout value" >&2
     exit 1
@@ -3452,12 +3452,12 @@ if [[ -e "$temperature_smappservice_provider_bad_env" ]]; then
     exit 1
 fi
 temperature_smappservice_provider_bad_bool="$bag_mode_smoke_dir/temperature-smappservice-provider-bad-bool"
-if CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE=maybe \
+if AGENTWAKE_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE=maybe \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_bad_bool" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature SMAppService provider harness accepted an invalid initial-usage flag" >&2
     exit 1
 fi
-if ! grep -q "CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE must be true or false" "$bag_mode_smoke_error"; then
+if ! grep -q "AGENTWAKE_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE must be true or false" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
@@ -3466,12 +3466,12 @@ if [[ -e "$temperature_smappservice_provider_bad_bool" ]]; then
     exit 1
 fi
 temperature_smappservice_provider_bad_source="$bag_mode_smoke_dir/temperature-smappservice-provider-bad-source"
-if CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=smc \
+if AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=smc \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_bad_source" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature SMAppService provider harness accepted an invalid provider source" >&2
     exit 1
 fi
-if ! grep -q "CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE must be one of: powermetrics, ioreg-smc, ioreg-pmu, ioreg-smc-dispatcher, thermal-levels, ioreport-ans2" "$bag_mode_smoke_error"; then
+if ! grep -q "AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE must be one of: powermetrics, ioreg-smc, ioreg-pmu, ioreg-smc-dispatcher, thermal-levels, ioreport-ans2" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
@@ -3480,12 +3480,12 @@ if [[ -e "$temperature_smappservice_provider_bad_source" ]]; then
     exit 1
 fi
 temperature_smappservice_provider_bad_suffix="$bag_mode_smoke_dir/temperature-smappservice-provider-bad-suffix"
-if CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX=bad-suffix \
+if AGENTWAKE_TEMPERATURE_PROVIDER_ID_SUFFIX=bad-suffix \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_bad_suffix" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature SMAppService provider harness accepted an invalid identity suffix" >&2
     exit 1
 fi
-if ! grep -q "CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX must start with a letter" "$bag_mode_smoke_error"; then
+if ! grep -q "AGENTWAKE_TEMPERATURE_PROVIDER_ID_SUFFIX must start with a letter" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
@@ -3494,7 +3494,7 @@ if [[ -e "$temperature_smappservice_provider_bad_suffix" ]]; then
     exit 1
 fi
 temperature_smappservice_provider_bad_samplers="$bag_mode_smoke_dir/temperature-smappservice-provider-bad-samplers"
-if CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
+if AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=smc \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_bad_samplers" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature SMAppService provider harness accepted an unsupported powermetrics sampler" >&2
     exit 1
@@ -3508,7 +3508,7 @@ if [[ -e "$temperature_smappservice_provider_bad_samplers" ]]; then
     exit 1
 fi
 temperature_smappservice_provider_newline_samplers="$bag_mode_smoke_dir/temperature-smappservice-provider-newline-samplers"
-if env $'CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=thermal\nsmc' \
+if env $'AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=thermal\nsmc' \
     scripts/temperature-provider-smappservice-proof.sh --output-dir "$temperature_smappservice_provider_newline_samplers" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Temperature SMAppService provider harness accepted a newline-delimited powermetrics sampler value" >&2
     exit 1
@@ -3529,7 +3529,7 @@ if ! grep -q "requires bash" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
-CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST=1m \
+AGENTWAKE_TEMPERATURE_PROVIDER_LOG_LAST=1m \
     scripts/temperature-provider-smappservice-proof.sh \
     --output-dir "$temperature_smappservice_provider_prepare" \
     --capture-post-approval >/dev/null
@@ -3598,7 +3598,7 @@ helperOwned=true
 numericTemperatureObserved=true
 runError=none
 EOF
-CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST=1m \
+AGENTWAKE_TEMPERATURE_PROVIDER_LOG_LAST=1m \
     scripts/temperature-provider-smappservice-proof.sh \
     --output-dir "$temperature_smappservice_provider_runtime_success" \
     --capture-post-approval >/dev/null
@@ -3648,7 +3648,7 @@ temperature_smappservice_provider_symlink_source="$bag_mode_smoke_dir/temperatur
 cp -R "$temperature_smappservice_provider_prepare" "$temperature_smappservice_provider_symlink_source"
 rm -f "$temperature_smappservice_provider_symlink_source/runtime/numeric-temperature-output.txt"
 ln -s /etc/hosts "$temperature_smappservice_provider_symlink_source/runtime/numeric-temperature-output.txt"
-CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST=1m \
+AGENTWAKE_TEMPERATURE_PROVIDER_LOG_LAST=1m \
     scripts/temperature-provider-smappservice-proof.sh \
     --output-dir "$temperature_smappservice_provider_symlink_source" \
     --capture-post-approval >/dev/null
@@ -3666,7 +3666,7 @@ temperature_smappservice_provider_non_regular_source="$bag_mode_smoke_dir/temper
 cp -R "$temperature_smappservice_provider_prepare" "$temperature_smappservice_provider_non_regular_source"
 rm -f "$temperature_smappservice_provider_non_regular_source/runtime/numeric-temperature-output.txt"
 mkdir "$temperature_smappservice_provider_non_regular_source/runtime/numeric-temperature-output.txt"
-CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST=1m \
+AGENTWAKE_TEMPERATURE_PROVIDER_LOG_LAST=1m \
     scripts/temperature-provider-smappservice-proof.sh \
     --output-dir "$temperature_smappservice_provider_non_regular_source" \
     --capture-post-approval >/dev/null
@@ -3705,11 +3705,11 @@ temperature_smappservice_provider_unregister_fake_label="$(awk -F= '$1 == "helpe
     printf '%s\n' '    ;;'
     printf '%s\n' '  *) exit 64 ;;'
     printf '%s\n' 'esac'
-} >"$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype"
-printf '#!/usr/bin/env bash\nexit 0\n' >"$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon"
-chmod +x "$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototype" \
-    "$temperature_smappservice_provider_unregister_fake/ClawShellTemperatureProviderPrototype.app/Contents/MacOS/ClawShellTemperatureProviderPrototypeDaemon"
-CLAWSHELL_TEMPERATURE_PROVIDER_LOG_LAST=1m \
+} >"$temperature_smappservice_provider_unregister_fake/AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeTemperatureProviderPrototype"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$temperature_smappservice_provider_unregister_fake/AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeTemperatureProviderPrototypeDaemon"
+chmod +x "$temperature_smappservice_provider_unregister_fake/AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeTemperatureProviderPrototype" \
+    "$temperature_smappservice_provider_unregister_fake/AgentWakeTemperatureProviderPrototype.app/Contents/MacOS/AgentWakeTemperatureProviderPrototypeDaemon"
+AGENTWAKE_TEMPERATURE_PROVIDER_LOG_LAST=1m \
     scripts/temperature-provider-smappservice-proof.sh \
     --output-dir "$temperature_smappservice_provider_unregister_fake" \
     --capture-unregister \
@@ -4203,7 +4203,7 @@ if ! grep -q 'Output directory is not empty' "$bag_mode_smoke_error"; then
 fi
 
 helper_bad_env_dir="$bag_mode_smoke_dir/helper-bad-env"
-if CLAWSHELL_HELPER_READINESS_TIMEOUT_SECONDS=abc \
+if AGENTWAKE_HELPER_READINESS_TIMEOUT_SECONDS=abc \
     scripts/helper-service-readiness.sh --output-dir "$helper_bad_env_dir" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Helper readiness harness accepted an invalid timeout value" >&2
     exit 1
@@ -4362,7 +4362,7 @@ sleep 5
 EOF
 chmod +x "$helper_timeout_bin/security"
 helper_timeout_dir="$bag_mode_smoke_dir/helper-timeout"
-CLAWSHELL_HELPER_READINESS_TIMEOUT_SECONDS=1 \
+AGENTWAKE_HELPER_READINESS_TIMEOUT_SECONDS=1 \
 PATH="$helper_timeout_bin:$PATH" scripts/helper-service-readiness.sh --output-dir "$helper_timeout_dir" >/dev/null
 if ! grep -q '^timedOut=true$' "$helper_timeout_dir/codesigning-identities.status"; then
     echo "Helper readiness harness did not record timeout for hanging security command" >&2
@@ -4379,9 +4379,9 @@ cat >"$helper_prototype_dir/validation-config.txt" <<'EOF'
 evidenceFormat=helper-prototype-v1
 metadataRedacted=true
 macOSVersion=15.0
-appBundleIdentifier=com.example.ClawShell
-helperLabel=com.example.ClawShell.Helper
-launchDaemonPlist=ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist
+appBundleIdentifier=com.example.AgentWake
+helperLabel=com.example.AgentWake.Helper
+launchDaemonPlist=AgentWake.app/Contents/Library/LaunchDaemons/com.example.AgentWake.Helper.plist
 helperInstallPath=smappservice
 localAuthModel=ad-hoc app/helper signature plus root-owned pairing token
 developerIDApplicationSigned=false
@@ -4395,8 +4395,8 @@ cat >"$helper_prototype_dir/manual-result.md" <<'EOF'
 ## Prototype Case
 - Case ID: validate-helper-smoke
 - macOS: 15.0
-- App bundle: /Applications/ClawShell.app
-- LaunchDaemon plist: ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist
+- App bundle: /Applications/AgentWake.app
+- LaunchDaemon plist: AgentWake.app/Contents/Library/LaunchDaemons/com.example.AgentWake.Helper.plist
 - Helper install path: smappservice
 - Helper install API/path: SMAppService.daemon(plistName:)
 
@@ -4469,11 +4469,11 @@ scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_manifes
 
 helper_prototype_fallback_dir="$bag_mode_smoke_dir/helper-prototype-fallback"
 cp -R "$helper_prototype_dir" "$helper_prototype_fallback_dir"
-sed -i '' 's#launchDaemonPlist=ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist#launchDaemonPlist=/Library/LaunchDaemons/com.example.ClawShell.Helper.plist#' "$helper_prototype_fallback_dir/validation-config.txt"
+sed -i '' 's#launchDaemonPlist=AgentWake.app/Contents/Library/LaunchDaemons/com.example.AgentWake.Helper.plist#launchDaemonPlist=/Library/LaunchDaemons/com.example.AgentWake.Helper.plist#' "$helper_prototype_fallback_dir/validation-config.txt"
 sed -i '' 's/helperInstallPath=smappservice/helperInstallPath=launchdaemon-fallback/' "$helper_prototype_fallback_dir/validation-config.txt"
-sed -i '' 's#- LaunchDaemon plist: ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist#- LaunchDaemon plist: /Library/LaunchDaemons/com.example.ClawShell.Helper.plist#' "$helper_prototype_fallback_dir/manual-result.md"
+sed -i '' 's#- LaunchDaemon plist: AgentWake.app/Contents/Library/LaunchDaemons/com.example.AgentWake.Helper.plist#- LaunchDaemon plist: /Library/LaunchDaemons/com.example.AgentWake.Helper.plist#' "$helper_prototype_fallback_dir/manual-result.md"
 sed -i '' 's/- Helper install path: smappservice/- Helper install path: launchdaemon-fallback/' "$helper_prototype_fallback_dir/manual-result.md"
-sed -i '' 's#- Helper install API/path: SMAppService.daemon(plistName:)#- Helper install API/path: launchctl bootstrap system /Library/LaunchDaemons/com.example.ClawShell.Helper.plist#' "$helper_prototype_fallback_dir/manual-result.md"
+sed -i '' 's#- Helper install API/path: SMAppService.daemon(plistName:)#- Helper install API/path: launchctl bootstrap system /Library/LaunchDaemons/com.example.AgentWake.Helper.plist#' "$helper_prototype_fallback_dir/manual-result.md"
 sed -i '' 's/- Install\/status transition: requiresApproval -> enabled/- Install\/status transition: bootout -> bootstrap -> running/' "$helper_prototype_fallback_dir/manual-result.md"
 printf '$ smappservice-rejection\ncaptured kSMErrorInvalidSignature fallback evidence\n' >"$helper_prototype_fallback_dir/evidence/smappservice-rejection.txt"
 sed -i '' 's#smappservice-rejection	n/a		SMAppService path used in this smoke#smappservice-rejection	evidence	evidence/smappservice-rejection.txt	fallback justified by SMAppService rejection#' "$helper_prototype_fallback_dir/prototype-manifest.tsv"
@@ -4493,8 +4493,8 @@ fi
 
 helper_prototype_fallback_bad_plist_dir="$bag_mode_smoke_dir/helper-prototype-fallback-bad-plist"
 cp -R "$helper_prototype_fallback_dir" "$helper_prototype_fallback_bad_plist_dir"
-sed -i '' 's#launchDaemonPlist=/Library/LaunchDaemons/com.example.ClawShell.Helper.plist#launchDaemonPlist=ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist#' "$helper_prototype_fallback_bad_plist_dir/validation-config.txt"
-sed -i '' 's#- LaunchDaemon plist: /Library/LaunchDaemons/com.example.ClawShell.Helper.plist#- LaunchDaemon plist: ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist#' "$helper_prototype_fallback_bad_plist_dir/manual-result.md"
+sed -i '' 's#launchDaemonPlist=/Library/LaunchDaemons/com.example.AgentWake.Helper.plist#launchDaemonPlist=AgentWake.app/Contents/Library/LaunchDaemons/com.example.AgentWake.Helper.plist#' "$helper_prototype_fallback_bad_plist_dir/validation-config.txt"
+sed -i '' 's#- LaunchDaemon plist: /Library/LaunchDaemons/com.example.AgentWake.Helper.plist#- LaunchDaemon plist: AgentWake.app/Contents/Library/LaunchDaemons/com.example.AgentWake.Helper.plist#' "$helper_prototype_fallback_bad_plist_dir/manual-result.md"
 if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_fallback_bad_plist_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Helper service prototype verifier accepted fallback without installed LaunchDaemon plist evidence" >&2
     exit 1
@@ -4590,11 +4590,11 @@ for required_file in validation-config.txt manual-result.md prototype-manifest.t
         exit 1
     fi
 done
-if [[ ! -x "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype" ]]; then
+if [[ ! -x "$helper_smappservice_prepare/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototype" ]]; then
     echo "SMAppService helper prototype harness did not build controller executable" >&2
     exit 1
 fi
-if [[ ! -x "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon" ]]; then
+if [[ ! -x "$helper_smappservice_prepare/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototypeDaemon" ]]; then
     echo "SMAppService helper prototype harness did not build helper executable" >&2
     exit 1
 fi
@@ -4606,11 +4606,11 @@ helper_smappservice_prepare_identity="$(awk -F= '$1 == "identitySuffix" { print 
 helper_smappservice_prepare_label="$(awk -F= '$1 == "helperLabel" { print $2; found = 1 } END { exit !found }' "$helper_smappservice_prepare/validation-config.txt")"
 rebase_helper_smappservice_launchdaemon() {
     local artifact_dir="$1"
-    local artifact_plist="$artifact_dir/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+    local artifact_plist="$artifact_dir/AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
     if [[ ! -f "$artifact_plist" ]]; then
         return 0
     fi
-    /usr/libexec/PlistBuddy -c "Set :ProgramArguments:0 $artifact_dir/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon" "$artifact_plist"
+    /usr/libexec/PlistBuddy -c "Set :ProgramArguments:0 $artifact_dir/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototypeDaemon" "$artifact_plist"
     /usr/libexec/PlistBuddy -c "Set :ProgramArguments:5 $artifact_dir/runtime/helper.log" "$artifact_plist"
     /usr/libexec/PlistBuddy -c "Set :ProgramArguments:7 $artifact_dir/runtime/helper-ledger.jsonl" "$artifact_plist"
     /usr/libexec/PlistBuddy -c "Set :StandardOutPath $artifact_dir/runtime/helper.stdout.log" "$artifact_plist"
@@ -4621,17 +4621,17 @@ if [[ ! "$helper_smappservice_prepare_identity" =~ ^h[A-Fa-f0-9]{10}$ ]]; then
     cat "$helper_smappservice_prepare/validation-config.txt" >&2
     exit 1
 fi
-if [[ "$helper_smappservice_prepare_label" != "com.makeavish.ClawShell.HelperPrototype.$helper_smappservice_prepare_identity.daemon" ]]; then
+if [[ "$helper_smappservice_prepare_label" != "com.makeavish.AgentWake.HelperPrototype.$helper_smappservice_prepare_identity.daemon" ]]; then
     echo "SMAppService helper prototype harness did not record derived helper label" >&2
     cat "$helper_smappservice_prepare/validation-config.txt" >&2
     exit 1
 fi
-if ! grep -q "^appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.$helper_smappservice_prepare_identity$" "$helper_smappservice_prepare/validation-config.txt"; then
+if ! grep -q "^appBundleIdentifier=com.makeavish.AgentWake.HelperPrototype.$helper_smappservice_prepare_identity$" "$helper_smappservice_prepare/validation-config.txt"; then
     echo "SMAppService helper prototype harness did not record derived app bundle id" >&2
     cat "$helper_smappservice_prepare/validation-config.txt" >&2
     exit 1
 fi
-if ! plutil -extract Label raw -o - "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist" | grep -qx "$helper_smappservice_prepare_label"; then
+if ! plutil -extract Label raw -o - "$helper_smappservice_prepare/AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist" | grep -qx "$helper_smappservice_prepare_label"; then
     echo "SMAppService helper prototype LaunchDaemon label does not match helper label" >&2
     cat "$helper_smappservice_prepare/validation-config.txt" >&2
     exit 1
@@ -4792,25 +4792,25 @@ if ! grep -q "fixed-command-api" "$bag_mode_smoke_error"; then
     exit 1
 fi
 helper_smappservice_manual_identity="$bag_mode_smoke_dir/helper-smappservice-manual-identity"
-CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX=manual01 \
+AGENTWAKE_HELPER_PROTOTYPE_ID_SUFFIX=manual01 \
     scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_manual_identity" >/dev/null
 if ! grep -q '^identitySuffix=manual01$' "$helper_smappservice_manual_identity/validation-config.txt"; then
     echo "SMAppService helper prototype harness did not honor manual identity suffix" >&2
     cat "$helper_smappservice_manual_identity/validation-config.txt" >&2
     exit 1
 fi
-if ! grep -q '^helperLabel=com.makeavish.ClawShell.HelperPrototype.manual01.daemon$' "$helper_smappservice_manual_identity/validation-config.txt"; then
+if ! grep -q '^helperLabel=com.makeavish.AgentWake.HelperPrototype.manual01.daemon$' "$helper_smappservice_manual_identity/validation-config.txt"; then
     echo "SMAppService helper prototype harness did not use manual helper label" >&2
     cat "$helper_smappservice_manual_identity/validation-config.txt" >&2
     exit 1
 fi
-if ! grep -q 'plistName=com.makeavish.ClawShell.HelperPrototype.manual01.daemon.plist' "$helper_smappservice_manual_identity/evidence/helper-status-before-approval.txt"; then
+if ! grep -q 'plistName=com.makeavish.AgentWake.HelperPrototype.manual01.daemon.plist' "$helper_smappservice_manual_identity/evidence/helper-status-before-approval.txt"; then
     echo "SMAppService helper prototype controller did not use manual plist name" >&2
     cat "$helper_smappservice_manual_identity/evidence/helper-status-before-approval.txt" >&2
     exit 1
 fi
 helper_smappservice_daemon_command="$bag_mode_smoke_dir/helper-smappservice-daemon-command"
-CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND=repair \
+AGENTWAKE_HELPER_PROTOTYPE_DAEMON_COMMAND=repair \
     scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_daemon_command" >/dev/null
 if ! grep -q '^daemonCommand=repair$' "$helper_smappservice_daemon_command/validation-config.txt"; then
     echo "SMAppService helper prototype harness did not honor daemon command" >&2
@@ -4823,7 +4823,7 @@ if ! grep -q '3 => "repair"' "$helper_smappservice_daemon_command/evidence/launc
     exit 1
 fi
 helper_smappservice_generation="$bag_mode_smoke_dir/helper-smappservice-generation"
-CLAWSHELL_HELPER_PROTOTYPE_GENERATION=7 \
+AGENTWAKE_HELPER_PROTOTYPE_GENERATION=7 \
     scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_generation" >/dev/null
 if ! grep -q '^helperGeneration=7$' "$helper_smappservice_generation/validation-config.txt"; then
     echo "SMAppService helper prototype harness did not honor helper generation" >&2
@@ -4837,42 +4837,42 @@ if ! grep -Fq 'helperGeneration=7' "$helper_smappservice_generation/evidence/fix
     exit 1
 fi
 helper_smappservice_bad_generation="$bag_mode_smoke_dir/helper-smappservice-bad-generation"
-if CLAWSHELL_HELPER_PROTOTYPE_GENERATION=0 \
+if AGENTWAKE_HELPER_PROTOTYPE_GENERATION=0 \
     scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_bad_generation" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype harness accepted an invalid helper generation" >&2
     exit 1
 fi
-if ! grep -q "CLAWSHELL_HELPER_PROTOTYPE_GENERATION must be a positive integer" "$bag_mode_smoke_error"; then
+if ! grep -q "AGENTWAKE_HELPER_PROTOTYPE_GENERATION must be a positive integer" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
 helper_smappservice_huge_generation="$bag_mode_smoke_dir/helper-smappservice-huge-generation"
-if CLAWSHELL_HELPER_PROTOTYPE_GENERATION=999999999999999999999999999999999999999999999999 \
+if AGENTWAKE_HELPER_PROTOTYPE_GENERATION=999999999999999999999999999999999999999999999999 \
     scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_huge_generation" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype harness accepted an out-of-range helper generation" >&2
     exit 1
 fi
-if ! grep -q "CLAWSHELL_HELPER_PROTOTYPE_GENERATION must be a positive integer no greater than 2147483647" "$bag_mode_smoke_error"; then
+if ! grep -q "AGENTWAKE_HELPER_PROTOTYPE_GENERATION must be a positive integer no greater than 2147483647" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
 helper_smappservice_bad_daemon_command="$bag_mode_smoke_dir/helper-smappservice-bad-daemon-command"
-if CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND=arbitraryShellCommand \
+if AGENTWAKE_HELPER_PROTOTYPE_DAEMON_COMMAND=arbitraryShellCommand \
     scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_bad_daemon_command" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype harness accepted an invalid daemon command" >&2
     exit 1
 fi
-if ! grep -q "CLAWSHELL_HELPER_PROTOTYPE_DAEMON_COMMAND must be one of" "$bag_mode_smoke_error"; then
+if ! grep -q "AGENTWAKE_HELPER_PROTOTYPE_DAEMON_COMMAND must be one of" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
 helper_smappservice_bad_identity="$bag_mode_smoke_dir/helper-smappservice-bad-identity"
-if CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX=bad-suffix \
+if AGENTWAKE_HELPER_PROTOTYPE_ID_SUFFIX=bad-suffix \
     scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_bad_identity" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype harness accepted an invalid identity suffix" >&2
     exit 1
 fi
-if ! grep -q "CLAWSHELL_HELPER_PROTOTYPE_ID_SUFFIX must start with a letter" "$bag_mode_smoke_error"; then
+if ! grep -q "AGENTWAKE_HELPER_PROTOTYPE_ID_SUFFIX must start with a letter" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
@@ -4906,7 +4906,7 @@ if ! grep -q "missing required artifact file path" "$bag_mode_smoke_error"; then
     exit 1
 fi
 for unexpected_path in \
-    "$helper_smappservice_capture_malformed/ClawShellHelperPrototype.app" \
+    "$helper_smappservice_capture_malformed/AgentWakeHelperPrototype.app" \
     "$helper_smappservice_capture_malformed/evidence" \
     "$helper_smappservice_capture_malformed/runtime" \
     "$helper_smappservice_capture_malformed/source-package"
@@ -4919,8 +4919,8 @@ done
 helper_smappservice_capture_symlink_executable="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-executable"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_executable"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_symlink_executable"
-rm -f "$helper_smappservice_capture_symlink_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
-ln -s /bin/echo "$helper_smappservice_capture_symlink_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
+rm -f "$helper_smappservice_capture_symlink_executable/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototype"
+ln -s /bin/echo "$helper_smappservice_capture_symlink_executable/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototype"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_executable" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype post-approval capture ran a symlinked controller path" >&2
     exit 1
@@ -4932,8 +4932,8 @@ fi
 helper_smappservice_capture_symlink_plist="$bag_mode_smoke_dir/helper-smappservice-capture-symlink-plist"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_plist"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_symlink_plist"
-rm -f "$helper_smappservice_capture_symlink_plist/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
-ln -s /etc/hosts "$helper_smappservice_capture_symlink_plist/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+rm -f "$helper_smappservice_capture_symlink_plist/AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+ln -s /etc/hosts "$helper_smappservice_capture_symlink_plist/AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_plist" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype post-approval capture accepted a symlinked LaunchDaemon plist" >&2
     exit 1
@@ -4945,7 +4945,7 @@ fi
 helper_smappservice_capture_mismatched_label="$bag_mode_smoke_dir/helper-smappservice-capture-mismatched-label"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_mismatched_label"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_mismatched_label"
-sed -i '' 's/^helperLabel=.*/helperLabel=com.makeavish.ClawShell.HelperPrototype.other.daemon/' "$helper_smappservice_capture_mismatched_label/validation-config.txt"
+sed -i '' 's/^helperLabel=.*/helperLabel=com.makeavish.AgentWake.HelperPrototype.other.daemon/' "$helper_smappservice_capture_mismatched_label/validation-config.txt"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_mismatched_label" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype post-approval capture accepted helperLabel mismatched with identitySuffix" >&2
     exit 1
@@ -4957,7 +4957,7 @@ fi
 helper_smappservice_capture_mismatched_bundle="$bag_mode_smoke_dir/helper-smappservice-capture-mismatched-bundle"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_mismatched_bundle"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_mismatched_bundle"
-sed -i '' 's/^appBundleIdentifier=.*/appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.other/' "$helper_smappservice_capture_mismatched_bundle/validation-config.txt"
+sed -i '' 's/^appBundleIdentifier=.*/appBundleIdentifier=com.makeavish.AgentWake.HelperPrototype.other/' "$helper_smappservice_capture_mismatched_bundle/validation-config.txt"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_mismatched_bundle" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype post-approval capture accepted appBundleIdentifier mismatched with identitySuffix" >&2
     exit 1
@@ -4981,7 +4981,7 @@ fi
 helper_smappservice_capture_mismatched_command="$bag_mode_smoke_dir/helper-smappservice-capture-mismatched-command"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_mismatched_command"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_mismatched_command"
-/usr/libexec/PlistBuddy -c "Set :ProgramArguments:3 repair" "$helper_smappservice_capture_mismatched_command/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+/usr/libexec/PlistBuddy -c "Set :ProgramArguments:3 repair" "$helper_smappservice_capture_mismatched_command/AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_mismatched_command" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype post-approval capture accepted LaunchDaemon command mismatched with daemonCommand" >&2
     exit 1
@@ -5004,7 +5004,7 @@ EOF
     helper_smappservice_capture_tampered_arg="$bag_mode_smoke_dir/helper-smappservice-capture-tampered-arg-$tampered_arg_index"
     cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_tampered_arg"
     rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_tampered_arg"
-    /usr/libexec/PlistBuddy -c "Set :ProgramArguments:$tampered_arg_index $tampered_arg_value" "$helper_smappservice_capture_tampered_arg/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+    /usr/libexec/PlistBuddy -c "Set :ProgramArguments:$tampered_arg_index $tampered_arg_value" "$helper_smappservice_capture_tampered_arg/AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
     if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_tampered_arg" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
         echo "SMAppService helper prototype post-approval capture accepted tampered ProgramArguments.$tampered_arg_index" >&2
         exit 1
@@ -5017,7 +5017,7 @@ done
 helper_smappservice_capture_extra_arg="$bag_mode_smoke_dir/helper-smappservice-capture-extra-arg"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_extra_arg"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_extra_arg"
-/usr/libexec/PlistBuddy -c "Add :ProgramArguments:8 string unexpected" "$helper_smappservice_capture_extra_arg/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+/usr/libexec/PlistBuddy -c "Add :ProgramArguments:8 string unexpected" "$helper_smappservice_capture_extra_arg/AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_extra_arg" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype post-approval capture accepted extra LaunchDaemon argument" >&2
     exit 1
@@ -5036,7 +5036,7 @@ EOF
     helper_smappservice_capture_tampered_stream="$bag_mode_smoke_dir/helper-smappservice-capture-tampered-$tampered_stream_key"
     cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_tampered_stream"
     rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_tampered_stream"
-    /usr/libexec/PlistBuddy -c "Set :$tampered_stream_key $tampered_stream_value" "$helper_smappservice_capture_tampered_stream/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+    /usr/libexec/PlistBuddy -c "Set :$tampered_stream_key $tampered_stream_value" "$helper_smappservice_capture_tampered_stream/AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
     if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_tampered_stream" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
         echo "SMAppService helper prototype post-approval capture accepted tampered $tampered_stream_key" >&2
         exit 1
@@ -5073,7 +5073,7 @@ fi
 helper_smappservice_capture_mismatched_ledger="$bag_mode_smoke_dir/helper-smappservice-capture-mismatched-ledger"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_mismatched_ledger"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_mismatched_ledger"
-/usr/libexec/PlistBuddy -c "Set :ProgramArguments:7 $helper_smappservice_capture_mismatched_ledger/runtime/other-ledger.jsonl" "$helper_smappservice_capture_mismatched_ledger/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+/usr/libexec/PlistBuddy -c "Set :ProgramArguments:7 $helper_smappservice_capture_mismatched_ledger/runtime/other-ledger.jsonl" "$helper_smappservice_capture_mismatched_ledger/AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
 if scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_mismatched_ledger" --capture-post-approval >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "SMAppService helper prototype post-approval capture accepted LaunchDaemon ledger mismatched with rootLedgerPath" >&2
     exit 1
@@ -5207,7 +5207,7 @@ cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_temp_symlink"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_temp_symlink"
 printf 'victim-before\n' >"$helper_smappservice_capture_temp_victim"
 ln -s "$helper_smappservice_capture_temp_victim" "$helper_smappservice_capture_temp_symlink/validation-config.txt.tmp"
-CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_temp_symlink" --capture-post-approval >/dev/null
+AGENTWAKE_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_temp_symlink" --capture-post-approval >/dev/null
 if [[ "$(cat "$helper_smappservice_capture_temp_victim")" != "victim-before" ]]; then
     echo "SMAppService helper prototype post-approval capture followed validation-config temp symlink" >&2
     cat "$helper_smappservice_capture_temp_victim" >&2
@@ -5238,7 +5238,7 @@ if ! grep -q "Use only one" "$bag_mode_smoke_error"; then
     cat "$bag_mode_smoke_error" >&2
     exit 1
 fi
-CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" --capture-post-approval >/dev/null
+AGENTWAKE_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" --capture-post-approval >/dev/null
 if ! grep -q '^postApprovalCaptureAttempted=true$' "$helper_smappservice_prepare/validation-config.txt"; then
     echo "SMAppService helper prototype post-approval capture did not update validation config" >&2
     cat "$helper_smappservice_prepare/validation-config.txt" >&2
@@ -5259,7 +5259,7 @@ printf '%s\n' \
     'commandJson="status"' \
     '{"schemaVersion":1,"event":"bagModeHelperLedgerSample","command":"status","effect":"dry-run"}' \
     >"$helper_smappservice_prepare/runtime/helper.stdout.log"
-CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" --capture-post-approval >/dev/null
+AGENTWAKE_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" --capture-post-approval >/dev/null
 if ! grep -q '^exitCode=0$' "$helper_smappservice_prepare/evidence/helper-stdout-after-approval.status"; then
     echo "SMAppService helper prototype post-approval stdout capture did not succeed for seeded stdout" >&2
     cat "$helper_smappservice_prepare/evidence/helper-stdout-after-approval.status" >&2
@@ -5305,7 +5305,7 @@ do
         exit 1
     fi
 done
-CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" --capture-post-reboot >/dev/null
+AGENTWAKE_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_prepare" --capture-post-reboot >/dev/null
 if ! grep -q '^postRebootCaptureAttempted=true$' "$helper_smappservice_prepare/validation-config.txt"; then
     echo "SMAppService helper prototype post-reboot capture did not update validation config" >&2
     cat "$helper_smappservice_prepare/validation-config.txt" >&2
@@ -5348,7 +5348,7 @@ cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_symlink_sourc
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_symlink_source"
 rm -f "$helper_smappservice_capture_symlink_source/runtime/helper.log"
 ln -s /etc/hosts "$helper_smappservice_capture_symlink_source/runtime/helper.log"
-CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_source" --capture-post-approval >/dev/null
+AGENTWAKE_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_symlink_source" --capture-post-approval >/dev/null
 if ! grep -q "symlinkSource=" "$helper_smappservice_capture_symlink_source/evidence/helper-bootstrap-after-approval.txt"; then
     echo "SMAppService helper prototype post-approval capture followed a symlinked runtime source" >&2
     cat "$helper_smappservice_capture_symlink_source/evidence/helper-bootstrap-after-approval.txt" >&2
@@ -5364,7 +5364,7 @@ cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_non_regular_s
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_non_regular_source"
 rm -f "$helper_smappservice_capture_non_regular_source/runtime/helper.log"
 mkdir "$helper_smappservice_capture_non_regular_source/runtime/helper.log"
-CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_non_regular_source" --capture-post-approval >/dev/null
+AGENTWAKE_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh --output-dir "$helper_smappservice_capture_non_regular_source" --capture-post-approval >/dev/null
 if ! grep -q "nonRegularSource=" "$helper_smappservice_capture_non_regular_source/evidence/helper-bootstrap-after-approval.txt"; then
     echo "SMAppService helper prototype post-approval capture read a non-regular runtime source" >&2
     cat "$helper_smappservice_capture_non_regular_source/evidence/helper-bootstrap-after-approval.txt" >&2
@@ -5375,7 +5375,7 @@ if ! grep -q '^exitCode=1$' "$helper_smappservice_capture_non_regular_source/evi
     cat "$helper_smappservice_capture_non_regular_source/evidence/helper-bootstrap-after-approval.status" >&2
     exit 1
 fi
-helper_smappservice_manual_helper="$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon"
+helper_smappservice_manual_helper="$helper_smappservice_prepare/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototypeDaemon"
 helper_smappservice_manual_log="$bag_mode_smoke_dir/helper-smappservice-manual-helper.log"
 helper_smappservice_manual_ledger="$bag_mode_smoke_dir/helper-smappservice-manual-helper-ledger.jsonl"
 helper_smappservice_manual_stdout="$bag_mode_smoke_dir/helper-smappservice-manual-helper.stdout"
@@ -5476,8 +5476,8 @@ fi
 helper_smappservice_capture_unregister_symlink_executable="$bag_mode_smoke_dir/helper-smappservice-capture-unregister-symlink-executable"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_unregister_symlink_executable"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_unregister_symlink_executable"
-rm -f "$helper_smappservice_capture_unregister_symlink_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
-ln -s /bin/echo "$helper_smappservice_capture_unregister_symlink_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
+rm -f "$helper_smappservice_capture_unregister_symlink_executable/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototype"
+ln -s /bin/echo "$helper_smappservice_capture_unregister_symlink_executable/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototype"
 if scripts/helper-service-smappservice-prototype.sh \
     --output-dir "$helper_smappservice_capture_unregister_symlink_executable" \
     --capture-unregister \
@@ -5492,8 +5492,8 @@ fi
 helper_smappservice_capture_unregister_non_regular_executable="$bag_mode_smoke_dir/helper-smappservice-capture-unregister-non-regular-executable"
 cp -R "$helper_smappservice_prepare" "$helper_smappservice_capture_unregister_non_regular_executable"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_unregister_non_regular_executable"
-rm -f "$helper_smappservice_capture_unregister_non_regular_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
-mkdir "$helper_smappservice_capture_unregister_non_regular_executable/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
+rm -f "$helper_smappservice_capture_unregister_non_regular_executable/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototype"
+mkdir "$helper_smappservice_capture_unregister_non_regular_executable/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototype"
 if scripts/helper-service-smappservice-prototype.sh \
     --output-dir "$helper_smappservice_capture_unregister_non_regular_executable" \
     --capture-unregister \
@@ -5506,14 +5506,14 @@ if ! grep -q "regular executable artifact path" "$bag_mode_smoke_error"; then
     exit 1
 fi
 helper_smappservice_capture_unregister_fake="$bag_mode_smoke_dir/helper-smappservice-capture-unregister-fake"
-mkdir -p "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/MacOS" \
-    "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons" \
+mkdir -p "$helper_smappservice_capture_unregister_fake/AgentWakeHelperPrototype.app/Contents/MacOS" \
+    "$helper_smappservice_capture_unregister_fake/AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons" \
     "$helper_smappservice_capture_unregister_fake/evidence" \
     "$helper_smappservice_capture_unregister_fake/runtime"
-cp "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/Info.plist" \
-    "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/Info.plist"
-cp "$helper_smappservice_prepare/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist" \
-    "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
+cp "$helper_smappservice_prepare/AgentWakeHelperPrototype.app/Contents/Info.plist" \
+    "$helper_smappservice_capture_unregister_fake/AgentWakeHelperPrototype.app/Contents/Info.plist"
+cp "$helper_smappservice_prepare/AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist" \
+    "$helper_smappservice_capture_unregister_fake/AgentWakeHelperPrototype.app/Contents/Library/LaunchDaemons/$helper_smappservice_prepare_label.plist"
 rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_unregister_fake"
 {
     printf '%s\n' '#!/usr/bin/env bash'
@@ -5537,13 +5537,13 @@ rebase_helper_smappservice_launchdaemon "$helper_smappservice_capture_unregister
     printf '%s\n' '    ;;'
     printf '%s\n' '  *) exit 64 ;;'
     printf '%s\n' 'esac'
-} >"$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype"
-printf '#!/usr/bin/env bash\nexit 0\n' >"$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon"
-chmod +x "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototype" \
-    "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon"
+} >"$helper_smappservice_capture_unregister_fake/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototype"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$helper_smappservice_capture_unregister_fake/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototypeDaemon"
+chmod +x "$helper_smappservice_capture_unregister_fake/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototype" \
+    "$helper_smappservice_capture_unregister_fake/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototypeDaemon"
 {
     printf 'evidenceFormat=helper-prototype-v1\n'
-    printf 'appBundleIdentifier=com.makeavish.ClawShell.HelperPrototype.%s\n' "$helper_smappservice_prepare_identity"
+    printf 'appBundleIdentifier=com.makeavish.AgentWake.HelperPrototype.%s\n' "$helper_smappservice_prepare_identity"
     printf 'helperLabel=%s\n' "$helper_smappservice_prepare_label"
     printf 'identitySuffix=%s\n' "$helper_smappservice_prepare_identity"
     printf 'daemonCommand=status\n'
@@ -5551,7 +5551,7 @@ chmod +x "$helper_smappservice_capture_unregister_fake/ClawShellHelperPrototype.
     printf 'unregisterAttempted=false\n'
 } >"$helper_smappservice_capture_unregister_fake/validation-config.txt"
 cp "$helper_smappservice_prepare/prototype-manifest.tsv" "$helper_smappservice_capture_unregister_fake/prototype-manifest.tsv"
-CLAWSHELL_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh \
+AGENTWAKE_SMAPP_LOG_LAST=1m scripts/helper-service-smappservice-prototype.sh \
     --output-dir "$helper_smappservice_capture_unregister_fake" \
     --capture-unregister \
     --i-understand-this-registers-helper >/dev/null
@@ -5954,12 +5954,12 @@ mkdir -p "$helper_update_old/evidence" "$helper_update_new/evidence"
 write_update_review_artifact() {
     local artifact="$1"
     local generation="$2"
-    local label="com.example.ClawShell.HelperPrototype.hupdate.daemon"
+    local label="com.example.AgentWake.HelperPrototype.hupdate.daemon"
     cat >"$artifact/validation-config.txt" <<EOF
 evidenceFormat=helper-prototype-v1
 helperInstallPath=smappservice
 identitySuffix=hupdate
-appBundleIdentifier=com.example.ClawShell.HelperPrototype.hupdate
+appBundleIdentifier=com.example.AgentWake.HelperPrototype.hupdate
 helperLabel=$label
 helperGeneration=$generation
 EOF
@@ -5981,7 +5981,7 @@ EOF
 $ launchctl print system/$label
 system/$label = {
 managed_by = com.apple.xpc.ServiceManagement
-program = $artifact/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon
+program = $artifact/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototypeDaemon
 runs = 1
 last exit code = 0
 }
@@ -6042,7 +6042,7 @@ fi
 helper_update_review_bad_launchctl="$bag_mode_smoke_dir/helper-update-review-bad-launchctl"
 cp -R "$helper_update_review_root" "$helper_update_review_bad_launchctl"
 rebase_update_review_fixture "$helper_update_review_bad_launchctl"
-sed -i '' "s|$helper_update_review_bad_launchctl/new/ClawShellHelperPrototype.app|$helper_update_review_bad_launchctl/old/ClawShellHelperPrototype.app|" "$helper_update_review_bad_launchctl/new/evidence/launchctl-status.txt"
+sed -i '' "s|$helper_update_review_bad_launchctl/new/AgentWakeHelperPrototype.app|$helper_update_review_bad_launchctl/old/AgentWakeHelperPrototype.app|" "$helper_update_review_bad_launchctl/new/evidence/launchctl-status.txt"
 scripts/helper-service-prototype-review-update.sh \
     --old-artifact "$helper_update_review_bad_launchctl/old" \
     --new-artifact "$helper_update_review_bad_launchctl/new" \
@@ -6055,7 +6055,7 @@ fi
 helper_update_review_bad_label="$bag_mode_smoke_dir/helper-update-review-bad-label"
 cp -R "$helper_update_review_root" "$helper_update_review_bad_label"
 rebase_update_review_fixture "$helper_update_review_bad_label"
-sed -i '' 's|^system/com.example.ClawShell.HelperPrototype.hupdate.daemon = {|system/com.example.Other.Helper.daemon = {|' "$helper_update_review_bad_label/new/evidence/launchctl-status.txt"
+sed -i '' 's|^system/com.example.AgentWake.HelperPrototype.hupdate.daemon = {|system/com.example.Other.Helper.daemon = {|' "$helper_update_review_bad_label/new/evidence/launchctl-status.txt"
 scripts/helper-service-prototype-review-update.sh \
     --old-artifact "$helper_update_review_bad_label/old" \
     --new-artifact "$helper_update_review_bad_label/new" \
@@ -6116,7 +6116,7 @@ case "$*" in
     "test --filter cliParsesCommandsAndSendsThroughClient")
         cat <<'OUT'
 ◇ Test run started.
-/Users/alice/local/clawshell/Tests/ClawShellCoreTests/ControlServerTests.swift:12: note: fixture path
+/Users/alice/local/agentwake/Tests/AgentWakeCoreTests/ControlServerTests.swift:12: note: fixture path
 ◇ Suite ControlServerTests started.
 ◇ Test cliParsesCommandsAndSendsThroughClient() started.
 ✔ Test cliParsesCommandsAndSendsThroughClient() passed after 0.001 seconds.
@@ -6127,7 +6127,7 @@ OUT
     "test --filter controlRouterSurfacesHelperCommandOutcomes")
         cat <<'OUT'
 ◇ Test run started.
-/Users/alice/local/clawshell/Tests/ClawShellCoreTests/ControlServerTests.swift:12: note: fixture path
+/Users/alice/local/agentwake/Tests/AgentWakeCoreTests/ControlServerTests.swift:12: note: fixture path
 ◇ Suite ControlServerTests started.
 ◇ Test controlRouterSurfacesHelperCommandOutcomes() started.
 ✔ Test controlRouterSurfacesHelperCommandOutcomes() passed after 0.001 seconds.
@@ -6144,7 +6144,7 @@ EOF
 chmod +x "$helper_cli_proof_bin/swift"
 helper_cli_proof_dir="$bag_mode_smoke_dir/helper-cli-proof"
 PATH="$helper_cli_proof_bin:$PATH" \
-    CLAWSHELL_HELPER_CLI_DEVELOPER_DIR="$helper_cli_proof_developer_dir" \
+    AGENTWAKE_HELPER_CLI_DEVELOPER_DIR="$helper_cli_proof_developer_dir" \
     scripts/helper-service-cli-outcome-proof.sh --output-dir "$helper_cli_proof_dir" >/dev/null
 if ! grep -q '^helperCliOutcomeProofReady=true$' "$helper_cli_proof_dir/validation-config.txt"; then
     echo "Helper CLI outcome proof did not mark the focused passing test as ready" >&2
@@ -6171,7 +6171,7 @@ if grep -q '/Users/alice' "$helper_cli_proof_dir/evidence/cli-helper-status-repa
     cat "$helper_cli_proof_dir/evidence/cli-helper-status-repair-uninstall.txt" >&2
     exit 1
 fi
-if ! grep -q '/Users/<user>/local/clawshell' "$helper_cli_proof_dir/evidence/cli-helper-status-repair-uninstall.txt"; then
+if ! grep -q '/Users/<user>/local/agentwake' "$helper_cli_proof_dir/evidence/cli-helper-status-repair-uninstall.txt"; then
     echo "Helper CLI outcome proof did not preserve a redacted path marker" >&2
     cat "$helper_cli_proof_dir/evidence/cli-helper-status-repair-uninstall.txt" >&2
     exit 1
@@ -6185,7 +6185,7 @@ EOF
 chmod +x "$helper_cli_proof_bin/swift"
 helper_cli_proof_fail="$bag_mode_smoke_dir/helper-cli-proof-fail"
 if PATH="$helper_cli_proof_bin:$PATH" \
-    CLAWSHELL_HELPER_CLI_DEVELOPER_DIR="$helper_cli_proof_developer_dir" \
+    AGENTWAKE_HELPER_CLI_DEVELOPER_DIR="$helper_cli_proof_developer_dir" \
     scripts/helper-service-cli-outcome-proof.sh --output-dir "$helper_cli_proof_fail" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Helper CLI outcome proof accepted a failing focused test" >&2
     exit 1
@@ -6197,7 +6197,7 @@ if ! grep -q '^helperCliOutcomeProofReady=false$' "$helper_cli_proof_fail/valida
 fi
 helper_cli_proof_missing_xcode="$bag_mode_smoke_dir/helper-cli-proof-missing-xcode"
 if PATH="$helper_cli_proof_bin:$PATH" \
-    CLAWSHELL_HELPER_CLI_DEVELOPER_DIR="$bag_mode_smoke_dir/missing-xcode" \
+    AGENTWAKE_HELPER_CLI_DEVELOPER_DIR="$bag_mode_smoke_dir/missing-xcode" \
     scripts/helper-service-cli-outcome-proof.sh --output-dir "$helper_cli_proof_missing_xcode" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Helper CLI outcome proof accepted a missing developer directory" >&2
     exit 1
@@ -6212,7 +6212,7 @@ mkdir -p "$helper_cli_proof_symlink_target"
 ln -s "$helper_cli_proof_symlink_target" "$helper_cli_proof_symlink"
 for helper_cli_proof_symlink_path in "$helper_cli_proof_symlink" "$helper_cli_proof_symlink/"; do
     if PATH="$helper_cli_proof_bin:$PATH" \
-        CLAWSHELL_HELPER_CLI_DEVELOPER_DIR="$helper_cli_proof_developer_dir" \
+        AGENTWAKE_HELPER_CLI_DEVELOPER_DIR="$helper_cli_proof_developer_dir" \
         scripts/helper-service-cli-outcome-proof.sh --output-dir "$helper_cli_proof_symlink_path" >/dev/null 2>"$bag_mode_smoke_error"; then
         echo "Helper CLI outcome proof accepted a symlink output directory: $helper_cli_proof_symlink_path" >&2
         exit 1
@@ -6465,7 +6465,7 @@ fi
 
 helper_prototype_plist_mismatch_dir="$bag_mode_smoke_dir/helper-prototype-plist-mismatch"
 cp -R "$helper_prototype_dir" "$helper_prototype_plist_mismatch_dir"
-sed -i '' 's#ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist#ClawShell.app/Contents/Library/LaunchDaemons/com.example.ClawShell.Helper.plist.bak#' "$helper_prototype_plist_mismatch_dir/manual-result.md"
+sed -i '' 's#AgentWake.app/Contents/Library/LaunchDaemons/com.example.AgentWake.Helper.plist#AgentWake.app/Contents/Library/LaunchDaemons/com.example.AgentWake.Helper.plist.bak#' "$helper_prototype_plist_mismatch_dir/manual-result.md"
 if scripts/helper-service-prototype-verify.sh --manifest "$helper_prototype_plist_mismatch_dir/prototype-manifest.tsv" >/dev/null 2>"$bag_mode_smoke_error"; then
     echo "Helper service prototype verifier accepted mismatched LaunchDaemon plist" >&2
     exit 1
@@ -6556,7 +6556,7 @@ fi
 
 if [[ -s "$test_list_output" ]]; then
     missing_targets=()
-    for target in ClawShellCoreTests ClawShellContractTests; do
+    for target in AgentWakeCoreTests AgentWakeContractTests; do
         if ! grep -q "$target" "$test_list_output"; then
             missing_targets+=("$target")
         fi

@@ -14,10 +14,10 @@ extern uint64_t IOReportChannelGetUnit(CFDictionaryRef);
 extern CFStringRef IOReportChannelGetUnitLabel(CFDictionaryRef);
 extern int64_t IOReportSimpleGetIntegerValue(CFDictionaryRef, int);
 
-#define CLAWSHELL_IOREPORT_GETUNIT_QUANTITY(unit) (((uint64_t)(unit) >> 56) & 0xff)
-#define CLAWSHELL_IOREPORT_GETUNIT_SCALE(unit) ((uint64_t)(unit) & 0x00ffffffffffffff)
-#define CLAWSHELL_IOREPORT_QUANTITY_TEMPERATURE 10
-#define CLAWSHELL_IOREPORT_SCALE_UNITY 0
+#define AGENTWAKE_IOREPORT_GETUNIT_QUANTITY(unit) (((uint64_t)(unit) >> 56) & 0xff)
+#define AGENTWAKE_IOREPORT_GETUNIT_SCALE(unit) ((uint64_t)(unit) & 0x00ffffffffffffff)
+#define AGENTWAKE_IOREPORT_QUANTITY_TEMPERATURE 10
+#define AGENTWAKE_IOREPORT_SCALE_UNITY 0
 
 struct ProbeResult {
     int sample_count;
@@ -115,10 +115,10 @@ static struct ProbeResult probe(CFStringRef group, CFStringRef subgroup) {
         uint64_t unit = IOReportChannelGetUnit(sample);
         uint64_t raw_unit = 0;
         int raw_unit_present = channel_info_unit(sample, &raw_unit);
-        uint64_t unit_quantity = CLAWSHELL_IOREPORT_GETUNIT_QUANTITY(unit);
-        uint64_t unit_scale = CLAWSHELL_IOREPORT_GETUNIT_SCALE(unit);
-        int scale_verified = unit_quantity == CLAWSHELL_IOREPORT_QUANTITY_TEMPERATURE &&
-            unit_scale == CLAWSHELL_IOREPORT_SCALE_UNITY;
+        uint64_t unit_quantity = AGENTWAKE_IOREPORT_GETUNIT_QUANTITY(unit);
+        uint64_t unit_scale = AGENTWAKE_IOREPORT_GETUNIT_SCALE(unit);
+        int scale_verified = unit_quantity == AGENTWAKE_IOREPORT_QUANTITY_TEMPERATURE &&
+            unit_scale == AGENTWAKE_IOREPORT_SCALE_UNITY;
         if (!is_temperature_channel(channel_name)) {
             printf("rawSample=%lld group=", (long long)value);
             print_cf_string(IOReportChannelGetGroup(sample));

@@ -3,10 +3,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="${1:-"$ROOT_DIR/.build/power-validation/timed-idle-$(date -u +%Y%m%dT%H%M%SZ)-$$"}"
-DURATION="${CLAWSHELL_TIMED_IDLE_DURATION:-90}"
-LATE_OFFSET="${CLAWSHELL_TIMED_IDLE_LATE_OFFSET:-70}"
-READY_TIMEOUT="${CLAWSHELL_TIMED_IDLE_READY_TIMEOUT:-120}"
-PMSET_LOG_LINES="${CLAWSHELL_TIMED_IDLE_PMSET_LOG_LINES:-300}"
+DURATION="${AGENTWAKE_TIMED_IDLE_DURATION:-90}"
+LATE_OFFSET="${AGENTWAKE_TIMED_IDLE_LATE_OFFSET:-70}"
+READY_TIMEOUT="${AGENTWAKE_TIMED_IDLE_READY_TIMEOUT:-120}"
+PMSET_LOG_LINES="${AGENTWAKE_TIMED_IDLE_PMSET_LOG_LINES:-300}"
 READY_FILE="$OUTPUT_DIR/hold.ready"
 HOLD_LOG="$OUTPUT_DIR/hold.log"
 
@@ -19,22 +19,22 @@ mkdir -p "$OUTPUT_DIR"
 rm -f "$READY_FILE"
 
 if ! [[ "$DURATION" =~ ^[0-9]+$ ]] || [[ "$DURATION" -le 0 ]]; then
-    echo "CLAWSHELL_TIMED_IDLE_DURATION must be a positive integer number of seconds" >&2
+    echo "AGENTWAKE_TIMED_IDLE_DURATION must be a positive integer number of seconds" >&2
     exit 1
 fi
 
 if ! [[ "$LATE_OFFSET" =~ ^[0-9]+$ ]] || [[ "$LATE_OFFSET" -le 0 ]] || [[ "$LATE_OFFSET" -ge "$DURATION" ]]; then
-    echo "CLAWSHELL_TIMED_IDLE_LATE_OFFSET must be a positive integer less than duration" >&2
+    echo "AGENTWAKE_TIMED_IDLE_LATE_OFFSET must be a positive integer less than duration" >&2
     exit 1
 fi
 
 if ! [[ "$READY_TIMEOUT" =~ ^[0-9]+$ ]] || [[ "$READY_TIMEOUT" -le 0 ]]; then
-    echo "CLAWSHELL_TIMED_IDLE_READY_TIMEOUT must be a positive integer number of seconds" >&2
+    echo "AGENTWAKE_TIMED_IDLE_READY_TIMEOUT must be a positive integer number of seconds" >&2
     exit 1
 fi
 
 if ! [[ "$PMSET_LOG_LINES" =~ ^[0-9]+$ ]] || [[ "$PMSET_LOG_LINES" -le 0 ]]; then
-    echo "CLAWSHELL_TIMED_IDLE_PMSET_LOG_LINES must be a positive integer line count" >&2
+    echo "AGENTWAKE_TIMED_IDLE_PMSET_LOG_LINES must be a positive integer line count" >&2
     exit 1
 fi
 
@@ -76,8 +76,8 @@ fi
 "$ROOT_DIR/scripts/pmset-snapshot.sh" "$OUTPUT_DIR/before"
 
 bin_dir="$(swift build --show-bin-path)"
-swift build --product ClawShellPowerValidation >"$OUTPUT_DIR/build.log" 2>&1
-"$bin_dir/ClawShellPowerValidation" --duration "$DURATION" --ready-file "$READY_FILE" >"$HOLD_LOG" 2>&1 &
+swift build --product AgentWakePowerValidation >"$OUTPUT_DIR/build.log" 2>&1
+"$bin_dir/AgentWakePowerValidation" --duration "$DURATION" --ready-file "$READY_FILE" >"$HOLD_LOG" 2>&1 &
 hold_pid="$!"
 
 # shellcheck disable=SC2329
@@ -124,38 +124,38 @@ trap - EXIT
 
 "$ROOT_DIR/scripts/pmset-snapshot.sh" "$OUTPUT_DIR/after"
 pmset -g log | tail -n "$PMSET_LOG_LINES" >"$OUTPUT_DIR/pmset-log-tail.txt" 2>&1 || true
-if [[ "${CLAWSHELL_TIMED_IDLE_FULL_PMSET_LOG:-0}" == "1" ]]; then
+if [[ "${AGENTWAKE_TIMED_IDLE_FULL_PMSET_LOG:-0}" == "1" ]]; then
     pmset -g log >"$OUTPUT_DIR/pmset-log.txt" 2>&1 || true
 fi
 echo "holdExitStatus=$hold_status" >>"$OUTPUT_DIR/validation-config.txt"
 
-if grep -q "ClawShellPowerValidation" "$OUTPUT_DIR/during-late/pmset-assertions.txt"; then
-    late_clawshell_assertion="present"
+if grep -q "AgentWakePowerValidation" "$OUTPUT_DIR/during-late/pmset-assertions.txt"; then
+    late_agentwake_assertion="present"
 else
-    late_clawshell_assertion="missing"
+    late_agentwake_assertion="missing"
 fi
-echo "lateClawShellAssertion=$late_clawshell_assertion" >>"$OUTPUT_DIR/validation-config.txt"
+echo "lateAgentWakeAssertion=$late_agentwake_assertion" >>"$OUTPUT_DIR/validation-config.txt"
 
-if grep -q "ClawShellPowerValidation" "$OUTPUT_DIR/after/pmset-assertions.txt"; then
-    after_clawshell_assertion="present"
+if grep -q "AgentWakePowerValidation" "$OUTPUT_DIR/after/pmset-assertions.txt"; then
+    after_agentwake_assertion="present"
 else
-    after_clawshell_assertion="missing"
+    after_agentwake_assertion="missing"
 fi
-echo "afterClawShellAssertion=$after_clawshell_assertion" >>"$OUTPUT_DIR/validation-config.txt"
+echo "afterAgentWakeAssertion=$after_agentwake_assertion" >>"$OUTPUT_DIR/validation-config.txt"
 
 grep -E '^[[:space:]]+pid .* (PreventUserIdleSystemSleep|PreventSystemSleep|NoIdleSleepAssertion|UserIsActive)' \
     "$OUTPUT_DIR/during-late/pmset-assertions.txt" \
-    | grep -v "ClawShellPowerValidation" \
-    >"$OUTPUT_DIR/non-clawshell-late-sleep-blockers.txt" || true
-blocker_count="$(wc -l <"$OUTPUT_DIR/non-clawshell-late-sleep-blockers.txt" | tr -d '[:space:]')"
-echo "nonClawShellLateSleepBlockerCount=$blocker_count" >>"$OUTPUT_DIR/validation-config.txt"
+    | grep -v "AgentWakePowerValidation" \
+    >"$OUTPUT_DIR/non-agentwake-late-sleep-blockers.txt" || true
+blocker_count="$(wc -l <"$OUTPUT_DIR/non-agentwake-late-sleep-blockers.txt" | tr -d '[:space:]')"
+echo "nonAgentWakeLateSleepBlockerCount=$blocker_count" >>"$OUTPUT_DIR/validation-config.txt"
 "$ROOT_DIR/scripts/sleep-blocker-guidance.sh" \
-    "$OUTPUT_DIR/non-clawshell-late-sleep-blockers.txt" \
-    >"$OUTPUT_DIR/non-clawshell-late-sleep-blocker-guidance.txt"
+    "$OUTPUT_DIR/non-agentwake-late-sleep-blockers.txt" \
+    >"$OUTPUT_DIR/non-agentwake-late-sleep-blocker-guidance.txt"
 
 if grep -q '^idleSleepThresholdExceeded=true$' "$OUTPUT_DIR/validation-config.txt" \
-    && [[ "$late_clawshell_assertion" == "present" ]] \
-    && [[ "$after_clawshell_assertion" == "missing" ]] \
+    && [[ "$late_agentwake_assertion" == "present" ]] \
+    && [[ "$after_agentwake_assertion" == "missing" ]] \
     && [[ "$blocker_count" == "0" ]] \
     && [[ "$hold_status" == "0" ]]; then
     echo "conclusive=true" >>"$OUTPUT_DIR/validation-config.txt"
@@ -172,12 +172,12 @@ Active power source: ${active_power_source}
 Active sleep setting minutes: ${sleep_minutes}
 
 Phases:
-- before: snapshot before ClawShell normal assertion hold
+- before: snapshot before AgentWake normal assertion hold
 - during-early: snapshot immediately after the hold is ready
 - during-late: snapshot after the late offset, intended to exceed the configured idle sleep interval
-- after: snapshot after ClawShell releases the normal assertion
+- after: snapshot after AgentWake releases the normal assertion
 
-This harness does not change pmset settings. It documents observed behavior under the machine's current AC/battery profile. Treat the result as conclusive only when validation-config.txt has conclusive=true. When conclusive=false, inspect non-clawshell-late-sleep-blockers.txt, non-clawshell-late-sleep-blocker-guidance.txt, and the active sleep threshold fields.
+This harness does not change pmset settings. It documents observed behavior under the machine's current AC/battery profile. Treat the result as conclusive only when validation-config.txt has conclusive=true. When conclusive=false, inspect non-agentwake-late-sleep-blockers.txt, non-agentwake-late-sleep-blocker-guidance.txt, and the active sleep threshold fields.
 EOF
 
 echo "Timed idle validation written to $OUTPUT_DIR"

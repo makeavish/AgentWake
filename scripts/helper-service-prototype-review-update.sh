@@ -167,8 +167,8 @@ new_enabled_ok() {
     has_exit_zero "$NEW_ARTIFACT_DIR" helper-status-after-approval &&
         has_all "$NEW_ARTIFACT_DIR" helper-status-after-approval 'statusBeforeRaw=1' 'statusAfterRaw=1' &&
         has_exit_zero "$NEW_ARTIFACT_DIR" launchctl-status &&
-        has_all "$NEW_ARTIFACT_DIR" launchctl-status "system/$helper_label = {" 'managed_by = com.apple.xpc.ServiceManagement' 'runs = 1' 'last exit code = 0' "$NEW_ARTIFACT_DIR/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon" &&
-        ! grep -Fq "$OLD_ARTIFACT_DIR/ClawShellHelperPrototype.app/Contents/MacOS/ClawShellHelperPrototypeDaemon" "$NEW_ARTIFACT_DIR/evidence/launchctl-status.txt" &&
+        has_all "$NEW_ARTIFACT_DIR" launchctl-status "system/$helper_label = {" 'managed_by = com.apple.xpc.ServiceManagement' 'runs = 1' 'last exit code = 0' "$NEW_ARTIFACT_DIR/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototypeDaemon" &&
+        ! grep -Fq "$OLD_ARTIFACT_DIR/AgentWakeHelperPrototype.app/Contents/MacOS/AgentWakeHelperPrototypeDaemon" "$NEW_ARTIFACT_DIR/evidence/launchctl-status.txt" &&
         has_exit_zero "$NEW_ARTIFACT_DIR" helper-stdout-after-approval &&
         has_all "$NEW_ARTIFACT_DIR" helper-stdout-after-approval 'uid=0' 'euid=0' 'allowed=true' "\"helperGeneration\":$new_generation"
 }

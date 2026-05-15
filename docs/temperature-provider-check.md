@@ -2,9 +2,9 @@
 
 Check date: May 14, 2026
 
-Original issue: [#7](https://github.com/makeavish/ClawShell/issues/7)
+Original issue: [#7](https://github.com/makeavish/AgentWake/issues/7)
 
-Final E2E follow-up: [#120](https://github.com/makeavish/ClawShell/issues/120)
+Final E2E follow-up: [#120](https://github.com/makeavish/AgentWake/issues/120)
 
 App-side artifact: `.build/temperature-provider-validation/local-20260512T023358Z`
 
@@ -111,7 +111,7 @@ Production Bag Mode must fail closed for:
 
 The harness records these as evidence fields but does not enable production behavior.
 
-The mocked fail-closed contract is now executable in `BagModeSafetyPolicy` and covered by the portable `ClawShellCoreChecks` gate. Those checks cover warning, cutoff, stale, unavailable, permission-denied, parse-failed, helper-crashed, unsupported-hardware, timeout, coverage-insufficient, missing/invalid battery, battery floor, and hysteresis behavior. They do not select a production provider or prove helper-side sampling.
+The mocked fail-closed contract is now executable in `BagModeSafetyPolicy` and covered by the portable `AgentWakeCoreChecks` gate. Those checks cover warning, cutoff, stale, unavailable, permission-denied, parse-failed, helper-crashed, unsupported-hardware, timeout, coverage-insufficient, missing/invalid battery, battery floor, and hysteresis behavior. They do not select a production provider or prove helper-side sampling.
 
 ## Helper-Equivalent Readiness
 
@@ -241,7 +241,7 @@ freshness, cadence, closed-bag coverage, or fail-closed proof.
 
 The later `.build/temperature-provider-proof/ioreg-smc-prepare-20260513T061711Z`
 artifact used the same no-membership `SMAppService` path with
-`CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc`. After registration, approval,
+`AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc`. After registration, approval,
 and a wait of at least 15 seconds before post-approval capture, the helper ran as root and
 captured partial `AppleSMCKeysEndpoint` output:
 
@@ -446,7 +446,7 @@ does not expose a current scalar temperature reading or a public provider
 contract for Bag Mode.
 
 The follow-up `.build/temperature-provider-proof/ioreg-pmu-local-20260513T105941Z`
-artifact adds `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu`, which runs
+artifact adds `AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu`, which runs
 `/usr/sbin/ioreg -r -c AppleARMPMUTempSensor -l`. A direct generated-helper run
 completed inside the 1 second timeout and captured 278,760 stdout bytes without
 truncation, but found no numeric candidates:
@@ -493,7 +493,7 @@ To test the SMC sensor-dispatcher path through the same no-membership helper,
 prepare an artifact with:
 
 ```sh
-CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc-dispatcher \
+AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc-dispatcher \
 scripts/temperature-provider-smappservice-proof.sh \
   --output-dir .build/temperature-provider-proof/ioreg-smc-dispatcher-$(date -u +%Y%m%dT%H%M%SZ)
 ```
@@ -526,7 +526,7 @@ cadence, timeout, closed-bag coverage, and fail-closed evidence.
 
 The thermal command artifact
 `.build/temperature-provider-proof/thermal-levels-smappservice-20260513T173804Z`
-adds `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=thermal-levels`, which runs
+adds `AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=thermal-levels`, which runs
 `/usr/bin/thermal levels`. The same no-membership helper path reached status
 raw `1`, launched as root after approval and a 15 second wait, then recorded:
 
@@ -553,14 +553,14 @@ and provides no accepted numeric cutoff source, freshness, cadence,
 closed-bag coverage, or fail-closed proof.
 
 The `.build/temperature-provider-proof/ioreport-ans2-smappservice-20260514T052521Z`
-artifact adds `CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreport-ans2`, which
+artifact adds `AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreport-ans2`, which
 bundles a native `libIOReport` probe next to the ad-hoc helper. After
 SMAppService approval and the required 15 second wait, the helper launched as
 root and recorded:
 
 ```text
 providerSource=ioreport-ans2
-command=.../ClawShellIOReportTemperatureProbe
+command=.../AgentWakeIOReportTemperatureProbe
 timeoutSeconds=1
 durationSeconds=1
 timedOut=false
@@ -592,9 +592,9 @@ non-battery, numeric, root-owned, and completes under the 1 second deadline.
 It still needs scale validation, freshness/cadence evidence, closed-bag
 coverage, and fail-closed proof in final app E2E validation.
 
-`ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. The no-membership `SMAppService` path can launch a helper as root on this machine. The tested `powermetrics` sampler variants did not provide a trustworthy numeric cutoff source. The bounded `ioreg-smc` diagnostic path now runs as root through SMAppService without timing out, but its observed `AppleSmartBattery` values are rejected as production cutoff candidates and do not prove CPU/package or closed-bag thermal coverage. The `ioreg-pmu` path now also runs as root through SMAppService without timing out, but the visible `AppleARMPMUTempSensor` inventory exposes PMU sensor names without numeric readings. The `thermal-levels` path can also run as root through SMAppService, but `/usr/bin/thermal levels` exits 69 with unsupported-hardware output on this machine. The refreshed alternate-source probe now captures `hidutil list`, HID temperature-service NDJSON/dump metadata, native IOHID service properties, NVMe temperature sensor inventory, and native IOReport samples. On this machine the IOReport ANS2/MSP path is the first accepted non-battery numeric candidate, while the HID/PMU/NVMe inventory remains metadata only. Final app E2E issue [#120](https://github.com/makeavish/ClawShell/issues/120) must still prove scale or feature-gated fail-closed behavior, freshness, cadence, timeout, and coverage before Bag Mode/release readiness is claimed.
+`ProcessInfo.thermalState` is permission-compatible and useful as a supplemental app-side thermal-pressure/liveness signal, but it is coarse, non-numeric, and does not prove closed-bag coverage. `pmset -g therm` did not provide current numeric temperature evidence. AppleSmartBattery temperature is useful context when present, but it is not enough for CPU/package or closed-bag thermal risk and did not meet the 10 second freshness target in the local run. The no-membership `SMAppService` path can launch a helper as root on this machine. The tested `powermetrics` sampler variants did not provide a trustworthy numeric cutoff source. The bounded `ioreg-smc` diagnostic path now runs as root through SMAppService without timing out, but its observed `AppleSmartBattery` values are rejected as production cutoff candidates and do not prove CPU/package or closed-bag thermal coverage. The `ioreg-pmu` path now also runs as root through SMAppService without timing out, but the visible `AppleARMPMUTempSensor` inventory exposes PMU sensor names without numeric readings. The `thermal-levels` path can also run as root through SMAppService, but `/usr/bin/thermal levels` exits 69 with unsupported-hardware output on this machine. The refreshed alternate-source probe now captures `hidutil list`, HID temperature-service NDJSON/dump metadata, native IOHID service properties, NVMe temperature sensor inventory, and native IOReport samples. On this machine the IOReport ANS2/MSP path is the first accepted non-battery numeric candidate, while the HID/PMU/NVMe inventory remains metadata only. Final app E2E issue [#120](https://github.com/makeavish/AgentWake/issues/120) must still prove scale or feature-gated fail-closed behavior, freshness, cadence, timeout, and coverage before Bag Mode/release readiness is claimed.
 
-Production Bag Mode readiness remains gated by [#120](https://github.com/makeavish/ClawShell/issues/120), which carries forward the remaining provider validation rows from #25.
+Production Bag Mode readiness remains gated by [#120](https://github.com/makeavish/AgentWake/issues/120), which carries forward the remaining provider validation rows from #25.
 
 ## Helper Provider Proof Verifier
 
@@ -659,8 +659,8 @@ approval. New artifacts still default to `powermetrics --show-initial-usage -n
 1 -i 1000 --samplers thermal` for reproducible comparison with existing
 evidence, but the current local conclusion is that the tested `powermetrics`
 variants are not the primary path to a provider-ready numeric cutoff source.
-Use `CLAWSHELL_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE=false` or
-`CLAWSHELL_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=<samplers>` only for
+Use `AGENTWAKE_TEMPERATURE_PROVIDER_SHOW_INITIAL_USAGE=false` or
+`AGENTWAKE_TEMPERATURE_PROVIDER_POWERMETRICS_SAMPLERS=<samplers>` only for
 comparison runs, for example `all`, `default`, `cpu_power`, or
 `thermal,cpu_power`.
 
@@ -668,7 +668,7 @@ To generate the helper-owned I/O Registry SMC diagnostic source, create the
 artifact with:
 
 ```bash
-CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc \
+AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-smc \
   scripts/temperature-provider-smappservice-proof.sh \
   --output-dir .build/temperature-provider-proof/ioreg-smc-$(date -u +%Y%m%dT%H%M%SZ)
 ```
@@ -687,7 +687,7 @@ and a non-battery numeric cutoff source are still missing.
 To test the PMU I/O Registry inventory path explicitly, use:
 
 ```bash
-CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu \
+AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreg-pmu \
   scripts/temperature-provider-smappservice-proof.sh \
   --output-dir .build/temperature-provider-proof/ioreg-pmu-$(date -u +%Y%m%dT%H%M%SZ)
 ```
@@ -701,7 +701,7 @@ same PMU identity reached status raw `1`, launched as root, and also reported
 To test the root-gated thermal levels command explicitly, use:
 
 ```bash
-CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=thermal-levels \
+AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=thermal-levels \
   scripts/temperature-provider-smappservice-proof.sh \
   --output-dir .build/temperature-provider-proof/thermal-levels-$(date -u +%Y%m%dT%H%M%SZ)
 ```
@@ -714,12 +714,12 @@ completed.
 To test the native IOReport ANS2/MSP candidate explicitly, use:
 
 ```bash
-CLAWSHELL_TEMPERATURE_PROVIDER_SOURCE=ioreport-ans2 \
+AGENTWAKE_TEMPERATURE_PROVIDER_SOURCE=ioreport-ans2 \
   scripts/temperature-provider-smappservice-proof.sh \
   --output-dir .build/temperature-provider-proof/ioreport-ans2-$(date -u +%Y%m%dT%H%M%SZ)
 ```
 
-That source bundles `ClawShellIOReportTemperatureProbe` into the ad-hoc app and
+That source bundles `AgentWakeIOReportTemperatureProbe` into the ad-hoc app and
 runs it from the approved helper. The May 14 local artifact produced four
 helper-owned numeric ANS2/MSP samples under the 1 second deadline, making it the
 best current source candidate. Keep it marked proof-incomplete until scale,
@@ -728,7 +728,7 @@ freshness, cadence, closed-bag coverage, and fail-closed evidence are captured.
 Each new artifact also gets a unique SMAppService bundle/helper identity derived
 from its output path. This avoids reusing stale macOS approval/code-signing state
 between ad-hoc proof attempts. To force a deterministic suffix for comparison
-runs, set `CLAWSHELL_TEMPERATURE_PROVIDER_ID_SUFFIX=<lettersAndDigits>`.
+runs, set `AGENTWAKE_TEMPERATURE_PROVIDER_ID_SUFFIX=<lettersAndDigits>`.
 Mutating registration uses the same prepared artifact and requires:
 
 ```bash

@@ -2,11 +2,11 @@
 
 Check date: May 13, 2026
 
-Original issue: [#7](https://github.com/makeavish/ClawShell/issues/7)
+Original issue: [#7](https://github.com/makeavish/AgentWake/issues/7)
 
-Final E2E follow-up: [#120](https://github.com/makeavish/ClawShell/issues/120)
+Final E2E follow-up: [#120](https://github.com/makeavish/AgentWake/issues/120)
 
-Harness artifact: [PR #22](https://github.com/makeavish/ClawShell/pull/22)
+Harness artifact: [PR #22](https://github.com/makeavish/AgentWake/pull/22)
 
 Latest local apply artifacts:
 
@@ -15,7 +15,7 @@ Latest local apply artifacts:
 
 ## Question
 
-Is `pmset disablesleep` reliable enough across ClawShell's required Bag Mode matrix?
+Is `pmset disablesleep` reliable enough across AgentWake's required Bag Mode matrix?
 
 ## Current Evidence
 
@@ -91,7 +91,7 @@ lifecycle. Missing matrix coverage still includes:
 
 Helper-dependent cases, such as helper restart and helper upgrade mid-hold, are
 carried forward to final app E2E issue
-[#120](https://github.com/makeavish/ClawShell/issues/120). Until then, each
+[#120](https://github.com/makeavish/AgentWake/issues/120). Until then, each
 helper-only lifecycle row must be marked `N/A` or `deferred to #120` in
 `manual-result.md`.
 
@@ -134,7 +134,7 @@ The manifest is a tab-separated file with this header:
 caseId	status	evidenceDir	naReason
 ```
 
-Use `status=evidence` for rows with a completed evidence directory, `status=n/a` for physically unavailable rows, and `status=deferred` for helper-dependent rows carried forward to final app E2E issue [#120](https://github.com/makeavish/ClawShell/issues/120). `n/a` and `deferred` rows must include a concrete reason in `naReason`.
+Use `status=evidence` for rows with a completed evidence directory, `status=n/a` for physically unavailable rows, and `status=deferred` for helper-dependent rows carried forward to final app E2E issue [#120](https://github.com/makeavish/AgentWake/issues/120). `n/a` and `deferred` rows must include a concrete reason in `naReason`.
 
 The verifier fails missing files, baseline-only captures, test-only fake-`pmset` captures, placeholder manual fields, placeholder snapshot output, unredacted snapshot metadata, missing reboot state, missing IORegistry snapshots, incomplete snapshot directories, placeholder N/A/deferred reasons, and manifests with no evidence rows. Passing the verifier only means the manifest and evidence package are structurally complete; it does not mean the primitive passed the hardware matrix.
 
@@ -144,4 +144,4 @@ The primitive remains unproven across the full app matrix. The Apple Silicon
 battery/internal normal reopen-recovery case now has verified pass evidence,
 but the AC/internal case is still inconclusive and broader display/lifecycle
 coverage is missing. Remaining hardware/app lifecycle validation is tracked in
-final app E2E issue [#120](https://github.com/makeavish/ClawShell/issues/120).
+final app E2E issue [#120](https://github.com/makeavish/AgentWake/issues/120).

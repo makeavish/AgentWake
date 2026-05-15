@@ -24,15 +24,15 @@ jobs:
 
       - name: Capture non-destructive power snapshot
         if: always()
-        run: scripts/pmset-snapshot.sh "$RUNNER_TEMP/clawshell-power-snapshot"
+        run: scripts/pmset-snapshot.sh "$RUNNER_TEMP/agentwake-power-snapshot"
         env:
-          CLAWSHELL_PMSET_REDACT_METADATA: "1"
-          CLAWSHELL_PMSET_STRICT: "1"
+          AGENTWAKE_PMSET_REDACT_METADATA: "1"
+          AGENTWAKE_PMSET_STRICT: "1"
 
       - name: Upload power snapshot
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: power-snapshot
-          path: ${{ runner.temp }}/clawshell-power-snapshot
+          path: ${{ runner.temp }}/agentwake-power-snapshot
           retention-days: 7

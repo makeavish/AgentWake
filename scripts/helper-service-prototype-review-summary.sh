@@ -100,7 +100,7 @@ if [[ -n "$OUTPUT_FILE" ]]; then
     REPORT_TARGET="$OUTPUT_FILE"
 fi
 
-WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/clawshell-helper-review-summary.XXXXXX")"
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/agentwake-helper-review-summary.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT
 ORDER_FILE="$WORK_DIR/order.tsv"
 CANDIDATES_FILE="$WORK_DIR/candidates.tsv"

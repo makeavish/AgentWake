@@ -204,7 +204,7 @@ else
     shopt -u nullglob
 fi
 
-review_rows="$(mktemp -t clawshell-bag-mode-matrix-review.XXXXXX)"
+review_rows="$(mktemp -t agentwake-bag-mode-matrix-review.XXXXXX)"
 cleanup() {
     rm -f "$review_rows"
 }
