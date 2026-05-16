@@ -11,7 +11,7 @@ final class SettingsWindowController: NSWindowController {
         let window = SettingsWindow(contentViewController: contentViewController)
         window.title = "AgentWake Settings"
         window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 620, height: 500))
+        window.setContentSize(NSSize(width: 700, height: 640))
         window.center()
         window.isReleasedWhenClosed = false
         window.tabbingMode = .disallowed
@@ -61,6 +61,12 @@ private final class SettingsViewController: NSViewController {
     private let closedLidModeStatusLabel = NSTextField(wrappingLabelWithString: "")
     private let claudeStatusLabel = NSTextField(labelWithString: "")
     private let codexStatusLabel = NSTextField(labelWithString: "")
+    private let claudeDetailsButton = NSButton(title: "Show details", target: nil, action: nil)
+    private let codexDetailsButton = NSButton(title: "Show details", target: nil, action: nil)
+    private let claudeDetailsLabel = NSTextField(wrappingLabelWithString: "")
+    private let codexDetailsLabel = NSTextField(wrappingLabelWithString: "")
+    private let claudeRemoveButton = NSButton(title: "Remove", target: nil, action: nil)
+    private let codexRemoveButton = NSButton(title: "Remove", target: nil, action: nil)
     private let protectButton = NSButton(title: "Keep sessions awake", target: nil, action: nil)
     private let enableClosedLidButton = NSButton(title: "Turn On", target: nil, action: nil)
     private let disableClosedLidButton = NSButton(title: "Turn Off", target: nil, action: nil)
@@ -101,15 +107,42 @@ private final class SettingsViewController: NSViewController {
         let codexTitle = keyValueLabel(key: "Codex CLI", value: "")
         claudeStatusLabel.textColor = .secondaryLabelColor
         codexStatusLabel.textColor = .secondaryLabelColor
+        claudeDetailsLabel.textColor = .secondaryLabelColor
+        codexDetailsLabel.textColor = .secondaryLabelColor
+        claudeDetailsLabel.font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        codexDetailsLabel.font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        claudeDetailsLabel.isHidden = true
+        codexDetailsLabel.isHidden = true
 
-        let integrationGrid = NSGridView(views: [
-            [claudeTitle, claudeStatusLabel],
-            [codexTitle, codexStatusLabel]
+        claudeDetailsButton.target = self
+        claudeDetailsButton.action = #selector(toggleClaudeDetails)
+        claudeDetailsButton.bezelStyle = .disclosure
+        claudeDetailsButton.setAccessibilityLabel("Show Claude Code integration details")
+
+        codexDetailsButton.target = self
+        codexDetailsButton.action = #selector(toggleCodexDetails)
+        codexDetailsButton.bezelStyle = .disclosure
+        codexDetailsButton.setAccessibilityLabel("Show Codex CLI integration details")
+
+        claudeRemoveButton.target = self
+        claudeRemoveButton.action = #selector(removeClaudeIntegration)
+        claudeRemoveButton.bezelStyle = .rounded
+        claudeRemoveButton.setAccessibilityLabel("Remove Claude Code agent hook")
+
+        codexRemoveButton.target = self
+        codexRemoveButton.action = #selector(removeCodexIntegration)
+        codexRemoveButton.bezelStyle = .rounded
+        codexRemoveButton.setAccessibilityLabel("Remove Codex CLI agent hook")
+
+        let integrationStack = NSStackView(views: [
+            integrationRow(title: claudeTitle, status: claudeStatusLabel, detailsButton: claudeDetailsButton, removeButton: claudeRemoveButton),
+            claudeDetailsLabel,
+            integrationRow(title: codexTitle, status: codexStatusLabel, detailsButton: codexDetailsButton, removeButton: codexRemoveButton),
+            codexDetailsLabel
         ])
-        integrationGrid.column(at: 0).xPlacement = .leading
-        integrationGrid.column(at: 1).xPlacement = .leading
-        integrationGrid.rowSpacing = 8
-        integrationGrid.columnSpacing = 18
+        integrationStack.orientation = .vertical
+        integrationStack.alignment = .leading
+        integrationStack.spacing = 6
 
         protectButton.target = self
         protectButton.action = #selector(protectDetectedSessions)
@@ -157,7 +190,7 @@ private final class SettingsViewController: NSViewController {
             closedLidButtons,
             separator(),
             sectionHeader("Integrations"),
-            integrationGrid,
+            integrationStack,
             repairButton,
             footerButtons
         ])
@@ -176,6 +209,7 @@ private final class SettingsViewController: NSViewController {
             stack.bottomAnchor.constraint(lessThanOrEqualTo: rootView.bottomAnchor),
             sessionButtons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
             closedLidButtons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
+            integrationStack.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
             footerButtons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48)
         ])
 
@@ -214,8 +248,15 @@ private final class SettingsViewController: NSViewController {
         let snapshots = Dictionary(
             uniqueKeysWithValues: services.integrationManager.snapshots().map { ($0.agentID, $0) }
         )
+        let previews = Dictionary(
+            uniqueKeysWithValues: services.integrationManager.installPreviews().map { ($0.agentID, $0) }
+        )
         claudeStatusLabel.stringValue = statusText(for: snapshots["claude-code"])
         codexStatusLabel.stringValue = statusText(for: snapshots["codex-cli"])
+        claudeDetailsLabel.stringValue = detailsText(for: snapshots["claude-code"], preview: previews["claude-code"])
+        codexDetailsLabel.stringValue = detailsText(for: snapshots["codex-cli"], preview: previews["codex-cli"])
+        claudeRemoveButton.isEnabled = snapshots["claude-code"]?.status == .installed
+        codexRemoveButton.isEnabled = snapshots["codex-cli"]?.status == .installed
     }
 
     private func keyValueLabel(key: String, value: String) -> NSTextField {
@@ -246,6 +287,22 @@ private final class SettingsViewController: NSViewController {
         return parts.joined(separator: " - ")
     }
 
+    private func detailsText(for snapshot: IntegrationStatusSnapshot?, preview: IntegrationPreview?) -> String {
+        let settingsFile = snapshot?.settingsFile ?? preview?.settingsFile ?? "No config path available"
+        var lines = ["Config: \(settingsFile)"]
+
+        if let preview, !preview.dryRunDiff.isEmpty {
+            lines.append("Will change:")
+            lines += preview.dryRunDiff.map { "- \($0)" }
+        }
+
+        if let failureReason = snapshot?.failureReason ?? preview?.failureReason, !failureReason.isEmpty {
+            lines.append("Issue: \(failureReason)")
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
     private func separator() -> NSBox {
         let box = NSBox()
         box.boxType = .separator
@@ -257,6 +314,19 @@ private final class SettingsViewController: NSViewController {
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.spacing = 8
+        return stack
+    }
+
+    private func integrationRow(
+        title: NSTextField,
+        status: NSTextField,
+        detailsButton: NSButton,
+        removeButton: NSButton
+    ) -> NSStackView {
+        let spacer = NSView()
+        let stack = rowStack([detailsButton, title, spacer, status, removeButton])
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        stack.widthAnchor.constraint(greaterThanOrEqualToConstant: 520).isActive = true
         return stack
     }
 
@@ -319,6 +389,56 @@ private final class SettingsViewController: NSViewController {
         _ = services.agentMonitor.protectDetectedSessions(at: Date())
         services.assertionManager.reconcile()
         refresh()
+    }
+
+    @objc private func toggleClaudeDetails() {
+        claudeDetailsLabel.isHidden.toggle()
+        claudeDetailsButton.state = claudeDetailsLabel.isHidden ? .off : .on
+    }
+
+    @objc private func toggleCodexDetails() {
+        codexDetailsLabel.isHidden.toggle()
+        codexDetailsButton.state = codexDetailsLabel.isHidden ? .off : .on
+    }
+
+    @objc private func removeClaudeIntegration() {
+        removeIntegration(agentID: "claude-code", displayName: "Claude Code")
+    }
+
+    @objc private func removeCodexIntegration() {
+        removeIntegration(agentID: "codex-cli", displayName: "Codex CLI")
+    }
+
+    private func removeIntegration(agentID: String, displayName: String) {
+        let alert = NSAlert()
+        alert.messageText = "Remove \(displayName) hook?"
+        alert.informativeText = "AgentWake will remove only its owned hook from the agent config and stop reinstalling it automatically."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+
+        let runRemoval = { [weak self] in
+            guard let self else {
+                return
+            }
+            do {
+                _ = try self.services.integrationManager.removeIntegration(agentID: agentID, at: Date())
+                self.refresh()
+            } catch {
+                self.presentAlert(title: "Could not remove \(displayName) hook", message: error.localizedDescription, style: .warning)
+            }
+        }
+
+        if let window = view.window {
+            alert.beginSheetModal(for: window) { response in
+                guard response == .alertFirstButtonReturn else {
+                    return
+                }
+                runRemoval()
+            }
+        } else if alert.runModal() == .alertFirstButtonReturn {
+            runRemoval()
+        }
     }
 
     @objc private func enableClosedLidMode() {

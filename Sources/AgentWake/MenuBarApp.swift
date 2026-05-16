@@ -30,6 +30,9 @@ final class MenuBarApp: NSObject {
         services.startAll()
         refreshState()
         refreshClosedLidModeStatusAsync()
+        DispatchQueue.main.async { [weak self] in
+            self?.presentOnboardingIfNeeded()
+        }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refreshState()
@@ -80,6 +83,7 @@ final class MenuBarApp: NSObject {
             button.image = statusItemImage(for: snapshot.statusItemIcon)
             button.imagePosition = .imageOnly
             button.contentTintColor = statusItemTintColor(snapshot.statusItemIcon.tint)
+            button.setAccessibilityTitle(snapshot.statusItemAccessibilityTitle)
             button.setAccessibilityLabel("AgentWake status: \(snapshot.statusItemIcon.accessibilityDescription)")
         }
 
@@ -348,6 +352,60 @@ final class MenuBarApp: NSObject {
         alert.addButton(withTitle: "OK")
         alert.runModal()
         NSApp.setActivationPolicy(.accessory)
+    }
+
+    private func presentOnboardingIfNeeded() {
+        guard ProcessInfo.processInfo.environment["AGENTWAKE_SKIP_ONBOARDING"] != "1" else {
+            return
+        }
+
+        var settings = services.settingsStore.settings
+        guard !settings.hasCompletedOnboarding else {
+            return
+        }
+
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Welcome to AgentWake"
+        alert.informativeText = onboardingMessage()
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Done")
+        let response = alert.runModal()
+
+        settings.hasCompletedOnboarding = true
+        try? services.settingsStore.save(settings)
+
+        if response == .alertFirstButtonReturn {
+            openSettings()
+        } else {
+            NSApp.setActivationPolicy(.accessory)
+        }
+    }
+
+    private func onboardingMessage() -> String {
+        let hookSummary = services.integrationManager.installPreviews().map { preview in
+            var lines = [
+                "\(preview.displayName): \(preview.settingsFile.isEmpty ? "config path unavailable" : preview.settingsFile)"
+            ]
+            if !preview.dryRunDiff.isEmpty {
+                lines += preview.dryRunDiff.map { "  - \($0)" }
+            }
+            if let failureReason = preview.failureReason {
+                lines.append("  - \(failureReason)")
+            }
+            return lines.joined(separator: "\n")
+        }.joined(separator: "\n")
+
+        return """
+        1. AgentWake adds local hooks so Claude Code and Codex can report session activity.
+        \(hookSummary)
+
+        2. Lid-Closed Awake on battery requires administrator approval. Set it up now or later from Settings.
+
+        3. Open Claude Code or Codex. AgentWake will catch the next session automatically.
+        """
     }
 
     private func presentMessage(title: String, message: String, style: NSAlert.Style) {

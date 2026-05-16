@@ -14,6 +14,7 @@ public struct AgentWakeSettings: Codable, Equatable, Sendable {
         case safety
         case manualOverrides
         case helperOwnership
+        case hasCompletedOnboarding
     }
 
     public var schemaVersion: Int
@@ -26,6 +27,7 @@ public struct AgentWakeSettings: Codable, Equatable, Sendable {
     public var safety: SafetySettings
     public var manualOverrides: [ManualOverride]
     public var helperOwnership: HelperOwnership?
+    public var hasCompletedOnboarding: Bool
 
     public init(
         schemaVersion: Int = AgentWakeSettings.currentSchemaVersion,
@@ -37,7 +39,8 @@ public struct AgentWakeSettings: Codable, Equatable, Sendable {
         integrationStates: [String: IntegrationState] = [:],
         safety: SafetySettings = SafetySettings(),
         manualOverrides: [ManualOverride] = [],
-        helperOwnership: HelperOwnership? = nil
+        helperOwnership: HelperOwnership? = nil,
+        hasCompletedOnboarding: Bool = false
     ) {
         self.schemaVersion = schemaVersion
         self.launchAtLogin = launchAtLogin
@@ -49,6 +52,7 @@ public struct AgentWakeSettings: Codable, Equatable, Sendable {
         self.safety = safety
         self.manualOverrides = manualOverrides
         self.helperOwnership = helperOwnership
+        self.hasCompletedOnboarding = hasCompletedOnboarding
     }
 
     public init(from decoder: Decoder) throws {
@@ -63,6 +67,7 @@ public struct AgentWakeSettings: Codable, Equatable, Sendable {
         safety = try container.decode(SafetySettings.self, forKey: .safety)
         manualOverrides = try container.decode([ManualOverride].self, forKey: .manualOverrides)
         helperOwnership = try container.decodeIfPresent(HelperOwnership.self, forKey: .helperOwnership)
+        hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -77,6 +82,7 @@ public struct AgentWakeSettings: Codable, Equatable, Sendable {
         try container.encode(safety, forKey: .safety)
         try container.encode(manualOverrides, forKey: .manualOverrides)
         try container.encode(helperOwnership, forKey: .helperOwnership)
+        try container.encode(hasCompletedOnboarding, forKey: .hasCompletedOnboarding)
     }
 }
 

@@ -104,7 +104,11 @@ PLIST
 }
 
 open_app() {
-    /usr/bin/open -n "$APP_BUNDLE"
+    if [[ "${AGENTWAKE_SKIP_ONBOARDING:-0}" == "1" ]]; then
+        AGENTWAKE_SKIP_ONBOARDING=1 "$APP_BINARY" >/dev/null 2>&1 &
+    else
+        /usr/bin/open -n "$APP_BUNDLE"
+    fi
 }
 
 verify_app() {
@@ -150,7 +154,7 @@ case "$MODE" in
     --verify|verify)
         stop_app
         stage_app
-        open_app
+        AGENTWAKE_SKIP_ONBOARDING=1 open_app
         sleep 2
         verify_app
         ;;

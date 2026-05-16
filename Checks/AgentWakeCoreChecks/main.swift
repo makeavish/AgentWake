@@ -2876,6 +2876,11 @@ struct AgentWakeCoreChecks {
         )
         manager.start()
 
+        let previews = manager.installPreviews()
+        try check(previews.map(\.agentID) == ["claude-code", "codex-cli"], "Expected integration previews for built-in agents")
+        try check(previews.allSatisfy { !$0.settingsFile.isEmpty }, "Expected integration previews to expose config paths")
+        try check(previews.flatMap(\.dryRunDiff).contains { $0.contains("owned") }, "Expected integration previews to expose dry-run hook changes")
+
         let claudeInstalled = try String(contentsOf: claudeURL, encoding: .utf8)
         let codexInstalled = try String(contentsOf: codexURL, encoding: .utf8)
         try check(claudeInstalled.contains(ClaudeCodeConfigPatcher.manifest.ownerMarker), "Expected manager start to install Claude hooks")
@@ -2972,9 +2977,11 @@ struct AgentWakeCoreChecks {
             "Expected Claude executable aliases to include claude and claude-code"
         )
         try check(store.settings.safety.batteryFloorPercent == 15, "Expected default battery floor")
+        try check(!store.settings.hasCompletedOnboarding, "Expected onboarding to be incomplete by default")
 
         let settingsJSON = try String(contentsOf: paths.settingsURL, encoding: .utf8)
         try check(settingsJSON.contains("\"helperOwnership\" : null"), "Expected helperOwnership null placeholder")
+        try check(settingsJSON.contains("\"hasCompletedOnboarding\" : false"), "Expected onboarding completion to be persisted")
     }
 
     private static func corruptSettingsRecoverToDefaults() throws {

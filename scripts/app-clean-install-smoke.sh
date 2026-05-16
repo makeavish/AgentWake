@@ -304,7 +304,7 @@ stop_installed_copy
 require_no_other_agentwake_processes
 capture_process_snapshot "before-launch-processes"
 
-if ! capture_command "open-installed-copy" /usr/bin/open -n "$INSTALLED_APP_BUNDLE"; then
+if ! capture_command "open-installed-copy" /bin/bash -c 'AGENTWAKE_SKIP_ONBOARDING=1 "$1" >/dev/null 2>&1 &' _ "$INSTALLED_APP_BINARY"; then
     echo "Clean installed app launch failed; inspect $EVIDENCE_DIR/open-installed-copy.txt" >&2
     exit 1
 fi

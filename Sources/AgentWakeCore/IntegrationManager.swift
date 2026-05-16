@@ -62,6 +62,28 @@ public struct IntegrationStatusSnapshot: Equatable, Sendable {
     }
 }
 
+public struct IntegrationPreview: Equatable, Sendable {
+    public var agentID: String
+    public var displayName: String
+    public var settingsFile: String
+    public var dryRunDiff: [String]
+    public var failureReason: String?
+
+    public init(
+        agentID: String,
+        displayName: String,
+        settingsFile: String,
+        dryRunDiff: [String],
+        failureReason: String? = nil
+    ) {
+        self.agentID = agentID
+        self.displayName = displayName
+        self.settingsFile = settingsFile
+        self.dryRunDiff = dryRunDiff
+        self.failureReason = failureReason
+    }
+}
+
 public enum IntegrationManagerError: Error, Equatable, LocalizedError {
     case missingInstallLocations
     case unsupportedAgent(String)
@@ -172,6 +194,44 @@ public final class IntegrationManager: StubLifecycleComponent {
     public func statusMessage() -> String {
         let message = listMessage()
         return message.isEmpty ? "No integrations configured" : message
+    }
+
+    public func installPreviews() -> [IntegrationPreview] {
+        let settings = settingsStore?.settings ?? AgentWakeSettings()
+        return settings.agents.compactMap { configuration -> IntegrationPreview? in
+            guard let agent = AgentKind(agentID: configuration.id) else {
+                return nil
+            }
+
+            guard let target = target(for: agent) else {
+                return IntegrationPreview(
+                    agentID: configuration.id,
+                    displayName: configuration.displayName,
+                    settingsFile: "",
+                    dryRunDiff: [],
+                    failureReason: IntegrationManagerError.missingInstallLocations.localizedDescription
+                )
+            }
+
+            do {
+                let currentData = try readConfigDataIfPresent(at: target.url)
+                let plan = try installPlan(for: agent, currentData: currentData, adapterPath: target.adapterPath)
+                return IntegrationPreview(
+                    agentID: configuration.id,
+                    displayName: configuration.displayName,
+                    settingsFile: target.url.path,
+                    dryRunDiff: plan.dryRunDiff
+                )
+            } catch {
+                return IntegrationPreview(
+                    agentID: configuration.id,
+                    displayName: configuration.displayName,
+                    settingsFile: target.url.path,
+                    dryRunDiff: [],
+                    failureReason: failureReason(for: error)
+                )
+            }
+        }
     }
 
     @discardableResult
