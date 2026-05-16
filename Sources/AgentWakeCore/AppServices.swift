@@ -18,6 +18,7 @@ public final class AgentMonitor: AppLifecycleComponent {
     private var timer: DispatchSourceTimer?
     private var storedRunState: ComponentRunState = .stopped
     private var storedScheduledPollInterval: TimeInterval?
+    private var storedLastPollAt: Date?
 
     public init(
         snapshotProvider: ProcessSnapshotProviding = LibprocProcessSnapshotProvider(),
@@ -56,6 +57,12 @@ public final class AgentMonitor: AppLifecycleComponent {
     public var scheduledPollInterval: TimeInterval? {
         queue.sync {
             storedScheduledPollInterval
+        }
+    }
+
+    public var lastPollAt: Date? {
+        queue.sync {
+            storedLastPollAt
         }
     }
 
@@ -146,6 +153,7 @@ public final class AgentMonitor: AppLifecycleComponent {
 
     private func pollOnQueue() {
         let timestamp = now()
+        storedLastPollAt = timestamp
         let settings = settingsProvider()
         stateMachine.graceInterval = TimeInterval(settings.defaultGraceSeconds)
         stateMachine.processDetectionHoldInterval = TimeInterval(settings.defaultGraceSeconds)

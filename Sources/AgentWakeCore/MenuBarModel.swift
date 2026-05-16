@@ -88,6 +88,7 @@ public enum MenuBarModel {
         protectableDetectedSessionCount: Int = 0,
         enableClosedLidModeEnabled: Bool = true,
         disableClosedLidModeEnabled: Bool = false,
+        showRefreshStatus: Bool = false,
         integrationStatuses: [IntegrationStatusSnapshot] = []
     ) -> MenuBarSnapshot {
         var items = [
@@ -184,14 +185,17 @@ public enum MenuBarModel {
             )
         }
 
-        items += [
-            separatorItem(),
-            MenuBarItem(
-                title: "Refresh",
-                isEnabled: true,
-                kind: .refreshStatus
-            )
-        ]
+        if showRefreshStatus {
+            items += [
+                separatorItem(),
+                MenuBarItem(
+                    title: "Refresh",
+                    detail: "Status has not updated recently.",
+                    isEnabled: true,
+                    kind: .refreshStatus
+                )
+            ]
+        }
 
         items += [
             MenuBarItem(

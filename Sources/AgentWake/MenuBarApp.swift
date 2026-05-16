@@ -75,6 +75,7 @@ final class MenuBarApp: NSObject {
             protectableDetectedSessionCount: services.agentMonitor.protectableDetectedSessionCount,
             enableClosedLidModeEnabled: canEnableClosedLidMode,
             disableClosedLidModeEnabled: canDisableClosedLidMode,
+            showRefreshStatus: isStatusStale(),
             integrationStatuses: services.integrationManager.snapshots()
         )
 
@@ -137,6 +138,14 @@ final class MenuBarApp: NSObject {
 
     private var canDisableClosedLidMode: Bool {
         !closedLidModeActionInFlight && closedLidModeStatusLine == "Closed-Lid Mode enabled"
+    }
+
+    private func isStatusStale(referenceDate: Date = Date()) -> Bool {
+        guard let lastPollAt = services.agentMonitor.lastPollAt else {
+            return true
+        }
+
+        return referenceDate.timeIntervalSince(lastPollAt) > 30
     }
 
     private func makeMenu(from snapshot: MenuBarSnapshot) -> NSMenu {

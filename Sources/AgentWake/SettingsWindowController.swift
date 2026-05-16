@@ -243,6 +243,7 @@ private final class SettingsViewController: NSViewController {
         sessionListLabel.stringValue = services.agentMonitor.sessionOverviewMessage()
         protectButton.title = protectButtonTitle(count: protectableCount)
         protectButton.isEnabled = protectableCount > 0
+        refreshButton.isHidden = !isStatusStale()
 
         let closedLidStatusMessage = services.closedLidModeController.statusMessage()
         closedLidModeStatusLabel.stringValue = closedLidDisplayText(for: closedLidStatusMessage)
@@ -382,6 +383,14 @@ private final class SettingsViewController: NSViewController {
     private func shouldShowSafetyWarning(statusMessage: String) -> Bool {
         let firstLine = statusMessage.split(separator: "\n").first.map(String.init) ?? ""
         return firstLine == "Closed-Lid Mode enabled" || firstLine == "Closed-Lid Mode already enabled"
+    }
+
+    private func isStatusStale(referenceDate: Date = Date()) -> Bool {
+        guard let lastPollAt = services.agentMonitor.lastPollAt else {
+            return true
+        }
+
+        return referenceDate.timeIntervalSince(lastPollAt) > 30
     }
 
     private func presentAlert(title: String, message: String, style: NSAlert.Style = .informational) {

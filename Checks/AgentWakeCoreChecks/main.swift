@@ -95,9 +95,12 @@ struct AgentWakeCoreChecks {
         try check(titles.contains(ClosedLidModeAvailability.unavailableTitle), "Expected Closed-Lid Mode boundary in menu")
         try check(!titles.contains("Keep 1 session awake"), "Expected protect action only when sessions are detected")
         try check(titles.contains("Turn On Lid-Closed Awake"), "Expected Closed-Lid Mode enable action in menu")
-        try check(titles.contains("Refresh"), "Expected refresh action in menu")
+        try check(!titles.contains("Refresh"), "Expected refresh action to stay hidden while status is fresh")
         try check(!titles.contains("Claude Code: Installed"), "Expected installed integrations to stay out of the short menu")
         try check(!titles.contains("Reinstall agent hooks"), "Expected repair action only when an integration needs attention")
+
+        let staleSnapshot = MenuBarModel.snapshot(currentState: .idle, showRefreshStatus: true)
+        try check(staleSnapshot.items.contains { $0.title == "Refresh" }, "Expected refresh action when status is stale")
 
         let protectableSnapshot = MenuBarModel.snapshot(
             currentState: .idle,
@@ -633,7 +636,9 @@ struct AgentWakeCoreChecks {
         )
 
         try check(monitor.pollInterval == 2, "Expected default process polling interval to be two seconds")
+        try check(monitor.lastPollAt == nil, "Expected last poll timestamp to be empty before polling")
         monitor.poll()
+        try check(monitor.lastPollAt == now, "Expected manual poll to record last poll timestamp")
         try check(monitor.sessions.count == 1, "Expected monitor poll to normalize snapshots into sessions")
         try check(monitor.sessions.first?.agent == .codexCLI, "Expected monitor to detect Codex CLI")
     }
