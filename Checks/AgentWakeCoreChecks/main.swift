@@ -191,6 +191,9 @@ struct AgentWakeCoreChecks {
             now: { Date(timeIntervalSince1970: 123) }
         )
 
+        let currentDisablesleep = try controller.currentDisablesleepValue()
+        try check(currentDisablesleep == 0, "Expected Closed-Lid controller to expose the current restore value before prompting")
+
         let enabled = try controller.enable()
         try check(enabled.contains("SleepDisabled=1"), "Expected enable message to report SleepDisabled=1")
         try check(runner.setValues == [1], "Expected enable to set disablesleep=1")

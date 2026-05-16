@@ -323,8 +323,10 @@ private final class SettingsViewController: NSViewController {
 
     @objc private func enableClosedLidMode() {
         let controller = services.closedLidModeController
-        runClosedLidModeAction {
-            try controller.enable()
+        confirmClosedLidEnable(currentValue: currentDisablesleepText(controller)) { [weak self] in
+            self?.runClosedLidModeAction {
+                try controller.enable()
+            }
         }
     }
 
@@ -361,6 +363,38 @@ private final class SettingsViewController: NSViewController {
                     self.presentAlert(title: "Closed-Lid Mode failed", message: error.localizedDescription, style: .warning)
                 }
             }
+        }
+    }
+
+    private func currentDisablesleepText(_ controller: ClosedLidModeController) -> String {
+        do {
+            return String(try controller.currentDisablesleepValue())
+        } catch {
+            return "unknown"
+        }
+    }
+
+    private func confirmClosedLidEnable(currentValue: String, onContinue: @escaping () -> Void) {
+        let alert = NSAlert()
+        alert.messageText = "Turn On Lid-Closed Awake?"
+        alert.informativeText = """
+        AgentWake will request administrator permission to disable lid sleep via pmset disablesleep. This setting affects all apps system-wide.
+
+        When you turn Lid-Closed Awake off, AgentWake will restore your previous value (currently: \(currentValue)).
+        """
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Cancel")
+
+        if let window = view.window {
+            alert.beginSheetModal(for: window) { response in
+                guard response == .alertFirstButtonReturn else {
+                    return
+                }
+                onContinue()
+            }
+        } else if alert.runModal() == .alertFirstButtonReturn {
+            onContinue()
         }
     }
 

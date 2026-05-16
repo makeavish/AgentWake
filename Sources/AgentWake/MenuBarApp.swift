@@ -227,6 +227,9 @@ final class MenuBarApp: NSObject {
             return
         }
         let controller = services.closedLidModeController
+        guard confirmClosedLidEnable(currentValue: currentDisablesleepText(controller)) else {
+            return
+        }
         runClosedLidAction {
             try controller.enable()
         }
@@ -270,6 +273,33 @@ final class MenuBarApp: NSObject {
                 }
             }
         }
+    }
+
+    private func currentDisablesleepText(_ controller: ClosedLidModeController) -> String {
+        do {
+            return String(try controller.currentDisablesleepValue())
+        } catch {
+            return "unknown"
+        }
+    }
+
+    private func confirmClosedLidEnable(currentValue: String) -> Bool {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.messageText = "Turn On Lid-Closed Awake?"
+        alert.informativeText = """
+        AgentWake will request administrator permission to disable lid sleep via pmset disablesleep. This setting affects all apps system-wide.
+
+        When you turn Lid-Closed Awake off, AgentWake will restore your previous value (currently: \(currentValue)).
+        """
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Cancel")
+        let response = alert.runModal()
+        NSApp.setActivationPolicy(.accessory)
+        return response == .alertFirstButtonReturn
     }
 
     private func refreshClosedLidModeStatusAsync() {

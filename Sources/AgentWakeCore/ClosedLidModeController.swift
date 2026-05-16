@@ -164,6 +164,13 @@ public final class ClosedLidModeController: @unchecked Sendable {
         return "Closed-Lid Mode off\nSleepDisabled=0"
     }
 
+    public func currentDisablesleepValue() throws -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+
+        return try commandRunner.currentDisablesleep()
+    }
+
     public func enable() throws -> String {
         lock.lock()
         defer { lock.unlock() }
