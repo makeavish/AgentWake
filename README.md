@@ -81,8 +81,9 @@ The V1 adapter contract reduces native hook payloads to a minimal event schema a
 
 ## Install
 
-Download the latest macOS ZIP from GitHub Releases and move `AgentWake.app` to
-`/Applications`.
+Download the latest macOS ZIP from
+[GitHub Releases](https://github.com/makeavish/AgentWake/releases/latest),
+unzip it, and move `AgentWake.app` to `/Applications`.
 
 Current releases are ad-hoc signed. macOS may require right-click -> Open on
 first launch; moving the app into `/Applications` may ask for administrator
@@ -99,7 +100,7 @@ release scope and Closed-Lid Mode boundaries.
 Build a local release ZIP:
 
 ```sh
-scripts/package-release.sh --version v0.2.0
+scripts/package-release.sh --version v0.2.1
 ```
 
 The generated artifact is ad-hoc signed and does not install/register privileged
