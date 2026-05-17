@@ -283,7 +283,7 @@ if grep -q '^statusItemFound=true$' "$EVIDENCE_DIR/accessibility-menu-bar.txt" &
 fi
 
 closed_lid_mode_copy_found=false
-if grep -Eq '^menuItem=(Lid-Closed Awake: (Off|On|Unknown|On Outside AgentWake|Finishing Setup)|Closed-Lid Mode unavailable)$' "$EVIDENCE_DIR/accessibility-menu-bar.txt"; then
+if grep -Eq '^menuItem=(Lid-Closed Awake: (Off|On|Unknown|Finishing Setup)|Lid-closed sleep is disabled by another tool|Closed-Lid Mode unavailable)$' "$EVIDENCE_DIR/accessibility-menu-bar.txt"; then
     closed_lid_mode_copy_found=true
 fi
 

@@ -81,11 +81,11 @@ public final class SettingsStore: StubLifecycleComponent {
         try save(next)
     }
 
-    public func pauseSleepProtection() throws {
+    public func pauseSleepProtection(until expiresAt: Date? = nil) throws {
         var next = settings
         next.manualOverrides.removeAll { $0.overrideKind == .pauseAll }
         next.manualOverrides.append(
-            ManualOverride(id: "user-pause", kind: ManualOverrideKind.pauseAll.rawValue)
+            ManualOverride(id: "user-pause", kind: ManualOverrideKind.pauseAll.rawValue, expiresAt: expiresAt)
         )
         try save(next)
     }
@@ -93,6 +93,12 @@ public final class SettingsStore: StubLifecycleComponent {
     public func resumeSleepProtection() throws {
         var next = settings
         next.manualOverrides.removeAll { $0.overrideKind == .pauseAll }
+        try save(next)
+    }
+
+    public func setLaunchAtLogin(_ isEnabled: Bool) throws {
+        var next = settings
+        next.launchAtLogin = isEnabled
         try save(next)
     }
 

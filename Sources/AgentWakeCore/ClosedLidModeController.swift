@@ -54,6 +54,14 @@ public struct ClosedLidModeState: Codable, Equatable, Sendable {
     }
 }
 
+public enum ClosedLidStatus: Equatable, Sendable {
+    case off
+    case enabledByAgentWake
+    case enabledByOther
+    case ownershipPending
+    case unknown(reason: String)
+}
+
 public protocol ClosedLidModeCommandRunning: Sendable {
     func currentDisablesleep() throws -> Int
     func setDisablesleep(_ value: Int) throws
@@ -137,6 +145,33 @@ public final class ClosedLidModeController: @unchecked Sendable {
         self.decoder.dateDecodingStrategy = .iso8601
     }
 
+    public func status() -> ClosedLidStatus {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let current: Int
+        do {
+            current = try commandRunner.currentDisablesleep()
+        } catch {
+            return .unknown(reason: error.localizedDescription)
+        }
+        let state = loadState()
+
+        if current == 1, let state, state.phase == .active {
+            return .enabledByAgentWake
+        }
+
+        if current == 1, let state, state.phase == .pending {
+            return .ownershipPending
+        }
+
+        if current == 1 {
+            return .enabledByOther
+        }
+
+        return .off
+    }
+
     public func statusMessage() -> String {
         lock.lock()
         defer { lock.unlock() }
@@ -149,19 +184,18 @@ public final class ClosedLidModeController: @unchecked Sendable {
         }
         let state = loadState()
 
-        if current == 1, let state, state.phase == .active {
-            return "Closed-Lid Mode enabled\nSleepDisabled=1\nRestore value=\(state.previousDisablesleep)"
-        }
-
-        if current == 1, let state, state.phase == .pending {
+        switch statusFor(current: current, state: state) {
+        case .off:
+            return "Closed-Lid Mode off\nSleepDisabled=0"
+        case .enabledByAgentWake:
+            return "Closed-Lid Mode enabled\nSleepDisabled=1\nRestore value=\(state?.previousDisablesleep ?? 0)"
+        case .enabledByOther:
+            return "Lid-closed sleep is disabled by another tool\nSleepDisabled=1\nAgentWake left it alone so it can be restored cleanly when you turn that tool off."
+        case .ownershipPending:
             return "Closed-Lid Mode ownership pending\nSleepDisabled=1\nDisable is blocked until AgentWake confirms active ownership."
+        case .unknown(let reason):
+            return "Closed-Lid Mode status unknown\n\(reason)"
         }
-
-        if current == 1 {
-            return "Closed-Lid Mode enabled outside AgentWake\nSleepDisabled=1\nDisable is blocked until AgentWake owns a restore record."
-        }
-
-        return "Closed-Lid Mode off\nSleepDisabled=0"
     }
 
     public func currentDisablesleepValue() throws -> Int {
@@ -169,6 +203,17 @@ public final class ClosedLidModeController: @unchecked Sendable {
         defer { lock.unlock() }
 
         return try commandRunner.currentDisablesleep()
+    }
+
+    public func isAgentWakeOwnedEnabled() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard let state = loadState(), state.phase == .active else {
+            return false
+        }
+
+        return (try? commandRunner.currentDisablesleep()) == 1
     }
 
     public func enable() throws -> String {
@@ -222,6 +267,20 @@ public final class ClosedLidModeController: @unchecked Sendable {
         return "Closed-Lid Mode disabled\nSleepDisabled=\(restoreValue)"
     }
 
+    public func takeOwnership(restoreValue: Int = 0) throws -> String {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let current = try commandRunner.currentDisablesleep()
+        guard current == 1 else {
+            try removeState()
+            return "Closed-Lid Mode off\nSleepDisabled=0"
+        }
+
+        try saveState(ClosedLidModeState(previousDisablesleep: restoreValue, enabledAt: now(), phase: .active))
+        return "Closed-Lid Mode ownership adopted\nSleepDisabled=1\nDisable from AgentWake to restore disablesleep=\(restoreValue)."
+    }
+
     public func repair() throws -> String {
         lock.lock()
         defer { lock.unlock() }
@@ -256,6 +315,19 @@ public final class ClosedLidModeController: @unchecked Sendable {
         }
 
         return try? decoder.decode(ClosedLidModeState.self, from: data)
+    }
+
+    private func statusFor(current: Int, state: ClosedLidModeState?) -> ClosedLidStatus {
+        if current == 1, let state, state.phase == .active {
+            return .enabledByAgentWake
+        }
+        if current == 1, let state, state.phase == .pending {
+            return .ownershipPending
+        }
+        if current == 1 {
+            return .enabledByOther
+        }
+        return .off
     }
 
     private func saveState(_ state: ClosedLidModeState) throws {

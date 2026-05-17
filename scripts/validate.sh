@@ -810,6 +810,9 @@ for required_release_packaging_contract in \
     'helperInstalled=false' \
     'CFBundleIconFile' \
     'CFBundleShortVersionString' \
+    'LSUIElement' \
+    'LSApplicationCategoryType' \
+    'NSHumanReadableCopyright' \
     'codesign --force --sign -'
 do
     if ! grep -q -- "$required_release_packaging_contract" scripts/package-release.sh; then
@@ -870,6 +873,12 @@ if ! grep -q "Version must look like" "$bag_mode_smoke_error"; then
 fi
 if [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$release_package_app/Contents/Info.plist")" != "0.0.0" ]]; then
     echo "Release packaging Info.plist did not carry the requested short version" >&2
+    /usr/bin/plutil -p "$release_package_app/Contents/Info.plist" >&2
+    exit 1
+fi
+if [[ "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$release_package_app/Contents/Info.plist")" != "true" ||
+      "$(/usr/libexec/PlistBuddy -c 'Print :LSApplicationCategoryType' "$release_package_app/Contents/Info.plist")" != "public.app-category.developer-tools" ]]; then
+    echo "Release packaging Info.plist did not include menu-bar app metadata" >&2
     /usr/bin/plutil -p "$release_package_app/Contents/Info.plist" >&2
     exit 1
 fi

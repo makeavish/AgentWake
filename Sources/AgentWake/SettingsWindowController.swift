@@ -58,6 +58,8 @@ private final class SettingsViewController: NSViewController {
     private let services: AgentWakeServices
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
     private let sessionListLabel = NSTextField(wrappingLabelWithString: "")
+    private let launchAtLoginCheckbox = NSButton(checkboxWithTitle: "Launch at login", target: nil, action: nil)
+    private let launchAtLoginStatusLabel = NSTextField(labelWithString: "")
     private let closedLidModeStatusLabel = NSTextField(wrappingLabelWithString: "")
     private let closedLidSafetyWarningLabel = NSTextField(wrappingLabelWithString: "")
     private let claudeStatusLabel = NSTextField(labelWithString: "")
@@ -71,11 +73,16 @@ private final class SettingsViewController: NSViewController {
     private let claudeRemoveButton = NSButton(title: "Remove", target: nil, action: nil)
     private let codexRemoveButton = NSButton(title: "Remove", target: nil, action: nil)
     private let protectButton = NSButton(title: "Keep sessions awake", target: nil, action: nil)
-    private let pauseButton = NSButton(title: "Pause Sleep Protection", target: nil, action: nil)
+    private let pauseButton = NSButton(title: "Resume Sleep Protection", target: nil, action: nil)
+    private let pauseOptionsButton = NSPopUpButton(frame: .zero, pullsDown: true)
     private let enableClosedLidButton = NSButton(title: "Turn On", target: nil, action: nil)
     private let disableClosedLidButton = NSButton(title: "Turn Off", target: nil, action: nil)
     private let repairButton = NSButton(title: "Reinstall agent hooks", target: nil, action: nil)
     private let refreshButton = NSButton(title: "Refresh", target: nil, action: nil)
+    private let showEventLogButton = NSButton(title: "Show event log...", target: nil, action: nil)
+    private let revealEventLogButton = NSButton(title: "Reveal log in Finder", target: nil, action: nil)
+    private let copyDiagnosticsButton = NSButton(title: "Copy diagnostic info", target: nil, action: nil)
+    private let uninstallButton = NSButton(title: "Uninstall AgentWake...", target: nil, action: nil)
     private var closedLidActionInFlight = false
     private var refreshTimer: Timer?
 
@@ -97,11 +104,16 @@ private final class SettingsViewController: NSViewController {
         titleLabel.font = .preferredFont(forTextStyle: .title1)
         titleLabel.setAccessibilityLabel("AgentWake Settings")
 
+        launchAtLoginCheckbox.target = self
+        launchAtLoginCheckbox.action = #selector(toggleLaunchAtLogin)
+        launchAtLoginCheckbox.setAccessibilityLabel("Launch AgentWake at login")
+        launchAtLoginStatusLabel.textColor = .secondaryLabelColor
+
         statusLabel.font = .preferredFont(forTextStyle: .title3)
         statusLabel.setAccessibilityLabel("AgentWake runtime status")
         sessionListLabel.textColor = .secondaryLabelColor
         sessionListLabel.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        sessionListLabel.maximumNumberOfLines = 4
+        sessionListLabel.maximumNumberOfLines = 12
         sessionListLabel.setAccessibilityLabel("Detected agent sessions")
 
         closedLidModeStatusLabel.textColor = .secondaryLabelColor
@@ -168,7 +180,9 @@ private final class SettingsViewController: NSViewController {
         pauseButton.target = self
         pauseButton.action = #selector(toggleSleepProtectionPause)
         pauseButton.bezelStyle = .rounded
-        pauseButton.setAccessibilityLabel("Pause or resume sleep protection")
+        pauseButton.setAccessibilityLabel("Resume sleep protection")
+
+        configurePauseOptionsButton()
 
         enableClosedLidButton.target = self
         enableClosedLidButton.action = #selector(enableClosedLidMode)
@@ -195,12 +209,37 @@ private final class SettingsViewController: NSViewController {
         refreshButton.bezelStyle = .rounded
         refreshButton.setAccessibilityLabel("Refresh status")
 
-        let sessionButtons = rowStack([protectButton, pauseButton, refreshButton])
+        showEventLogButton.target = self
+        showEventLogButton.action = #selector(showEventLog)
+        showEventLogButton.bezelStyle = .rounded
+        showEventLogButton.setAccessibilityLabel("Show event log")
+
+        revealEventLogButton.target = self
+        revealEventLogButton.action = #selector(revealEventLog)
+        revealEventLogButton.bezelStyle = .rounded
+        revealEventLogButton.setAccessibilityLabel("Reveal event log in Finder")
+
+        copyDiagnosticsButton.target = self
+        copyDiagnosticsButton.action = #selector(copyDiagnosticInfo)
+        copyDiagnosticsButton.bezelStyle = .rounded
+        copyDiagnosticsButton.setAccessibilityLabel("Copy diagnostic info")
+
+        uninstallButton.target = self
+        uninstallButton.action = #selector(uninstallAgentWake)
+        uninstallButton.bezelStyle = .rounded
+        uninstallButton.setAccessibilityLabel("Uninstall AgentWake")
+
+        let sessionButtons = rowStack([protectButton, pauseOptionsButton, pauseButton, refreshButton])
         let closedLidButtons = rowStack([enableClosedLidButton, disableClosedLidButton])
+        let generalStack = rowStack([launchAtLoginCheckbox, launchAtLoginStatusLabel])
+        let supportButtons = rowStack([showEventLogButton, revealEventLogButton, copyDiagnosticsButton, uninstallButton])
         let footerButtons = rowStack([NSView(), closeButton])
 
         let stack = NSStackView(views: [
             titleLabel,
+            sectionHeader("General"),
+            generalStack,
+            separator(),
             sectionHeader("Sessions"),
             statusLabel,
             sessionListLabel,
@@ -214,6 +253,9 @@ private final class SettingsViewController: NSViewController {
             sectionHeader("Integrations"),
             integrationStack,
             repairButton,
+            separator(),
+            sectionHeader("Support"),
+            supportButtons,
             footerButtons
         ])
         stack.orientation = .vertical
@@ -231,7 +273,9 @@ private final class SettingsViewController: NSViewController {
             stack.bottomAnchor.constraint(lessThanOrEqualTo: rootView.bottomAnchor),
             sessionButtons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
             closedLidButtons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
+            generalStack.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
             integrationStack.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
+            supportButtons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
             footerButtons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48)
         ])
 
@@ -254,21 +298,25 @@ private final class SettingsViewController: NSViewController {
             return
         }
 
+        launchAtLoginCheckbox.state = LaunchAtLoginController.isEnabled ? .on : .off
+        launchAtLoginStatusLabel.stringValue = LaunchAtLoginController.statusText
+
         let protectableCount = services.agentMonitor.protectableDetectedSessionCount
         statusLabel.stringValue = services.agentMonitor.sessionSummaryMessage()
-        sessionListLabel.stringValue = services.agentMonitor.sessionOverviewMessage()
+        sessionListLabel.stringValue = services.agentMonitor.sessionDetailMessage()
         protectButton.title = protectButtonTitle(count: protectableCount)
         protectButton.isEnabled = protectableCount > 0
-        pauseButton.title = isSleepProtectionPaused ? "Resume Sleep Protection" : "Pause Sleep Protection"
+        pauseButton.isHidden = !isSleepProtectionPaused
+        pauseOptionsButton.isHidden = isSleepProtectionPaused
         refreshButton.isHidden = !isStatusStale()
 
-        let closedLidStatusMessage = services.closedLidModeController.statusMessage()
-        closedLidModeStatusLabel.stringValue = closedLidDisplayText(for: closedLidStatusMessage)
-        closedLidSafetyWarningLabel.isHidden = !shouldShowSafetyWarning(statusMessage: closedLidStatusMessage)
+        let closedLidStatus = services.closedLidModeController.status()
+        closedLidModeStatusLabel.stringValue = closedLidDisplayText(for: closedLidStatus)
+        closedLidSafetyWarningLabel.isHidden = !shouldShowSafetyWarning(status: closedLidStatus)
         enableClosedLidButton.isEnabled = !closedLidActionInFlight &&
-            canEnableClosedLidMode(statusMessage: closedLidStatusMessage)
+            canEnableClosedLidMode(status: closedLidStatus)
         disableClosedLidButton.isEnabled = !closedLidActionInFlight &&
-            canDisableClosedLidMode(statusMessage: closedLidStatusMessage)
+            canDisableClosedLidMode(status: closedLidStatus)
 
         let snapshots = Dictionary(
             uniqueKeysWithValues: services.integrationManager.snapshots().map { ($0.agentID, $0) }
@@ -344,6 +392,25 @@ private final class SettingsViewController: NSViewController {
         return stack
     }
 
+    private func configurePauseOptionsButton() {
+        pauseOptionsButton.removeAllItems()
+        pauseOptionsButton.addItem(withTitle: "Pause Sleep Protection")
+        pauseOptionsButton.menu?.items.first?.isEnabled = false
+        addPauseOption("Pause for 30 minutes", tag: 30 * 60)
+        addPauseOption("Pause for 1 hour", tag: 60 * 60)
+        addPauseOption("Pause for 4 hours", tag: 4 * 60 * 60)
+        addPauseOption("Pause until tomorrow morning", tag: -1)
+        addPauseOption("Pause indefinitely", tag: 0)
+        pauseOptionsButton.target = self
+        pauseOptionsButton.action = #selector(selectPauseOption(_:))
+        pauseOptionsButton.setAccessibilityLabel("Pause sleep protection")
+    }
+
+    private func addPauseOption(_ title: String, tag: Int) {
+        pauseOptionsButton.addItem(withTitle: title)
+        pauseOptionsButton.lastItem?.tag = tag
+    }
+
     private func integrationRow(
         title: NSTextField,
         enabledCheckbox: NSButton,
@@ -370,43 +437,36 @@ private final class SettingsViewController: NSViewController {
         return count == 1 ? "Also keep 1 detected session awake" : "Also keep \(count) detected sessions awake"
     }
 
-    private func closedLidDisplayText(for message: String) -> String {
-        let lines = message.split(separator: "\n").map(String.init)
-        guard let first = lines.first else {
-            return "Status unknown"
-        }
-
-        switch first {
-        case "Closed-Lid Mode off":
+    private func closedLidDisplayText(for status: ClosedLidStatus) -> String {
+        switch status {
+        case .off:
             return "Off"
-        case "Closed-Lid Mode enabled":
+        case .enabledByAgentWake:
             return "Enabled\nAgentWake will restore the previous sleep setting when this is disabled."
-        case "Closed-Lid Mode already enabled":
-            return "Enabled"
-        case "Closed-Lid Mode ownership pending":
+        case .ownershipPending:
             return "Finishing setup\nDisable is blocked until AgentWake confirms ownership."
-        case "Closed-Lid Mode enabled outside AgentWake":
-            return "On outside AgentWake\nDisable is blocked because AgentWake did not create this state."
-        case "Closed-Lid Mode status unknown":
-            return (["Status unknown"] + lines.dropFirst()).joined(separator: "\n")
-        default:
-            return first
+        case .enabledByOther:
+            return "Disabled by another tool\nAgentWake left it alone so it can be restored cleanly when you turn that tool off."
+        case .unknown(let reason):
+            return "Status unknown\n\(reason)"
         }
     }
 
-    private func canEnableClosedLidMode(statusMessage: String) -> Bool {
-        let firstLine = statusMessage.split(separator: "\n").first.map(String.init) ?? ""
-        return firstLine == "Closed-Lid Mode off" || firstLine == "Closed-Lid Mode already off"
+    private func canEnableClosedLidMode(status: ClosedLidStatus) -> Bool {
+        switch status {
+        case .off, .unknown:
+            return true
+        case .enabledByAgentWake, .enabledByOther, .ownershipPending:
+            return false
+        }
     }
 
-    private func canDisableClosedLidMode(statusMessage: String) -> Bool {
-        let firstLine = statusMessage.split(separator: "\n").first.map(String.init) ?? ""
-        return firstLine == "Closed-Lid Mode enabled" || firstLine == "Closed-Lid Mode already enabled"
+    private func canDisableClosedLidMode(status: ClosedLidStatus) -> Bool {
+        status == .enabledByAgentWake
     }
 
-    private func shouldShowSafetyWarning(statusMessage: String) -> Bool {
-        let firstLine = statusMessage.split(separator: "\n").first.map(String.init) ?? ""
-        return firstLine == "Closed-Lid Mode enabled" || firstLine == "Closed-Lid Mode already enabled"
+    private func shouldShowSafetyWarning(status: ClosedLidStatus) -> Bool {
+        status == .enabledByAgentWake
     }
 
     private var isSleepProtectionPaused: Bool {
@@ -482,14 +542,56 @@ private final class SettingsViewController: NSViewController {
         do {
             if isSleepProtectionPaused {
                 try services.settingsStore.resumeSleepProtection()
-            } else {
-                try services.settingsStore.pauseSleepProtection()
             }
             services.agentMonitor.poll()
             services.assertionManager.reconcile()
             refresh()
         } catch {
             presentAlert(title: "Could not update sleep protection", message: error.localizedDescription, style: .warning)
+        }
+    }
+
+    @objc private func selectPauseOption(_ sender: NSPopUpButton) {
+        guard let selectedItem = sender.selectedItem, selectedItem.tag != 0 || selectedItem.title == "Pause indefinitely" else {
+            sender.selectItem(at: 0)
+            return
+        }
+
+        do {
+            try services.settingsStore.pauseSleepProtection(until: pauseExpiration(forTag: selectedItem.tag, from: Date()))
+            services.agentMonitor.poll()
+            services.assertionManager.reconcile()
+            refresh()
+        } catch {
+            presentAlert(title: "Could not pause sleep protection", message: error.localizedDescription, style: .warning)
+        }
+        sender.selectItem(at: 0)
+    }
+
+    private func pauseExpiration(forTag tag: Int, from now: Date) -> Date? {
+        if tag > 0 {
+            return now.addingTimeInterval(TimeInterval(tag))
+        }
+        if tag == -1 {
+            return Calendar.current.nextDate(
+                after: now,
+                matching: DateComponents(hour: 8, minute: 0, second: 0),
+                matchingPolicy: .nextTime
+            )
+        }
+        return nil
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        let shouldEnable = launchAtLoginCheckbox.state == .on
+        do {
+            try LaunchAtLoginController.setEnabled(shouldEnable)
+            try services.settingsStore.setLaunchAtLogin(LaunchAtLoginController.isEnabled)
+            refresh()
+        } catch {
+            try? services.settingsStore.setLaunchAtLogin(LaunchAtLoginController.isEnabled)
+            presentAlert(title: "Could not update login item", message: error.localizedDescription, style: .warning)
+            refresh()
         }
     }
 
@@ -670,6 +772,66 @@ private final class SettingsViewController: NSViewController {
         services.agentMonitor.poll()
         services.assertionManager.reconcile()
         refresh()
+    }
+
+    @objc private func showEventLog() {
+        NSWorkspace.shared.open(services.logStore.auditLogURL)
+    }
+
+    @objc private func revealEventLog() {
+        NSWorkspace.shared.activateFileViewerSelecting([services.logStore.auditLogURL])
+    }
+
+    @objc private func copyDiagnosticInfo() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(services.diagnosticInfo(), forType: .string)
+    }
+
+    @objc private func uninstallAgentWake() {
+        let alert = NSAlert()
+        alert.messageText = "Uninstall AgentWake?"
+        alert.informativeText = "AgentWake will remove its Claude Code and Codex hooks, restore AgentWake-owned Lid-Closed Awake state, and attempt helper cleanup. The app bundle itself is left for you to delete from Applications."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Uninstall")
+        alert.addButton(withTitle: "Cancel")
+
+        let runUninstall = { [weak self] in
+            guard let self else {
+                return
+            }
+
+            var results: [String] = []
+            do {
+                try self.services.integrationManager.removeAllIntegrations(at: Date())
+                results.append("Agent hooks removed.")
+            } catch {
+                results.append("Agent hooks: \(error.localizedDescription)")
+            }
+
+            do {
+                results.append(try self.services.closedLidModeController.uninstall())
+            } catch {
+                results.append("Lid-Closed Awake: \(error.localizedDescription)")
+            }
+
+            results.append("Production helper: no production helper is installed.")
+            self.services.agentMonitor.poll()
+            self.services.assertionManager.reconcile()
+            self.refresh()
+            self.presentAlert(title: "Uninstall cleanup complete", message: results.joined(separator: "\n"))
+        }
+
+        if let window = view.window {
+            beginFrontmostSheet(alert, for: window) { response in
+                guard response == .alertFirstButtonReturn else {
+                    return
+                }
+                runUninstall()
+            }
+        } else if runFrontmostAlert(alert) == .alertFirstButtonReturn {
+            runUninstall()
+        }
     }
 
     @objc private func closeWindow() {

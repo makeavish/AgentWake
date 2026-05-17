@@ -27,6 +27,9 @@ public struct AgentWakeCLI {
         case "status":
             try requireArgumentCount(arguments, 1, usage: "status takes no arguments")
             return .status
+        case "doctor":
+            try requireArgumentCount(arguments, 1, usage: "doctor takes no arguments")
+            return .doctor
         case "pause":
             try requireArgumentCount(arguments, 2, usage: "pause requires a duration like 1h or 15m")
             guard let duration = arguments.dropFirst().first.flatMap(parseDuration) else {
@@ -49,9 +52,10 @@ public struct AgentWakeCLI {
             try requireArgumentCount(arguments, 1, usage: "list takes no arguments")
             return .list
         case "add":
-            try requireArgumentCount(arguments, 2, usage: "add requires a binary path")
-            guard let binary = arguments.dropFirst().first else {
-                throw ControlServerError.invalidRequest("add requires a binary path")
+            try requireArgumentCount(arguments, 3, usage: "add requires --experimental and a binary path")
+            guard arguments.dropFirst().first == "--experimental",
+                  let binary = arguments.dropFirst(2).first else {
+                throw ControlServerError.invalidRequest("add requires --experimental and a binary path")
             }
             return .add(binary: binary)
         case "integrations":

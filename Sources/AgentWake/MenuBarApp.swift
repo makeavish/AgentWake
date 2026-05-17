@@ -8,7 +8,7 @@ final class MenuBarApp: NSObject {
     private let settingsWindowController: SettingsWindowController
     private var currentState: AgentWakeState
     private var refreshTimer: Timer?
-    private var closedLidModeStatusLine = "Closed-Lid Mode status unknown"
+    private var closedLidStatus = ClosedLidStatus.unknown(reason: "Use Refresh Status to check Lid-Closed Awake.")
     private var closedLidModeStatusDetail = "Use Refresh Status to check Closed-Lid Mode."
     private var closedLidModeActionInFlight = false
 
@@ -70,13 +70,13 @@ final class MenuBarApp: NSObject {
         let snapshot = MenuBarModel.snapshot(
             currentState: currentState,
             sessionSummary: services.agentMonitor.sessionSummaryMessage(),
-            closedLidModeStatus: closedLidModeStatusLine,
+            closedLidStatus: closedLidStatus,
             closedLidModeDetail: closedLidModeStatusDetail,
             protectableDetectedSessionCount: services.agentMonitor.protectableDetectedSessionCount,
             enableClosedLidModeEnabled: canEnableClosedLidMode,
             disableClosedLidModeEnabled: canDisableClosedLidMode,
+            takeClosedLidOwnershipEnabled: canTakeClosedLidOwnership,
             isSleepProtectionPaused: isSleepProtectionPaused,
-            showRefreshStatus: isStatusStale(),
             integrationStatuses: services.integrationManager.snapshots()
         )
 
@@ -131,25 +131,26 @@ final class MenuBarApp: NSObject {
 
     private var canEnableClosedLidMode: Bool {
         !closedLidModeActionInFlight &&
-            closedLidModeStatusLine != "Closed-Lid Mode enabled" &&
-            !closedLidModeStatusLine.contains("outside AgentWake") &&
-            !closedLidModeStatusLine.contains("pending")
+            (closedLidStatus == .off || isUnknownClosedLidStatus)
     }
 
     private var canDisableClosedLidMode: Bool {
-        !closedLidModeActionInFlight && closedLidModeStatusLine == "Closed-Lid Mode enabled"
+        !closedLidModeActionInFlight && closedLidStatus == .enabledByAgentWake
+    }
+
+    private var canTakeClosedLidOwnership: Bool {
+        !closedLidModeActionInFlight && closedLidStatus == .enabledByOther
+    }
+
+    private var isUnknownClosedLidStatus: Bool {
+        if case .unknown = closedLidStatus {
+            return true
+        }
+        return false
     }
 
     private var isSleepProtectionPaused: Bool {
         services.agentMonitor.aggregateHoldState.isPaused
-    }
-
-    private func isStatusStale(referenceDate: Date = Date()) -> Bool {
-        guard let lastPollAt = services.agentMonitor.lastPollAt else {
-            return true
-        }
-
-        return referenceDate.timeIntervalSince(lastPollAt) > 30
     }
 
     private func makeMenu(from snapshot: MenuBarSnapshot) -> NSMenu {
@@ -165,19 +166,17 @@ final class MenuBarApp: NSObject {
             case .separator:
                 menu.addItem(.separator())
             case .pauseProtection:
-                menu.addItem(actionMenuItem(for: item, action: #selector(pauseSleepProtection)))
+                menu.addItem(pauseProtectionMenuItem(for: item))
             case .resumeProtection:
                 menu.addItem(actionMenuItem(for: item, action: #selector(resumeSleepProtection)))
             case .protectDetectedSessions:
                 menu.addItem(actionMenuItem(for: item, action: #selector(protectDetectedSessions)))
-            case .releaseProtection:
-                menu.addItem(actionMenuItem(for: item, action: #selector(releaseProtection)))
             case .closedLidEnable:
                 menu.addItem(actionMenuItem(for: item, action: #selector(enableClosedLidMode)))
             case .closedLidDisable:
                 menu.addItem(actionMenuItem(for: item, action: #selector(disableClosedLidMode)))
-            case .refreshStatus:
-                menu.addItem(actionMenuItem(for: item, action: #selector(refreshStatusNow)))
+            case .closedLidTakeOwnership:
+                menu.addItem(actionMenuItem(for: item, action: #selector(takeClosedLidOwnership)))
             case .repairIntegrations:
                 menu.addItem(actionMenuItem(for: item, action: #selector(repairIntegrations)))
             case .settings:
@@ -237,16 +236,35 @@ final class MenuBarApp: NSObject {
         settingsWindowController.refresh()
     }
 
-    @objc private func releaseProtection() {
-        services.agentMonitor.releaseHeldSessions(at: Date())
-        services.assertionManager.reconcile()
-        refreshState()
-        settingsWindowController.refresh()
+    private func pauseProtectionMenuItem(for item: MenuBarItem) -> NSMenuItem {
+        let menuItem = NSMenuItem(title: item.title, action: nil, keyEquivalent: "")
+        menuItem.isEnabled = item.isEnabled
+        let submenu = NSMenu(title: item.title)
+        submenu.autoenablesItems = false
+        addPauseOption("Pause for 30 minutes", tag: 30 * 60, to: submenu)
+        addPauseOption("Pause for 1 hour", tag: 60 * 60, to: submenu)
+        addPauseOption("Pause for 4 hours", tag: 4 * 60 * 60, to: submenu)
+        addPauseOption("Pause until tomorrow morning", tag: -1, to: submenu)
+        addPauseOption("Pause indefinitely", tag: 0, to: submenu)
+        menuItem.submenu = submenu
+        return menuItem
     }
 
-    @objc private func pauseSleepProtection() {
+    private func addPauseOption(_ title: String, tag: Int, to menu: NSMenu) {
+        let item = NSMenuItem(title: title, action: #selector(pauseSleepProtectionOption(_:)), keyEquivalent: "")
+        item.target = self
+        item.tag = tag
+        item.isEnabled = true
+        menu.addItem(item)
+    }
+
+    @objc private func pauseSleepProtectionOption(_ sender: NSMenuItem) {
+        pauseSleepProtection(until: pauseExpiration(forTag: sender.tag, from: Date()))
+    }
+
+    private func pauseSleepProtection(until expiresAt: Date?) {
         do {
-            try services.settingsStore.pauseSleepProtection()
+            try services.settingsStore.pauseSleepProtection(until: expiresAt)
             services.agentMonitor.poll()
             services.assertionManager.reconcile()
             refreshState()
@@ -254,6 +272,20 @@ final class MenuBarApp: NSObject {
         } catch {
             presentMessage(title: "Could not pause sleep protection", message: error.localizedDescription, style: .warning)
         }
+    }
+
+    private func pauseExpiration(forTag tag: Int, from now: Date) -> Date? {
+        if tag > 0 {
+            return now.addingTimeInterval(TimeInterval(tag))
+        }
+        if tag == -1 {
+            return Calendar.current.nextDate(
+                after: now,
+                matching: DateComponents(hour: 8, minute: 0, second: 0),
+                matchingPolicy: .nextTime
+            )
+        }
+        return nil
     }
 
     @objc private func resumeSleepProtection() {
@@ -291,6 +323,19 @@ final class MenuBarApp: NSObject {
         }
     }
 
+    @objc private func takeClosedLidOwnership() {
+        guard !closedLidModeActionInFlight else {
+            return
+        }
+        guard confirmClosedLidOwnershipTakeover() else {
+            return
+        }
+        let controller = services.closedLidModeController
+        runClosedLidAction {
+            try controller.takeOwnership()
+        }
+    }
+
     private func runClosedLidAction(action: @escaping @Sendable () throws -> String) {
         closedLidModeActionInFlight = true
         closedLidModeStatusDetail = "Closed-Lid Mode change is waiting for macOS administrator approval."
@@ -305,12 +350,12 @@ final class MenuBarApp: NSObject {
 
                 switch result {
                 case .success(let message):
-                    self.closedLidModeStatusLine = self.firstLine(of: message)
+                    self.closedLidStatus = self.services.closedLidModeController.status()
                     self.closedLidModeStatusDetail = message
                     self.closedLidModeActionInFlight = false
                     self.refreshState()
                 case .failure(let error):
-                    self.closedLidModeStatusLine = "Closed-Lid Mode status unknown"
+                    self.closedLidStatus = .unknown(reason: error.localizedDescription)
                     self.closedLidModeStatusDetail = error.localizedDescription
                     self.closedLidModeActionInFlight = false
                     self.refreshClosedLidModeStatusAsync()
@@ -327,6 +372,22 @@ final class MenuBarApp: NSObject {
         } catch {
             return "unknown"
         }
+    }
+
+    private func confirmClosedLidOwnershipTakeover() -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Let AgentWake manage this setting?"
+        alert.informativeText = """
+        Lid-closed sleep is already disabled by another tool or a previous pmset command.
+
+        AgentWake will record this as AgentWake-owned and restore disablesleep=0 when you turn Lid-Closed Awake off.
+        """
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Take Ownership")
+        alert.addButton(withTitle: "Cancel")
+        let response = runFrontmostAlert(alert)
+        NSApp.setActivationPolicy(.accessory)
+        return response == .alertFirstButtonReturn
     }
 
     private func confirmClosedLidEnable(currentValue: String) -> Bool {
@@ -362,13 +423,14 @@ final class MenuBarApp: NSObject {
 
         let controller = services.closedLidModeController
         DispatchQueue.global(qos: .utility).async { [weak self] in
+            let status = controller.status()
             let message = controller.statusMessage()
             DispatchQueue.main.async {
                 guard let self, !self.closedLidModeActionInFlight else {
                     return
                 }
 
-                self.closedLidModeStatusLine = self.firstLine(of: message)
+                self.closedLidStatus = status
                 self.closedLidModeStatusDetail = message
                 self.refreshState()
             }
@@ -411,46 +473,17 @@ final class MenuBarApp: NSObject {
             return
         }
 
-        let alert = NSAlert()
-        alert.messageText = "Welcome to AgentWake"
-        alert.informativeText = onboardingMessage()
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "Open Settings")
-        alert.addButton(withTitle: "Done")
-        let response = runFrontmostAlert(alert)
+        let onboarding = OnboardingWindowController(previews: services.integrationManager.installPreviews())
+        let response = onboarding.runFrontmostModal()
 
         settings.hasCompletedOnboarding = true
         try? services.settingsStore.save(settings)
 
-        if response == .alertFirstButtonReturn {
+        if response == .openSettings {
             openSettings()
         } else {
             NSApp.setActivationPolicy(.accessory)
         }
-    }
-
-    private func onboardingMessage() -> String {
-        let hookSummary = services.integrationManager.installPreviews().map { preview in
-            var lines = [
-                "\(preview.displayName): \(preview.settingsFile.isEmpty ? "config path unavailable" : preview.settingsFile)"
-            ]
-            if !preview.dryRunDiff.isEmpty {
-                lines += preview.dryRunDiff.map { "  - \($0)" }
-            }
-            if let failureReason = preview.failureReason {
-                lines.append("  - \(failureReason)")
-            }
-            return lines.joined(separator: "\n")
-        }.joined(separator: "\n")
-
-        return """
-        1. AgentWake adds local hooks so Claude Code and Codex can report session activity.
-        \(hookSummary)
-
-        2. Lid-Closed Awake on battery requires administrator approval. Set it up now or later from Settings.
-
-        3. Open Claude Code or Codex. AgentWake will catch the next session automatically.
-        """
     }
 
     private func presentMessage(title: String, message: String, style: NSAlert.Style) {

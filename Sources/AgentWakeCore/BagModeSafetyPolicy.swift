@@ -155,6 +155,10 @@ public struct BagModeSafetyPolicy: Equatable, Sendable {
             return locked(reason: .temperature, at: input.now, isBagModeArmed: isBagModeArmed)
         }
 
+        if input.appThermalPressure == .critical {
+            return locked(reason: .temperature, at: input.now, isBagModeArmed: isBagModeArmed)
+        }
+
         if state.mode == .cutoffLockedOut {
             guard let temperatureCelsius,
                   temperatureCelsius <= Double(settings.temperatureCutoffCelsius) - temperatureHysteresisCelsius,

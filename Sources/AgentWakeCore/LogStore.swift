@@ -95,6 +95,10 @@ public struct LogEvent: Codable, Equatable, Sendable {
 public final class LogStore: StubLifecycleComponent {
     public private(set) var events: [LogEvent]
 
+    public var auditLogURL: URL {
+        paths.auditLogURL
+    }
+
     private let paths: AgentWakePaths
     private let fileManager: FileManager
     private let now: @Sendable () -> Date

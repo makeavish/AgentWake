@@ -7,11 +7,10 @@ public enum MenuBarItemKind: Equatable, Sendable {
     case pauseProtection
     case resumeProtection
     case protectDetectedSessions
-    case releaseProtection
     case closedLidEnable
     case closedLidDisable
+    case closedLidTakeOwnership
     case integrationStatus(String)
-    case refreshStatus
     case repairIntegrations
     case settings
     case quit
@@ -85,13 +84,13 @@ public enum MenuBarModel {
     public static func snapshot(
         currentState: AgentWakeState,
         sessionSummary: String? = nil,
-        closedLidModeStatus: String = ClosedLidModeAvailability.currentStatus.title,
+        closedLidStatus: ClosedLidStatus? = nil,
         closedLidModeDetail: String? = ClosedLidModeAvailability.currentStatus.settingsDetail,
         protectableDetectedSessionCount: Int = 0,
         enableClosedLidModeEnabled: Bool = true,
         disableClosedLidModeEnabled: Bool = false,
+        takeClosedLidOwnershipEnabled: Bool = false,
         isSleepProtectionPaused: Bool = false,
-        showRefreshStatus: Bool = false,
         integrationStatuses: [IntegrationStatusSnapshot] = []
     ) -> MenuBarSnapshot {
         var items = [
@@ -124,17 +123,6 @@ public enum MenuBarModel {
             )
         }
 
-        if currentState == .active {
-            items.append(
-                MenuBarItem(
-                    title: "Stop Keeping Awake",
-                    detail: "Lets the Mac sleep until new agent activity starts.",
-                    isEnabled: true,
-                    kind: .releaseProtection
-                )
-            )
-        }
-
         items.append(
             MenuBarItem(
                 title: isSleepProtectionPaused ? "Resume Sleep Protection" : "Pause Sleep Protection",
@@ -148,8 +136,8 @@ public enum MenuBarModel {
 
         items.append(
             MenuBarItem(
-                title: closedLidStatusTitle(closedLidModeStatus),
-                detail: closedLidModeDetail,
+                title: closedLidStatusTitle(closedLidStatus),
+                detail: closedLidStatusDetail(closedLidStatus) ?? closedLidModeDetail,
                 isEnabled: false,
                 kind: .diagnostic
             )
@@ -162,6 +150,15 @@ public enum MenuBarModel {
                     detail: "Restores only AgentWake-owned closed-lid state.",
                     isEnabled: true,
                     kind: .closedLidDisable
+                )
+            )
+        } else if takeClosedLidOwnershipEnabled {
+            items.append(
+                MenuBarItem(
+                    title: "Take Ownership...",
+                    detail: "Use only if you want AgentWake to restore the current disabled-lid-sleep setting.",
+                    isEnabled: true,
+                    kind: .closedLidTakeOwnership
                 )
             )
         } else if enableClosedLidModeEnabled {
@@ -197,18 +194,6 @@ public enum MenuBarModel {
             )
         }
 
-        if showRefreshStatus {
-            items += [
-                separatorItem(),
-                MenuBarItem(
-                    title: "Refresh",
-                    detail: "Status has not updated recently.",
-                    isEnabled: true,
-                    kind: .refreshStatus
-                )
-            ]
-        }
-
         items += [
             MenuBarItem(
                 title: "Settings...",
@@ -226,25 +211,25 @@ public enum MenuBarModel {
         return MenuBarSnapshot(
             currentState: currentState,
             statusItemAccessibilityTitle: "AgentWake",
-            statusItemIcon: statusItemIcon(currentState: currentState, closedLidModeStatus: closedLidModeStatus),
+            statusItemIcon: statusItemIcon(currentState: currentState, closedLidStatus: closedLidStatus),
             items: items
         )
     }
 
-    private static func statusItemIcon(currentState: AgentWakeState, closedLidModeStatus: String) -> MenuBarStatusIcon {
+    private static func statusItemIcon(currentState: AgentWakeState, closedLidStatus: ClosedLidStatus?) -> MenuBarStatusIcon {
         switch currentState {
         case .idle:
             return MenuBarStatusIcon(
-                baseSystemImageName: closedLidModeStatus == "Closed-Lid Mode enabled outside AgentWake" ? "moon" : "moon.fill",
-                tint: closedLidModeStatus == "Closed-Lid Mode enabled outside AgentWake" ? .unknown : .secondary,
+                baseSystemImageName: closedLidStatus == .enabledByOther ? "moon" : "moon.fill",
+                tint: closedLidStatus == .enabledByOther ? .unknown : .secondary,
                 accessibilityDescription: "Idle"
             )
         case .active:
             return MenuBarStatusIcon(
                 baseSystemImageName: "bolt.fill",
-                overlaySystemImageName: closedLidModeStatus == "Closed-Lid Mode enabled" ? "lock.fill" : nil,
+                overlaySystemImageName: closedLidStatus == .enabledByAgentWake ? "lock.fill" : nil,
                 tint: .accent,
-                accessibilityDescription: closedLidModeStatus == "Closed-Lid Mode enabled" ? "Keeping Mac awake with Lid-Closed Awake on" : "Keeping Mac awake"
+                accessibilityDescription: closedLidStatus == .enabledByAgentWake ? "Keeping Mac awake with Lid-Closed Awake on" : "Keeping Mac awake"
             )
         case .bagMode:
             return MenuBarStatusIcon(
@@ -279,20 +264,33 @@ public enum MenuBarModel {
         return "Keeps detected sessions awake until they exit."
     }
 
-    private static func closedLidStatusTitle(_ status: String) -> String {
+    private static func closedLidStatusTitle(_ status: ClosedLidStatus?) -> String {
+        guard let status else {
+            return ClosedLidModeAvailability.unavailableTitle
+        }
+
         switch status {
-        case "Closed-Lid Mode off":
+        case .off:
             return "Lid-Closed Awake: Off"
-        case "Closed-Lid Mode enabled", "Closed-Lid Mode already enabled":
+        case .enabledByAgentWake:
             return "Lid-Closed Awake: On"
-        case "Closed-Lid Mode ownership pending":
+        case .ownershipPending:
             return "Lid-Closed Awake: Finishing Setup"
-        case "Closed-Lid Mode enabled outside AgentWake":
-            return "Lid-Closed Awake: On Outside AgentWake"
-        case "Closed-Lid Mode status unknown":
+        case .enabledByOther:
+            return "Lid-closed sleep is disabled by another tool"
+        case .unknown:
             return "Lid-Closed Awake: Unknown"
-        default:
-            return status
+        }
+    }
+
+    private static func closedLidStatusDetail(_ status: ClosedLidStatus?) -> String? {
+        switch status {
+        case .enabledByOther:
+            return "AgentWake left it alone so it can be restored cleanly when you turn that tool off."
+        case .unknown(let reason):
+            return reason
+        case .off, .enabledByAgentWake, .ownershipPending, .none:
+            return nil
         }
     }
 

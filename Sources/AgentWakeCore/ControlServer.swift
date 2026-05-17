@@ -47,6 +47,7 @@ public enum ControlCommand: Equatable, Sendable, Codable {
     case closedLidEnable
     case closedLidDisable
     case uninstall(removeHelper: Bool, removeIntegrations: Bool)
+    case doctor
 
     private enum CodingKeys: String, CodingKey {
         case name
@@ -106,6 +107,8 @@ public enum ControlCommand: Equatable, Sendable, Codable {
                 removeHelper: try container.decode(Bool.self, forKey: .removeHelper),
                 removeIntegrations: try container.decode(Bool.self, forKey: .removeIntegrations)
             )
+        case "doctor":
+            self = .doctor
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .name,
@@ -166,6 +169,8 @@ public enum ControlCommand: Equatable, Sendable, Codable {
             try container.encode("uninstall", forKey: .name)
             try container.encode(removeHelper, forKey: .removeHelper)
             try container.encode(removeIntegrations, forKey: .removeIntegrations)
+        case .doctor:
+            try container.encode("doctor", forKey: .name)
         }
     }
 }
@@ -355,6 +360,7 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
     public var closedLidEnableHandler: (Date) throws -> String
     public var closedLidDisableHandler: (Date) throws -> String
     public var uninstallHandler: (Bool, Bool, Date) throws -> String
+    public var doctorProvider: () -> String
 
     public init(
         statusProvider: @escaping () -> String = { "AgentWake status unavailable" },
@@ -377,7 +383,8 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         protectDetectedSessionsHandler: @escaping (Date) -> String = { _ in "No detected sessions to protect" },
         uninstallHandler: @escaping (Bool, Bool, Date) throws -> String = { removeHelper, removeIntegrations, _ in
             "Uninstall requested removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations)"
-        }
+        },
+        doctorProvider: @escaping () -> String = { "AgentWake diagnostics unavailable" }
     ) {
         self.statusProvider = statusProvider
         self.listProvider = listProvider
@@ -398,6 +405,7 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         self.closedLidEnableHandler = closedLidEnableHandler
         self.closedLidDisableHandler = closedLidDisableHandler
         self.uninstallHandler = uninstallHandler
+        self.doctorProvider = doctorProvider
     }
 
     public func route(_ command: ControlCommand, receivedAt: Date) throws -> ControlResponse {
@@ -448,6 +456,8 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
                 receiptTimestamp: receivedAt,
                 message: try uninstallHandler(removeHelper, removeIntegrations, receivedAt)
             )
+        case .doctor:
+            return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: doctorProvider())
         }
     }
 }

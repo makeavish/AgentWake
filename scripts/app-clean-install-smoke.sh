@@ -7,6 +7,8 @@ APP_NAME="AgentWake"
 HOOK_ADAPTER_NAME="AgentWakeHookAdapter"
 BUNDLE_ID="com.makeavish.AgentWake"
 MIN_SYSTEM_VERSION="13.0"
+SHORT_VERSION="0.0.0"
+BUILD_VERSION="$(git -C "$ROOT_DIR" rev-list --count HEAD 2>/dev/null || date -u +%Y%m%d%H%M)"
 APP_ICON_SOURCE="$ROOT_DIR/Resources/AgentWake.icns"
 APP_ICON_NAME="AgentWake"
 
@@ -90,8 +92,18 @@ stage_source_app_bundle() {
   <string>$APP_NAME</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$SHORT_VERSION</string>
+  <key>CFBundleVersion</key>
+  <string>$BUILD_VERSION</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.developer-tools</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
+  <key>LSUIElement</key>
+  <true/>
+  <key>NSHumanReadableCopyright</key>
+  <string>Copyright © 2026 Vishal Sharma. All rights reserved.</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
 </dict>

@@ -107,6 +107,12 @@ public final class AgentMonitor: AppLifecycleComponent {
         }
     }
 
+    public func setSafetyCutoffActive(_ isActive: Bool) {
+        queue.sync {
+            stateMachine.setSafetyCutoffActive(isActive)
+        }
+    }
+
     public var protectableDetectedSessionCount: Int {
         queue.sync {
             stateMachine.sessions.filter { isProtectableDetectedSession($0) }.count
@@ -265,6 +271,34 @@ public final class AgentMonitor: AppLifecycleComponent {
         }
     }
 
+    public func sessionDetailMessage() -> String {
+        queue.sync {
+            let activeSessions = stateMachine.sessions.filter { $0.state != .finished }
+            guard !activeSessions.isEmpty else {
+                return "No sessions"
+            }
+
+            let timestamp = now()
+            let grouped = Dictionary(grouping: activeSessions, by: \.agent)
+            return grouped.keys.sorted { $0.displayName < $1.displayName }.compactMap { agent in
+                guard let sessions = grouped[agent] else {
+                    return nil
+                }
+
+                let header = "\(agent.displayName) (\(sessions.count))"
+                let rows = sessions.sorted { $0.firstSeenAt < $1.firstSeenAt }.map { session in
+                    let pid = session.key.pid.map(String.init) ?? "-"
+                    let source = session.source.rawValue
+                    let event = session.lastEvent.map { "\(relativeTime(from: $0.occurredAt, to: timestamp)) ago (\($0.kind.rawValue))" } ?? "-"
+                    let heldSince = session.contributesToHold(at: timestamp) ? "\(relativeTime(from: session.firstSeenAt, to: timestamp)) ago" : "-"
+                    return "  \(pid)  \(source)  \(event)  held \(heldSince)"
+                }
+                return ([header] + rows).joined(separator: "\n")
+            }
+            .joined(separator: "\n")
+        }
+    }
+
     private func sessionDisplayState(_ session: AgentSession, at now: Date) -> String {
         if isManuallyProtectedDetectedSession(session) {
             return "keeping awake"
@@ -296,6 +330,22 @@ public final class AgentMonitor: AppLifecycleComponent {
         "\(count) \(count == 1 ? singular : plural)"
     }
 
+    private func relativeTime(from date: Date, to now: Date) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(date)))
+        if seconds < 60 {
+            return "\(seconds)s"
+        }
+        let minutes = seconds / 60
+        if minutes < 60 {
+            return "\(minutes)m"
+        }
+        let hours = minutes / 60
+        if hours < 24 {
+            return "\(hours)h"
+        }
+        return "\(hours / 24)d"
+    }
+
     private func isProtectableDetectedSession(_ session: AgentSession) -> Bool {
         session.source == .processScan
             && session.state != .finished
@@ -320,6 +370,7 @@ public final class AgentWakeServices {
     public let settingsStore: SettingsStore
     public let logStore: LogStore
     public let closedLidModeController: ClosedLidModeController
+    public let closedLidSafetyMonitor: ClosedLidSafetyMonitor
 
     public init(
         agentMonitor: AgentMonitor? = nil,
@@ -353,6 +404,14 @@ public final class AgentWakeServices {
             }
         )
         self.assertionManager = resolvedAssertionManager
+        let resolvedClosedLidSafetyMonitor = ClosedLidSafetyMonitor(
+            settingsProvider: { resolvedSettingsStore.settings },
+            closedLidModeController: resolvedClosedLidModeController,
+            agentMonitor: resolvedAgentMonitor,
+            assertionManager: resolvedAssertionManager,
+            logStore: resolvedLogStore
+        )
+        self.closedLidSafetyMonitor = resolvedClosedLidSafetyMonitor
         self.controlServer = controlServer ?? ControlServerComponent(
             runtimeStore: ControlRuntimeStore(paths: paths),
             router: DefaultControlCommandRouter(statusProvider: {
@@ -416,6 +475,13 @@ public final class AgentWakeServices {
                 }
 
                 return outcomes.joined(separator: "; ")
+            }, doctorProvider: {
+                AgentWakeServices.diagnosticInfo(
+                    agentMonitor: resolvedAgentMonitor,
+                    integrationManager: resolvedIntegrationManager,
+                    closedLidModeController: resolvedClosedLidModeController,
+                    logStore: resolvedLogStore
+                )
             })
         )
     }
@@ -427,6 +493,7 @@ public final class AgentWakeServices {
             agentMonitor,
             controlServer,
             assertionManager,
+            closedLidSafetyMonitor,
             integrationManager
         ]
     }
@@ -439,5 +506,78 @@ public final class AgentWakeServices {
     public func stopAll() {
         logStore.append(kind: .appStopped, message: "AgentWake stopped")
         lifecycleComponents.reversed().forEach { $0.stop() }
+    }
+
+    public func diagnosticInfo() -> String {
+        Self.diagnosticInfo(
+            agentMonitor: agentMonitor,
+            integrationManager: integrationManager,
+            closedLidModeController: closedLidModeController,
+            logStore: logStore
+        )
+    }
+
+    private static func diagnosticInfo(
+        agentMonitor: AgentMonitor,
+        integrationManager: IntegrationManager,
+        closedLidModeController: ClosedLidModeController,
+        logStore: LogStore
+    ) -> String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "dev"
+        let integrations = integrationManager.snapshots()
+            .map { "\($0.displayName): \($0.status.displayTitle)" }
+            .joined(separator: "\n")
+        let events = logStore.events.suffix(50).map { event in
+            let metadata = event.metadata
+                .sorted { $0.key < $1.key }
+                .map { "\($0.key)=\($0.value)" }
+                .joined(separator: " ")
+            return "\(event.timestamp) \(event.kind.rawValue) \(metadata)"
+        }
+        .joined(separator: "\n")
+
+        return """
+        AgentWake Diagnostic Info
+        Version: \(version) (\(build))
+        macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
+
+        Status:
+        \(agentMonitor.sessionSummaryMessage())
+
+        Sessions:
+        \(agentMonitor.sessionListMessage())
+
+        Lid-Closed Awake:
+        \(closedLidModeController.statusMessage())
+
+        Integrations:
+        \(integrations.isEmpty ? "No integration status" : integrations)
+
+        pmset:
+        \(runDiagnosticProcess("/usr/bin/pmset", arguments: ["-g"]))
+
+        Last audit events:
+        \(events.isEmpty ? "No audit events" : events)
+        """
+    }
+
+    private static func runDiagnosticProcess(_ executable: String, arguments: [String]) -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return error.localizedDescription
+        }
+        let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let error = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        return output.isEmpty ? error : output
     }
 }

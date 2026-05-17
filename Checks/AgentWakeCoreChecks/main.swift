@@ -24,6 +24,7 @@ struct AgentWakeCoreChecks {
         try cpuDiagnosticsDoNotDriveTransitions()
         try remainingTransitionRowsAreExecutable()
         try bagModeSafetyPolicyCoversWarningCutoffFailClosedAndHysteresis()
+        try closedLidSafetyMonitorReleasesOnCutoff()
         try bagModeSafetyDiagnosticsCoverUserFacingProviderStates()
         try powerSourceReaderParsesPmsetBatteryOutput()
         try trustedEventsAreMonotonic()
@@ -95,13 +96,10 @@ struct AgentWakeCoreChecks {
         try check(titles.contains(ClosedLidModeAvailability.unavailableTitle), "Expected Closed-Lid Mode boundary in menu")
         try check(!titles.contains("Also keep 1 detected session awake"), "Expected protect action only when sessions are detected")
         try check(titles.contains("Turn On Lid-Closed Awake"), "Expected Closed-Lid Mode enable action in menu")
-        try check(!titles.contains("Refresh"), "Expected refresh action to stay hidden while status is fresh")
+        try check(!titles.contains("Refresh"), "Expected refresh action to stay out of the menu")
         try check(titles.contains("Pause Sleep Protection"), "Expected menu to expose pause control")
         try check(!titles.contains("Claude Code: Installed"), "Expected installed integrations to stay out of the short menu")
         try check(!titles.contains("Reinstall agent hooks"), "Expected repair action only when an integration needs attention")
-
-        let staleSnapshot = MenuBarModel.snapshot(currentState: .idle, showRefreshStatus: true)
-        try check(staleSnapshot.items.contains { $0.title == "Refresh" }, "Expected refresh action when status is stale")
 
         let pausedSnapshot = MenuBarModel.snapshot(currentState: .paused, isSleepProtectionPaused: true)
         try check(pausedSnapshot.items.contains { $0.title == "Resume Sleep Protection" }, "Expected paused menu to expose resume control")
@@ -126,8 +124,8 @@ struct AgentWakeCoreChecks {
             "Expected active menu status to include the protected session count"
         )
         try check(
-            activeSnapshot.items.contains { $0.title == "Stop Keeping Awake" && $0.isEnabled },
-            "Expected active menu to include a release action"
+            !activeSnapshot.items.contains { $0.title == "Stop Keeping Awake" },
+            "Expected active menu to avoid a second sleep-control action"
         )
 
         let degradedSnapshot = MenuBarModel.snapshot(
@@ -179,7 +177,7 @@ struct AgentWakeCoreChecks {
 
         let activeWithClosedLid = MenuBarModel.snapshot(
             currentState: .active,
-            closedLidModeStatus: "Closed-Lid Mode enabled"
+            closedLidStatus: .enabledByAgentWake
         )
         try check(activeWithClosedLid.statusItemIcon.baseSystemImageName == "bolt.fill", "Expected active status icon with Lid-Closed Awake on")
         try check(activeWithClosedLid.statusItemIcon.overlaySystemImageName == "lock.fill", "Expected lock overlay when Lid-Closed Awake is on")
@@ -187,6 +185,16 @@ struct AgentWakeCoreChecks {
         let paused = MenuBarModel.snapshot(currentState: .paused)
         try check(paused.statusItemIcon.baseSystemImageName == "exclamationmark.triangle.fill", "Expected paused warning status icon")
         try check(paused.statusItemIcon.tint == .warning, "Expected paused warning tint")
+
+        let outsideClosedLidOwner = MenuBarModel.snapshot(
+            currentState: .idle,
+            closedLidStatus: .enabledByOther,
+            takeClosedLidOwnershipEnabled: true
+        )
+        let outsideTitles = outsideClosedLidOwner.items.map(\.title)
+        try check(outsideTitles.contains("Lid-closed sleep is disabled by another tool"), "Expected user-facing outside-owner copy")
+        try check(!outsideTitles.contains { $0.contains("Outside AgentWake") }, "Expected bookkeeping copy to stay out of the menu")
+        try check(outsideTitles.contains("Take Ownership..."), "Expected takeover action for externally disabled lid sleep")
     }
 
     private static func closedLidModeControllerEnablesAndRestoresPrimitive() throws {
@@ -620,6 +628,10 @@ struct AgentWakeCoreChecks {
             overview.components(separatedBy: "Claude Code:").count == 2,
             "Expected Claude Code to appear only once, got: \(overview)"
         )
+        let detail = monitor.sessionDetailMessage()
+        try check(detail.contains("Claude Code (3)"), "Expected detailed session list to group by agent: \(detail)")
+        try check(detail.contains("41  processScan"), "Expected detailed session list to include PID and source: \(detail)")
+        try check(detail.contains("toolStarted"), "Expected detailed session list to include last event: \(detail)")
     }
 
     private static func processOnlyDetectionDoesNotProtectWithoutIntegration() throws {
@@ -969,6 +981,13 @@ struct AgentWakeCoreChecks {
         try check(supplementalWarning.action == .warn, "Expected app thermal pressure not to be sole cutoff source")
         try check(supplementalWarning.canArmBagMode, "Expected app thermal pressure warning not to veto arming by itself")
 
+        let thermalPressureCutoff = policy.evaluate(
+            input: safetyInput(temperature: 60, pressure: .critical, battery: 80, now: now),
+            isBagModeArmed: true
+        )
+        try check(thermalPressureCutoff.state.cutoffReason == .temperature, "Expected critical app thermal pressure to cut off")
+        try check(thermalPressureCutoff.action == .releaseIfArmed, "Expected critical app thermal pressure to release")
+
         let temperatureCutoff = policy.evaluate(
             input: safetyInput(temperature: 96, battery: 80, now: now),
             isBagModeArmed: true
@@ -1109,6 +1128,75 @@ struct AgentWakeCoreChecks {
             isBagModeArmed: true
         )
         try check(rearmedWarning.state.mode == .warning, "Expected re-armed warning input to remain warning")
+    }
+
+    private static func closedLidSafetyMonitorReleasesOnCutoff() throws {
+        let paths = try makeTemporaryPaths()
+        defer { try? FileManager.default.removeItem(at: paths.applicationSupportDirectory) }
+
+        let runner = RecordingClosedLidModeCommandRunner(initialValue: 0)
+        let controller = ClosedLidModeController(
+            paths: paths,
+            commandRunner: runner,
+            now: { Date(timeIntervalSince1970: 5_000) }
+        )
+        _ = try controller.enable()
+
+        let settings = AgentWakeSettings(
+            safety: SafetySettings(
+                temperatureWarningCelsius: 85,
+                temperatureCutoffCelsius: 95,
+                batteryFloorPercent: 15
+            )
+        )
+        let monitor = AgentMonitor(
+            snapshotProvider: StaticSnapshotProvider(snapshotsToReturn: []),
+            settingsProvider: { settings },
+            now: { Date(timeIntervalSince1970: 5_001) }
+        )
+        let assertionController = RecordingPowerAssertionController()
+        let assertionManager = AssertionManager(
+            controller: assertionController,
+            holdStateProvider: { monitor.aggregateHoldState }
+        )
+        let logStore = LogStore(paths: paths, now: { Date(timeIntervalSince1970: 5_001) })
+        logStore.start()
+
+        let safetyMonitor = ClosedLidSafetyMonitor(
+            settingsProvider: { settings },
+            closedLidModeController: controller,
+            agentMonitor: monitor,
+            assertionManager: assertionManager,
+            logStore: logStore,
+            batteryPercentProvider: { 10 },
+            thermalPressureProvider: { .nominal },
+            now: { Date(timeIntervalSince1970: 5_001) }
+        )
+
+        safetyMonitor.evaluateNow()
+        try check(runner.setValues == [1, 0], "Expected safety monitor to restore disablesleep after battery cutoff")
+        try check(!controller.isAgentWakeOwnedEnabled(), "Expected safety release to remove AgentWake-owned Closed-Lid Mode")
+        try check(monitor.aggregateHoldState.isSafetyCutoffActive, "Expected safety cutoff to suppress further assertions")
+        try check(logStore.events.contains { $0.kind == .safetyCutoff && $0.metadata["cutoff"] == "battery" }, "Expected safety cutoff event to be logged")
+
+        let unarmedMonitor = AgentMonitor(
+            snapshotProvider: StaticSnapshotProvider(snapshotsToReturn: []),
+            settingsProvider: { settings },
+            now: { Date(timeIntervalSince1970: 5_002) }
+        )
+        let unarmedAssertionManager = AssertionManager(holdStateProvider: { unarmedMonitor.aggregateHoldState })
+        let unarmedSafetyMonitor = ClosedLidSafetyMonitor(
+            settingsProvider: { settings },
+            closedLidModeController: controller,
+            agentMonitor: unarmedMonitor,
+            assertionManager: unarmedAssertionManager,
+            logStore: logStore,
+            batteryPercentProvider: { nil },
+            thermalPressureProvider: { .nominal },
+            now: { Date(timeIntervalSince1970: 5_002) }
+        )
+        unarmedSafetyMonitor.evaluateNow()
+        try check(!unarmedMonitor.aggregateHoldState.isSafetyCutoffActive, "Expected missing battery while unarmed not to suppress normal sleep protection")
     }
 
     private static func bagModeSafetyDiagnosticsCoverUserFacingProviderStates() throws {
@@ -1262,6 +1350,8 @@ struct AgentWakeCoreChecks {
         try check(PowerSourceReader.parse(pmsetBatteryOutput: batteryOutput) == .battery, "Expected pmset battery output to parse as battery")
         try check(PowerSourceReader.parse(pmsetBatteryOutput: acOutput) == .ac, "Expected pmset AC output to parse as AC")
         try check(PowerSourceReader.parse(pmsetBatteryOutput: "No power source") == .unknown, "Expected unknown pmset output to stay unknown")
+        try check(PowerSourceReader.parseBatteryPercent(pmsetBatteryOutput: batteryOutput) == 82, "Expected battery percent parser to extract pmset percentage")
+        try check(PowerSourceReader.parseBatteryPercent(pmsetBatteryOutput: "No power source") == nil, "Expected missing battery percent to stay nil")
     }
 
     private static func trustedEventsAreMonotonic() throws {
@@ -2046,6 +2136,8 @@ struct AgentWakeCoreChecks {
         let statusOutput = try cli.run(arguments: ["agentwake", "status"])
         try check(statusOutput == "ok", "Expected status output from client")
         try check(client.commands.last == .status, "Expected status command")
+        _ = try cli.run(arguments: ["agentwake", "doctor"])
+        try check(client.commands.last == .doctor, "Expected doctor command")
         _ = try cli.run(arguments: ["agentwake", "pause", "1h"])
         try check(client.commands.last == .pause(duration: 3_600), "Expected pause command")
         _ = try cli.run(arguments: ["agentwake", "release", "now"])
@@ -2054,7 +2146,10 @@ struct AgentWakeCoreChecks {
         try check(client.commands.last == .protectDetectedSessions, "Expected protect detected command")
         _ = try cli.run(arguments: ["agentwake", "list"])
         try check(client.commands.last == .list, "Expected list command")
-        _ = try cli.run(arguments: ["agentwake", "add", "/usr/local/bin/agent"])
+        try expectThrows("Expected custom agent add to require experimental flag") {
+            _ = try cli.run(arguments: ["agentwake", "add", "/usr/local/bin/agent"])
+        }
+        _ = try cli.run(arguments: ["agentwake", "add", "--experimental", "/usr/local/bin/agent"])
         try check(client.commands.last == .add(binary: "/usr/local/bin/agent"), "Expected add command")
         _ = try cli.run(arguments: ["agentwake", "integrations", "list"])
         try check(client.commands.last == .integrationsList, "Expected integrations list command")
@@ -3032,7 +3127,7 @@ struct AgentWakeCoreChecks {
 
         try check(FileManager.default.fileExists(atPath: paths.settingsURL.path), "Expected settings.json to exist")
         try check(store.settings.schemaVersion == 1, "Expected schema version 1")
-        try check(store.settings.launchAtLogin, "Expected launch at login to default on")
+        try check(!store.settings.launchAtLogin, "Expected launch at login to default off until the user opts in")
         try check(store.settings.defaultGraceSeconds == 900, "Expected default grace to be 900 seconds")
         try check(store.settings.agents.map(\.id) == ["claude-code", "codex-cli"], "Expected Claude and Codex agent defaults")
         try check(
@@ -3062,6 +3157,10 @@ struct AgentWakeCoreChecks {
             store.settings.agents.first(where: { $0.id == "codex-cli" })?.isEnabled == true,
             "Expected settings store to re-enable an agent"
         )
+        try store.setLaunchAtLogin(true)
+        try check(store.settings.launchAtLogin, "Expected settings store to persist launch-at-login opt-in")
+        try store.setLaunchAtLogin(false)
+        try check(!store.settings.launchAtLogin, "Expected settings store to persist launch-at-login opt-out")
 
         let settingsJSON = try String(contentsOf: paths.settingsURL, encoding: .utf8)
         try check(settingsJSON.contains("\"helperOwnership\" : null"), "Expected helperOwnership null placeholder")
@@ -3193,6 +3292,7 @@ struct AgentWakeCoreChecks {
         try check(!exportJSON.contains(".codex/config.toml"), "Expected integration status paths to be excluded from export")
         try check(!exportJSON.contains("helperOwnership"), "Expected helper ownership to be excluded from export")
         try check(!exportJSON.contains("manualOverrides"), "Expected manual overrides to be excluded from export")
+        try check(!exportJSON.contains("customAgents"), "Expected post-v1 custom agents to be excluded from export")
         try check(!exportJSON.contains("runtime"), "Expected runtime tokens to be absent from export")
         try check(!exportJSON.contains("hookPayload"), "Expected hook payloads to be absent from export")
 

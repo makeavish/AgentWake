@@ -2,7 +2,15 @@
 
 Close the lid. The agent keeps running.
 
-AgentWake is a native macOS menu bar app for keeping long-running AI coding agents alive while they work, then letting the Mac return to normal sleep behavior when they are done.
+AgentWake is a native macOS menu bar app for long-running Claude Code and
+Codex CLI work:
+
+- keeps the Mac awake while active agent sessions run
+- shows a glanceable menu bar state
+- releases sleep protection when sessions finish
+- can keep detected already-running sessions awake manually
+- supports explicit admin-approved Lid-Closed Awake with release-only battery and
+  thermal safety cutoffs
 
 It is designed for developers using tools like Claude Code and Codex CLI on a MacBook as their main machine.
 
@@ -15,7 +23,7 @@ AgentWake is in early public release, focused on Claude Code and Codex CLI.
 | Auto-detect | Hooks + process detection | Hooks + process detection |
 | Idle sleep | Supported | Supported |
 | Lid-closed on AC | Admin-approved | Admin-approved |
-| Lid-closed on battery | Works, safety cutoffs TBD | Works, safety cutoffs TBD |
+| Lid-closed on battery | Works, release-only safety cutoffs | Works, release-only safety cutoffs |
 | Manual protection | Protect detected sessions | Protect detected sessions |
 | Pause / resume | Supported | Supported |
 
@@ -43,18 +51,19 @@ Gemini CLI, Cursor, VS Code, and custom binaries are planned for later versions.
 Closed-lid battery support is treated as a guarded mode, not a blanket promise that every situation is safe.
 Closed-Lid Mode is currently an explicit admin-approved local mode. It changes
 `pmset disablesleep`, records the prior value, and restores that value when
-disabled. Temperature-provider cutoff automation remains a guarded follow-up.
+disabled. Safety cutoffs are release-only: AgentWake turns Lid-Closed Awake off
+when a limit is crossed, and it does not auto-resume.
 
 Current safeguards include:
 
 - First-run consent before closed-lid battery mode is enabled
 - A visible menu bar state when guarded mode is active
+- Battery floor release
+- Critical macOS thermal-pressure release
 
 Planned safeguards include:
 
-- Temperature warning and cutoff thresholds
-- Battery floor cutoff
-- Automatic release when safety limits are crossed
+- A richer live temperature provider and warning thresholds
 - A privileged helper only for the closed-lid battery path
 
 Normal sleep prevention should work without admin privileges. macOS authorization is planned only when installing the privileged helper needed for closed-lid battery support.

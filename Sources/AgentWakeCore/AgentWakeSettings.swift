@@ -31,7 +31,7 @@ public struct AgentWakeSettings: Codable, Equatable, Sendable {
 
     public init(
         schemaVersion: Int = AgentWakeSettings.currentSchemaVersion,
-        launchAtLogin: Bool = true,
+        launchAtLogin: Bool = false,
         defaultGraceSeconds: Int = 900,
         agents: [AgentConfiguration] = AgentConfiguration.v1Defaults,
         customAgents: [CustomAgentConfiguration] = [],
@@ -242,7 +242,6 @@ public struct SettingsExport: Codable, Equatable, Sendable {
     public var launchAtLogin: Bool
     public var defaultGraceSeconds: Int
     public var agents: [AgentConfiguration]
-    public var customAgents: [CustomAgentConfiguration]
     public var integrationSuppressions: [String: IntegrationSuppression]
     public var safety: SafetySettings
 
@@ -251,7 +250,6 @@ public struct SettingsExport: Codable, Equatable, Sendable {
         launchAtLogin = settings.launchAtLogin
         defaultGraceSeconds = settings.defaultGraceSeconds
         agents = settings.agents
-        customAgents = settings.customAgents
         integrationSuppressions = settings.integrationSuppressions
         safety = settings.safety
     }
@@ -262,7 +260,7 @@ public struct SettingsExport: Codable, Equatable, Sendable {
             launchAtLogin: launchAtLogin,
             defaultGraceSeconds: defaultGraceSeconds,
             agents: agents,
-            customAgents: customAgents,
+            customAgents: settings.customAgents,
             integrationSuppressions: integrationSuppressions,
             integrationStates: settings.integrationStates,
             safety: safety,
