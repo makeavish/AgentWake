@@ -450,7 +450,7 @@ private final class SettingsViewController: NSViewController {
     private func configurePauseOptionsButton() {
         pauseOptionsButton.removeAllItems()
         pauseOptionsButton.addItem(withTitle: "Pause Sleep Protection")
-        pauseOptionsButton.menu?.items.first?.isEnabled = false
+        pauseOptionsButton.menu?.items.first?.isEnabled = true
         pauseOptionsButton.menu?.items.first?.tag = Self.pauseHeaderTag
         addPauseOption("Pause for 30 minutes", tag: 30 * 60)
         addPauseOption("Pause for 1 hour", tag: 60 * 60)
