@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.2.2 - 2026-05-18
+
+Settings and safety polish release:
+
+- Adds configurable Lid-Closed Awake safety thresholds in Settings.
+- Enforces release-only battery floor and macOS critical thermal pressure
+  cutoffs while Lid-Closed Awake is active.
+- Replaces the Settings pause dropdown with an explicit duration sheet.
+- Fixes safety controls so they are clickable and use one-step increments.
+- Clarifies launch-at-login status copy and hides misleading off-state text.
+- Makes uninstall remove hooks, restore AgentWake-owned Lid-Closed Awake state,
+  move the app bundle to Trash, and quit.
+- Aligns local build bundle versions with the latest release tag for better
+  diagnostics.
+
 ## v0.2.1 - 2026-05-17
 
 Menu bar and first-run UX polish release:
