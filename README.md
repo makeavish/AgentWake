@@ -90,6 +90,9 @@ Settings exposes:
 
 Uninstall removes AgentWake-owned hooks, turns off launch at login, restores
 AgentWake-owned Lid-Closed Awake state, moves the app bundle to Trash, and quits.
+For reinstall testing, the uninstall confirmation can also remove saved
+AgentWake settings so hook auto-install suppression does not carry into the next
+launch.
 
 ## Privacy Model
 

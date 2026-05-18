@@ -459,7 +459,7 @@ public final class AgentWakeServices {
                     return "No detected sessions to protect"
                 }
                 return "Keeping \(protectedCount) detected session\(protectedCount == 1 ? "" : "s") awake until the process exits"
-            }, uninstallHandler: { removeHelper, removeIntegrations, receivedAt in
+            }, uninstallHandler: { removeHelper, removeIntegrations, removeSettings, receivedAt in
                 var outcomes = ["Uninstall requested"]
                 if removeIntegrations {
                     try resolvedIntegrationManager.removeAllIntegrations(at: receivedAt)
@@ -472,6 +472,13 @@ public final class AgentWakeServices {
                     outcomes.append("helper removal unavailable: no production helper is installed")
                 } else {
                     outcomes.append("helper unchanged")
+                }
+
+                if removeSettings {
+                    try resolvedSettingsStore.removeSavedSettingsForFreshInstall()
+                    outcomes.append("saved settings removed")
+                } else {
+                    outcomes.append("saved settings kept")
                 }
 
                 return outcomes.joined(separator: "; ")

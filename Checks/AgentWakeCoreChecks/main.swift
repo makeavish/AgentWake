@@ -68,6 +68,7 @@ struct AgentWakeCoreChecks {
         try integrationManagerAppliesConfigPatchesAndRemovesThem()
         try integrationManagerSurfacesFailedInstallReasons()
         try settingsPersistWithExpectedSchema()
+        try freshInstallSettingsCleanupClearsAutoInstallSuppressions()
         try corruptSettingsRecoverToDefaults()
         try unsupportedSchemaDoesNotRecoverAsCorrupt()
         try invalidSettingsAreRejected()
@@ -1803,7 +1804,7 @@ struct AgentWakeCoreChecks {
             integrationEnableAutoHandler: { _, _ in
                 throw CheckFailure("enable failed")
             },
-            uninstallHandler: { _, _, _ in
+            uninstallHandler: { _, _, _, _ in
                 throw CheckFailure("uninstall failed")
             }
         )
@@ -1815,7 +1816,7 @@ struct AgentWakeCoreChecks {
             _ = try router.route(.integrationsEnableAuto(agentID: "codex-cli"), receivedAt: Date())
         }
         try expectThrows("Expected uninstall integration failure to propagate") {
-            _ = try router.route(.uninstall(removeHelper: false, removeIntegrations: true), receivedAt: Date())
+            _ = try router.route(.uninstall(removeHelper: false, removeIntegrations: true, removeSettings: false), receivedAt: Date())
         }
     }
 
@@ -1897,8 +1898,8 @@ struct AgentWakeCoreChecks {
             protectDetectedSessionsHandler: { receivedAt in
                 "Protect detected checked at \(Int(receivedAt.timeIntervalSince1970))"
             },
-            uninstallHandler: { removeHelper, removeIntegrations, receivedAt in
-                "Uninstall removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations) at \(Int(receivedAt.timeIntervalSince1970))"
+            uninstallHandler: { removeHelper, removeIntegrations, removeSettings, receivedAt in
+                "Uninstall removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations) removeSettings=\(removeSettings) at \(Int(receivedAt.timeIntervalSince1970))"
             }
         )
 
@@ -1911,7 +1912,7 @@ struct AgentWakeCoreChecks {
         let closedLidEnable = try router.route(.closedLidEnable, receivedAt: receivedAt)
         let closedLidDisable = try router.route(.closedLidDisable, receivedAt: receivedAt)
         let protectDetected = try router.route(.protectDetectedSessions, receivedAt: receivedAt)
-        let uninstall = try router.route(.uninstall(removeHelper: true, removeIntegrations: true), receivedAt: receivedAt)
+        let uninstall = try router.route(.uninstall(removeHelper: true, removeIntegrations: true, removeSettings: true), receivedAt: receivedAt)
 
         try check(status.accepted, "Expected helper status to be accepted")
         try check(status.message == "Helper installed generation=7 state=ready", "Expected helper status provider output")
@@ -1924,7 +1925,7 @@ struct AgentWakeCoreChecks {
         try check(closedLidDisable.message == "Closed-Lid disable checked at 9000", "Expected closed-lid disable handler output")
         try check(protectDetected.message == "Protect detected checked at 9000", "Expected protect-detected handler output")
         try check(
-            uninstall.message == "Uninstall removeHelper=true removeIntegrations=true at 9000",
+            uninstall.message == "Uninstall removeHelper=true removeIntegrations=true removeSettings=true at 9000",
             "Expected uninstall handler output"
         )
     }
@@ -2175,9 +2176,9 @@ struct AgentWakeCoreChecks {
         try check(client.commands.last == .helperRepair, "Expected helper repair command")
         _ = try cli.run(arguments: ["agentwake", "helper", "uninstall"])
         try check(client.commands.last == .helperUninstall, "Expected helper uninstall command")
-        _ = try cli.run(arguments: ["agentwake", "uninstall", "--remove-helper", "--remove-integrations"])
+        _ = try cli.run(arguments: ["agentwake", "uninstall", "--remove-helper", "--remove-integrations", "--remove-settings"])
         try check(
-            client.commands.last == .uninstall(removeHelper: true, removeIntegrations: true),
+            client.commands.last == .uninstall(removeHelper: true, removeIntegrations: true, removeSettings: true),
             "Expected uninstall flags"
         )
     }
@@ -2211,6 +2212,9 @@ struct AgentWakeCoreChecks {
         }
         try expectThrows("Expected unknown uninstall flag to be rejected") {
             _ = try cli.parse(arguments: ["uninstall", "--everything"])
+        }
+        try expectThrows("Expected remove-settings to require integration removal") {
+            _ = try cli.parse(arguments: ["uninstall", "--remove-settings"])
         }
     }
 
@@ -3176,6 +3180,39 @@ struct AgentWakeCoreChecks {
         let settingsJSON = try String(contentsOf: paths.settingsURL, encoding: .utf8)
         try check(settingsJSON.contains("\"helperOwnership\" : null"), "Expected helperOwnership null placeholder")
         try check(settingsJSON.contains("\"hasCompletedOnboarding\" : false"), "Expected onboarding completion to be persisted")
+    }
+
+    private static func freshInstallSettingsCleanupClearsAutoInstallSuppressions() throws {
+        let paths = try makeTemporaryPaths()
+        defer { try? FileManager.default.removeItem(at: paths.applicationSupportDirectory) }
+
+        let logStore = LogStore(paths: paths)
+        let store = SettingsStore(paths: paths, logStore: logStore)
+        logStore.start()
+        store.start()
+
+        try store.recordIntegrationSuppression(agentID: "claude-code", reason: "removed-by-user")
+        try store.recordIntegrationState(
+            IntegrationState(
+                agentID: "claude-code",
+                status: .removed,
+                integrationID: "com.agentwake.integration.claude-code.v1",
+                settingsFile: "/Users/tester/.claude/settings.json"
+            )
+        )
+        try check(FileManager.default.fileExists(atPath: paths.settingsURL.path), "Expected settings file before fresh cleanup")
+        try check(store.settings.integrationSuppressions["claude-code"]?.doNotAutoInstall == true, "Expected removed hook to suppress auto-install")
+
+        try store.removeSavedSettingsForFreshInstall()
+
+        try check(!FileManager.default.fileExists(atPath: paths.settingsURL.path), "Expected fresh cleanup to remove settings file")
+        try check(store.settings.integrationSuppressions.isEmpty, "Expected fresh cleanup to clear auto-install suppressions")
+        try check(store.settings.integrationStates.isEmpty, "Expected fresh cleanup to clear removed integration state")
+
+        let reloadedStore = SettingsStore(paths: paths, logStore: logStore)
+        reloadedStore.start()
+        try check(reloadedStore.settings.integrationSuppressions.isEmpty, "Expected next launch to recreate default settings without suppressions")
+        try check(FileManager.default.fileExists(atPath: paths.settingsURL.path), "Expected next launch to recreate settings file")
     }
 
     private static func corruptSettingsRecoverToDefaults() throws {

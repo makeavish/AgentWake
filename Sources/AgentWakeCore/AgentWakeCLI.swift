@@ -66,7 +66,7 @@ public struct AgentWakeCLI {
             return try parseHelper(Array(arguments.dropFirst()))
         case "uninstall":
             let flags = Array(arguments.dropFirst())
-            let allowedFlags = Set(["--remove-helper", "--remove-integrations"])
+            let allowedFlags = Set(["--remove-helper", "--remove-integrations", "--remove-settings"])
             guard flags.allSatisfy({ allowedFlags.contains($0) }) else {
                 let unknownFlag = flags.first { !allowedFlags.contains($0) } ?? ""
                 throw ControlServerError.invalidRequest("unknown uninstall flag: \(unknownFlag)")
@@ -74,9 +74,13 @@ public struct AgentWakeCLI {
             guard Set(flags).count == flags.count else {
                 throw ControlServerError.invalidRequest("duplicate uninstall flag")
             }
+            if flags.contains("--remove-settings") && !flags.contains("--remove-integrations") {
+                throw ControlServerError.invalidRequest("uninstall --remove-settings requires --remove-integrations")
+            }
             return .uninstall(
                 removeHelper: flags.contains("--remove-helper"),
-                removeIntegrations: flags.contains("--remove-integrations")
+                removeIntegrations: flags.contains("--remove-integrations"),
+                removeSettings: flags.contains("--remove-settings")
             )
         default:
             throw ControlServerError.invalidRequest("unknown command: \(first)")

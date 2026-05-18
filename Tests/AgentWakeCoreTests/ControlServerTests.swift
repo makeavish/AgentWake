@@ -280,9 +280,9 @@ private func runCLIParsesCommandsAndSendsThroughClient() throws {
     try check(client.commands.last == .helperRepair, "Expected helper repair command")
     _ = try cli.run(arguments: ["agentwake", "helper", "uninstall"])
     try check(client.commands.last == .helperUninstall, "Expected helper uninstall command")
-    _ = try cli.run(arguments: ["agentwake", "uninstall", "--remove-helper", "--remove-integrations"])
+    _ = try cli.run(arguments: ["agentwake", "uninstall", "--remove-helper", "--remove-integrations", "--remove-settings"])
     try check(
-        client.commands.last == .uninstall(removeHelper: true, removeIntegrations: true),
+        client.commands.last == .uninstall(removeHelper: true, removeIntegrations: true, removeSettings: true),
         "Expected uninstall flags"
     )
 }
@@ -316,6 +316,9 @@ private func runCLIRejectsExtraArgumentsAndUnknownFlags() throws {
     }
     try expectThrows(ControlServerError.invalidRequest("unknown uninstall flag: --everything")) {
         _ = try cli.parse(arguments: ["uninstall", "--everything"])
+    }
+    try expectThrows(ControlServerError.invalidRequest("uninstall --remove-settings requires --remove-integrations")) {
+        _ = try cli.parse(arguments: ["uninstall", "--remove-settings"])
     }
 }
 
@@ -370,8 +373,8 @@ private func runControlRouterSurfacesHelperCommandOutcomes() throws {
         protectDetectedSessionsHandler: { receivedAt in
             "Protect detected checked at \(Int(receivedAt.timeIntervalSince1970))"
         },
-        uninstallHandler: { removeHelper, removeIntegrations, receivedAt in
-            "Uninstall removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations) at \(Int(receivedAt.timeIntervalSince1970))"
+        uninstallHandler: { removeHelper, removeIntegrations, removeSettings, receivedAt in
+            "Uninstall removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations) removeSettings=\(removeSettings) at \(Int(receivedAt.timeIntervalSince1970))"
         }
     )
 
@@ -384,7 +387,7 @@ private func runControlRouterSurfacesHelperCommandOutcomes() throws {
     let closedLidEnable = try router.route(.closedLidEnable, receivedAt: receivedAt)
     let closedLidDisable = try router.route(.closedLidDisable, receivedAt: receivedAt)
     let protectDetected = try router.route(.protectDetectedSessions, receivedAt: receivedAt)
-    let uninstall = try router.route(.uninstall(removeHelper: true, removeIntegrations: true), receivedAt: receivedAt)
+    let uninstall = try router.route(.uninstall(removeHelper: true, removeIntegrations: true, removeSettings: true), receivedAt: receivedAt)
 
     try check(status.accepted, "Expected helper status to be accepted")
     try check(status.message == "Helper installed generation=7 state=ready", "Expected helper status provider output")
@@ -397,7 +400,7 @@ private func runControlRouterSurfacesHelperCommandOutcomes() throws {
     try check(closedLidDisable.message == "Closed-Lid disable checked at 9000", "Expected closed-lid disable handler output")
     try check(protectDetected.message == "Protect detected checked at 9000", "Expected protect-detected handler output")
     try check(
-        uninstall.message == "Uninstall removeHelper=true removeIntegrations=true at 9000",
+        uninstall.message == "Uninstall removeHelper=true removeIntegrations=true removeSettings=true at 9000",
         "Expected uninstall handler output"
     )
 }

@@ -46,7 +46,7 @@ public enum ControlCommand: Equatable, Sendable, Codable {
     case closedLidStatus
     case closedLidEnable
     case closedLidDisable
-    case uninstall(removeHelper: Bool, removeIntegrations: Bool)
+    case uninstall(removeHelper: Bool, removeIntegrations: Bool, removeSettings: Bool)
     case doctor
 
     private enum CodingKeys: String, CodingKey {
@@ -57,6 +57,7 @@ public enum ControlCommand: Equatable, Sendable, Codable {
         case event
         case removeHelper
         case removeIntegrations
+        case removeSettings
     }
 
     public init(from decoder: Decoder) throws {
@@ -105,7 +106,8 @@ public enum ControlCommand: Equatable, Sendable, Codable {
         case "uninstall":
             self = .uninstall(
                 removeHelper: try container.decode(Bool.self, forKey: .removeHelper),
-                removeIntegrations: try container.decode(Bool.self, forKey: .removeIntegrations)
+                removeIntegrations: try container.decode(Bool.self, forKey: .removeIntegrations),
+                removeSettings: try container.decodeIfPresent(Bool.self, forKey: .removeSettings) ?? false
             )
         case "doctor":
             self = .doctor
@@ -165,10 +167,11 @@ public enum ControlCommand: Equatable, Sendable, Codable {
             try container.encode("closedLidEnable", forKey: .name)
         case .closedLidDisable:
             try container.encode("closedLidDisable", forKey: .name)
-        case .uninstall(let removeHelper, let removeIntegrations):
+        case .uninstall(let removeHelper, let removeIntegrations, let removeSettings):
             try container.encode("uninstall", forKey: .name)
             try container.encode(removeHelper, forKey: .removeHelper)
             try container.encode(removeIntegrations, forKey: .removeIntegrations)
+            try container.encode(removeSettings, forKey: .removeSettings)
         case .doctor:
             try container.encode("doctor", forKey: .name)
         }
@@ -359,7 +362,7 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
     public var closedLidStatusProvider: () -> String
     public var closedLidEnableHandler: (Date) throws -> String
     public var closedLidDisableHandler: (Date) throws -> String
-    public var uninstallHandler: (Bool, Bool, Date) throws -> String
+    public var uninstallHandler: (Bool, Bool, Bool, Date) throws -> String
     public var doctorProvider: () -> String
 
     public init(
@@ -381,8 +384,8 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
         closedLidEnableHandler: @escaping (Date) throws -> String = { _ in ClosedLidModeAvailability.helperCommandMessage("enable") },
         closedLidDisableHandler: @escaping (Date) throws -> String = { _ in ClosedLidModeAvailability.helperCommandMessage("disable") },
         protectDetectedSessionsHandler: @escaping (Date) -> String = { _ in "No detected sessions to protect" },
-        uninstallHandler: @escaping (Bool, Bool, Date) throws -> String = { removeHelper, removeIntegrations, _ in
-            "Uninstall requested removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations)"
+        uninstallHandler: @escaping (Bool, Bool, Bool, Date) throws -> String = { removeHelper, removeIntegrations, removeSettings, _ in
+            "Uninstall requested removeHelper=\(removeHelper) removeIntegrations=\(removeIntegrations) removeSettings=\(removeSettings)"
         },
         doctorProvider: @escaping () -> String = { "AgentWake diagnostics unavailable" }
     ) {
@@ -450,11 +453,11 @@ public struct DefaultControlCommandRouter: ControlCommandRouting {
             return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: try closedLidEnableHandler(receivedAt))
         case .closedLidDisable:
             return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: try closedLidDisableHandler(receivedAt))
-        case .uninstall(let removeHelper, let removeIntegrations):
+        case .uninstall(let removeHelper, let removeIntegrations, let removeSettings):
             return ControlResponse(
                 accepted: true,
                 receiptTimestamp: receivedAt,
-                message: try uninstallHandler(removeHelper, removeIntegrations, receivedAt)
+                message: try uninstallHandler(removeHelper, removeIntegrations, removeSettings, receivedAt)
             )
         case .doctor:
             return ControlResponse(accepted: true, receiptTimestamp: receivedAt, message: doctorProvider())

@@ -81,6 +81,17 @@ public final class SettingsStore: StubLifecycleComponent {
         try save(next)
     }
 
+    public func removeSavedSettingsForFreshInstall() throws {
+        if fileManager.fileExists(atPath: paths.settingsURL.path) {
+            try fileManager.removeItem(at: paths.settingsURL)
+        }
+        setSettings(AgentWakeSettings())
+        logStore?.append(
+            kind: .settingsSaved,
+            message: "Saved settings removed for fresh install"
+        )
+    }
+
     public func pauseSleepProtection(until expiresAt: Date? = nil) throws {
         var next = settings
         next.manualOverrides.removeAll { $0.overrideKind == .pauseAll }

@@ -55,6 +55,12 @@ thermal pressure are enforced by the runtime release-only safety monitor, while
 direct temperature thresholds are stored for the future temperature-provider
 path.
 
+Removing an agent hook records an auto-install suppression in `settings.json` so
+AgentWake does not silently reinstall a hook the user removed. The app uninstall
+sheet has an optional fresh-install cleanup checkbox, and the CLI has
+`agentwake uninstall --remove-integrations --remove-settings`, to clear that
+saved suppression before reinstall testing.
+
 Pre-release ClawShell state under `~/Library/Application Support/ClawShell/` is
 not migrated. The integration patchers still recognize and remove legacy
 ClawShell-owned Claude Code and Codex CLI hooks so early dogfood installs do not

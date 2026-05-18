@@ -929,12 +929,14 @@ private final class SettingsViewController: NSViewController {
     @objc private func uninstallAgentWake() {
         let alert = NSAlert()
         alert.messageText = "Uninstall AgentWake?"
-        alert.informativeText = "AgentWake will remove its Claude Code and Codex hooks, turn off launch at login, restore AgentWake-owned Lid-Closed Awake state, move the app to Trash, and quit."
+        alert.informativeText = "AgentWake will remove its Claude Code and Codex hooks, turn off launch at login, restore AgentWake-owned Lid-Closed Awake state, move the app to Trash, and quit. Keep saved settings if you want AgentWake to remember that hooks should not be reinstalled automatically."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Uninstall")
         alert.addButton(withTitle: "Cancel")
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = "Remove saved settings for a fresh install"
 
-        let runUninstall = { [weak self] in
+        let runUninstall = { [weak self] (removeSavedSettings: Bool) in
             guard let self else {
                 return
             }
@@ -962,6 +964,16 @@ private final class SettingsViewController: NSViewController {
             }
 
             results.append("Production helper: no production helper is installed.")
+            if removeSavedSettings {
+                do {
+                    try self.services.settingsStore.removeSavedSettingsForFreshInstall()
+                    results.append("Saved settings removed for a fresh install.")
+                } catch {
+                    results.append("Saved settings: \(error.localizedDescription)")
+                }
+            } else {
+                results.append("Saved settings kept.")
+            }
             self.services.agentMonitor.poll()
             self.services.assertionManager.reconcile()
             self.refresh()
@@ -973,10 +985,10 @@ private final class SettingsViewController: NSViewController {
                 guard response == .alertFirstButtonReturn else {
                     return
                 }
-                runUninstall()
+                runUninstall(alert.suppressionButton?.state == .on)
             }
         } else if runFrontmostAlert(alert) == .alertFirstButtonReturn {
-            runUninstall()
+            runUninstall(alert.suppressionButton?.state == .on)
         }
     }
 
