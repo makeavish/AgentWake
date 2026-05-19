@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.4 - 2026-05-19
+
+- Fixes the Settings window so long content scrolls inside the window instead
+  of extending off-screen.
+- Keeps the Settings window within the visible screen area on smaller displays.
+
 ## v0.2.3 - 2026-05-19
 
 - Replaces the visible detected-session manual protection control with a

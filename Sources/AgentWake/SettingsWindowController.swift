@@ -3,6 +3,10 @@ import AgentWakeCore
 
 @MainActor
 final class SettingsWindowController: NSWindowController {
+    private static let preferredContentSize = NSSize(width: 760, height: 760)
+    private static let minimumContentSize = NSSize(width: 640, height: 480)
+    private static let screenMargin: CGFloat = 80
+
     private let settingsViewController: SettingsViewController
 
     init(services: AgentWakeServices) {
@@ -11,7 +15,8 @@ final class SettingsWindowController: NSWindowController {
         let window = SettingsWindow(contentViewController: contentViewController)
         window.title = "AgentWake Settings"
         window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 760, height: 760))
+        window.contentMinSize = Self.minimumContentSize
+        window.setContentSize(Self.initialContentSize())
         window.center()
         window.isReleasedWhenClosed = false
         window.tabbingMode = .disallowed
@@ -32,6 +37,17 @@ final class SettingsWindowController: NSWindowController {
     required init?(coder: NSCoder) {
         nil
     }
+
+    private static func initialContentSize(screen: NSScreen? = NSScreen.main) -> NSSize {
+        guard let visibleFrame = screen?.visibleFrame else {
+            return preferredContentSize
+        }
+
+        return NSSize(
+            width: min(preferredContentSize.width, max(minimumContentSize.width, visibleFrame.width - screenMargin)),
+            height: min(preferredContentSize.height, max(minimumContentSize.height, visibleFrame.height - screenMargin))
+        )
+    }
 }
 
 private final class SettingsWindow: NSWindow {
@@ -44,6 +60,12 @@ private final class SettingsWindow: NSWindow {
         }
 
         return super.performKeyEquivalent(with: event)
+    }
+}
+
+private final class FlippedView: NSView {
+    override var isFlipped: Bool {
+        true
     }
 }
 
@@ -125,6 +147,16 @@ private final class SettingsViewController: NSViewController {
     override func loadView() {
         let rootView = NSView()
         rootView.translatesAutoresizingMaskIntoConstraints = false
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = false
+        scrollView.drawsBackground = false
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+
+        let contentView = FlippedView()
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.documentView = contentView
 
         let titleLabel = NSTextField(labelWithString: "AgentWake")
         titleLabel.font = .preferredFont(forTextStyle: .title1)
@@ -339,13 +371,19 @@ private final class SettingsViewController: NSViewController {
         stack.edgeInsets = NSEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        rootView.addSubview(stack)
+        rootView.addSubview(scrollView)
+        contentView.addSubview(stack)
 
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: rootView.topAnchor),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: rootView.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: rootView.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
+            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: contentView.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             sessionButtons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
             closedLidButtons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
             generalStack.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48),
