@@ -35,8 +35,8 @@ Process detection remains the liveness backup. A detected `codex` process create
 
 Native hooks provide integrated confidence:
 
-- `SessionStart` creates or refreshes an integrated active session keyed by `session_id`, cwd hash, and process identity when available.
-- `UserPromptSubmit` creates or refreshes an integrated active turn keyed by `turn_id`.
+- `SessionStart` is treated as a non-protecting startup/resume signal. It must not keep the Mac awake by itself because a long-lived app session is not proof of active agent work.
+- `UserPromptSubmit` creates or refreshes an integrated active turn keyed by `turn_id`. If no tool activity or `Stop` follows, AgentWake expires the stale turn-start hold and falls back to process-only detection.
 - `PreToolUse` keeps the matching turn active.
 - `PostToolUse` keeps the matching turn active briefly after tool completion because the agent may continue the turn. If no `Stop` or further activity arrives, AgentWake expires this stale post-tool hold and falls back to process-only detection while the Codex desktop process remains open.
 - `Stop` finishes the matching Codex turn and releases protection. The still-open Codex desktop process remains visible as process-only detection until new activity arrives.

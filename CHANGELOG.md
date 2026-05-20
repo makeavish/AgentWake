@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.7 - 2026-05-20
+
+- Prevents startup/resume-only Claude Code and Codex sessions from keeping the
+  Mac awake without real turn or tool activity.
+- Expires stale turn-start holds when no later tool or completion hook arrives,
+  leaving the still-open agent process visible only as detected.
+
 ## v0.2.6 - 2026-05-20
 
 - Shows the AgentWake app version and build number in Settings.

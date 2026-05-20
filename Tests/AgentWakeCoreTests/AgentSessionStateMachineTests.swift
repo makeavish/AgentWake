@@ -37,6 +37,10 @@ struct AgentSessionStateMachineTests {
         try runProcessOnlyDetectionDoesNotProtectWithoutIntegration()
     }
 
+    @Test func sessionStartDoesNotProtectDetectedProcess() throws {
+        try runSessionStartDoesNotProtectDetectedProcess()
+    }
+
     @Test func agentMonitorStartUsesTimerCadence() throws {
         try runAgentMonitorStartUsesTimerCadence()
     }
@@ -105,6 +109,10 @@ final class AgentSessionStateMachineTests: XCTestCase {
 
     func testReleaseNowSuppressesProcessOnlyProvisionalRehold() throws {
         try runProcessOnlyDetectionDoesNotProtectWithoutIntegration()
+    }
+
+    func testSessionStartDoesNotProtectDetectedProcess() throws {
+        try runSessionStartDoesNotProtectDetectedProcess()
     }
 
     func testAgentMonitorStartUsesTimerCadence() throws {
@@ -431,6 +439,80 @@ private func runProcessOnlyDetectionDoesNotProtectWithoutIntegration() throws {
     try check(
         !machine.aggregateHoldState(at: baseline.addingTimeInterval(4)).shouldHold,
         "Expected manually protected detected session to release when the process exits"
+    )
+}
+
+private func runSessionStartDoesNotProtectDetectedProcess() throws {
+    let machine = AgentSessionStateMachine(graceInterval: 900, agentResumeIdleTimeout: 30)
+    let processStart = baseline.addingTimeInterval(-120)
+    let processObservation = observation(
+        pid: 35,
+        start: processStart,
+        path: "/opt/homebrew/bin/claude",
+        agent: .claudeCode
+    )
+
+    machine.applyProcessObservations([processObservation], at: baseline)
+    let sessionID = try checkNotNil(machine.sessions.first?.id, "Expected process-backed Claude session")
+    machine.applyIntegrationEvent(
+        hookEvent(
+            .sessionStarted,
+            integrationSessionId: "claude-resumed-session",
+            pid: 35,
+            processStartTime: processStart,
+            agent: .claudeCode
+        ),
+        at: baseline.addingTimeInterval(1)
+    )
+
+    try check(machine.sessions.first?.id == sessionID, "Expected SessionStart not to create a replacement session")
+    try check(
+        machine.sessions.first?.lastEvent?.kind == .matchingProcessStarted,
+        "Expected SessionStart/resume not to become protecting activity"
+    )
+    try check(
+        !machine.aggregateHoldState(at: baseline.addingTimeInterval(1)).shouldHold,
+        "Expected bare Claude SessionStart/resume not to keep the Mac awake"
+    )
+    try check(
+        machine.sessions.first?.key.integrationSessionId == nil,
+        "Expected bare SessionStart/resume not to attach confirmed integration evidence"
+    )
+
+    machine.applyIntegrationEvent(
+        hookEvent(
+            .turnStarted,
+            integrationSessionId: "claude-resumed-session",
+            pid: 35,
+            processStartTime: processStart,
+            agent: .claudeCode
+        ),
+        at: baseline.addingTimeInterval(2)
+    )
+
+    try check(
+        machine.aggregateHoldState(at: baseline.addingTimeInterval(2)).shouldHold,
+        "Expected Claude UserPromptSubmit to keep the Mac awake for real activity"
+    )
+    try check(
+        machine.sessions.first?.key.integrationSessionId == "claude-resumed-session",
+        "Expected real turn activity to attach integration evidence"
+    )
+
+    machine.applyProcessObservations([processObservation], at: baseline.addingTimeInterval(33))
+    try check(
+        !machine.aggregateHoldState(at: baseline.addingTimeInterval(33)).shouldHold,
+        "Expected stale Claude turn-start activity to release if no tool or stop event follows"
+    )
+    try check(
+        machine.sessions.contains { $0.lastEvent?.kind == .staleActivityExpired },
+        "Expected stale Claude turn-start activity to record an expiry event"
+    )
+    try check(
+        machine.sessions.contains {
+            $0.source == .processScan && $0.state != .finished && !$0.hasIntegratedEvidence
+        },
+        "Expected the still-open Claude process to remain visible only as a detected process"
     )
 }
 

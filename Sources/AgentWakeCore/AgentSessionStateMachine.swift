@@ -4,6 +4,7 @@ public final class AgentSessionStateMachine {
     public var graceInterval: TimeInterval
     public var processDetectionHoldInterval: TimeInterval
     public var codexPostToolIdleTimeout: TimeInterval
+    public var agentResumeIdleTimeout: TimeInterval
     public private(set) var sessions: [AgentSession]
     public private(set) var pauseAllExpiresAt: Date?
     public private(set) var manualPauseAllExpiresAt: Date?
@@ -16,6 +17,7 @@ public final class AgentSessionStateMachine {
         graceInterval: TimeInterval = TimeInterval(AgentWakeSettings.defaultGraceSeconds),
         processDetectionHoldInterval: TimeInterval = TimeInterval(AgentWakeSettings.defaultGraceSeconds),
         codexPostToolIdleTimeout: TimeInterval = 90,
+        agentResumeIdleTimeout: TimeInterval = 90,
         sessions: [AgentSession] = [],
         pauseAllExpiresAt: Date? = nil,
         manualPauseAllExpiresAt: Date? = nil,
@@ -27,6 +29,7 @@ public final class AgentSessionStateMachine {
         self.graceInterval = graceInterval
         self.processDetectionHoldInterval = processDetectionHoldInterval
         self.codexPostToolIdleTimeout = codexPostToolIdleTimeout
+        self.agentResumeIdleTimeout = agentResumeIdleTimeout
         self.sessions = sessions
         self.pauseAllExpiresAt = pauseAllExpiresAt
         self.manualPauseAllExpiresAt = manualPauseAllExpiresAt
@@ -120,6 +123,10 @@ public final class AgentSessionStateMachine {
         refreshExpirations(at: now)
 
         guard event.schemaVersion == 1 else {
+            return
+        }
+
+        guard event.event != .sessionStarted else {
             return
         }
 
@@ -241,7 +248,7 @@ public final class AgentSessionStateMachine {
         }
 
         for index in sessions.indices {
-            if shouldExpireStaleCodexPostToolSession(sessions[index], at: now) {
+            if shouldExpireStaleActivitySession(sessions[index], at: now) {
                 sessions[index].state = .finished
                 sessions[index].standingByExpiresAt = nil
                 sessions[index].lastEvent = SessionEvent(kind: .staleActivityExpired, occurredAt: now)
@@ -355,13 +362,22 @@ public final class AgentSessionStateMachine {
         }
     }
 
-    private func shouldExpireStaleCodexPostToolSession(_ session: AgentSession, at now: Date) -> Bool {
-        session.agent == .codexCLI
-            && session.state == .active
+    private func shouldExpireStaleActivitySession(_ session: AgentSession, at now: Date) -> Bool {
+        guard session.state == .active
             && session.hasIntegratedEvidence
             && !session.holdWhileOpen
-            && session.lastEvent?.kind == .toolFinishedContinuing
-            && now.timeIntervalSince(session.lastActivityAt) >= codexPostToolIdleTimeout
+        else {
+            return false
+        }
+
+        switch session.lastEvent?.kind {
+        case .agentResumed:
+            return now.timeIntervalSince(session.lastActivityAt) >= agentResumeIdleTimeout
+        case .toolFinishedContinuing where session.agent == .codexCLI:
+            return now.timeIntervalSince(session.lastActivityAt) >= codexPostToolIdleTimeout
+        default:
+            return false
+        }
     }
 
     private func isProtectableProcessOnlySession(_ session: AgentSession) -> Bool {
