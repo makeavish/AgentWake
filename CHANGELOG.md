@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.6 - 2026-05-20
+
+- Shows the AgentWake app version and build number in Settings.
+
 ## v0.2.5 - 2026-05-19
 
 - Aligns Claude Code and Codex CLI completion behavior so `Stop` releases the

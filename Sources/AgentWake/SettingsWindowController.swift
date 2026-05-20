@@ -95,6 +95,7 @@ private final class SettingsViewController: NSViewController {
     ]
 
     private let services: AgentWakeServices
+    private let versionLabel = NSTextField(labelWithString: "")
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
     private let macActiveStatusLabel = NSTextField(wrappingLabelWithString: "")
     private let sessionListLabel = NSTextField(wrappingLabelWithString: "")
@@ -161,6 +162,9 @@ private final class SettingsViewController: NSViewController {
         let titleLabel = NSTextField(labelWithString: "AgentWake")
         titleLabel.font = .preferredFont(forTextStyle: .title1)
         titleLabel.setAccessibilityLabel("AgentWake Settings")
+        versionLabel.stringValue = Self.appVersionText()
+        versionLabel.textColor = .secondaryLabelColor
+        versionLabel.setAccessibilityLabel("AgentWake app version")
 
         launchAtLoginCheckbox.target = self
         launchAtLoginCheckbox.action = #selector(toggleLaunchAtLogin)
@@ -339,6 +343,7 @@ private final class SettingsViewController: NSViewController {
 
         let stack = NSStackView(views: [
             titleLabel,
+            versionLabel,
             sectionHeader("General"),
             generalStack,
             separator(),
@@ -458,6 +463,22 @@ private final class SettingsViewController: NSViewController {
         let label = NSTextField(labelWithString: text)
         label.font = .preferredFont(forTextStyle: .body)
         return label
+    }
+
+    private static func appVersionText(bundle: Bundle = .main) -> String {
+        let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+
+        switch (version?.isEmpty == false ? version : nil, build?.isEmpty == false ? build : nil) {
+        case let (.some(version), .some(build)):
+            return "Version \(version) (\(build))"
+        case let (.some(version), nil):
+            return "Version \(version)"
+        case (nil, let .some(build)):
+            return "Build \(build)"
+        case (nil, nil):
+            return "Version dev"
+        }
     }
 
     private func sectionHeader(_ title: String) -> NSTextField {
