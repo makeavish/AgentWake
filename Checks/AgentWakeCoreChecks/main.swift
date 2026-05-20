@@ -3007,39 +3007,6 @@ struct AgentWakeCoreChecks {
         let removed = String(data: removal.patchedData, encoding: .utf8) ?? ""
         try check(removed.contains("user-hook"), "Expected Claude removal to keep user hooks")
         try check(!removed.contains(ClaudeCodeConfigPatcher.manifest.ownerMarker), "Expected Claude removal to remove owned handlers")
-
-        let legacyCurrent = """
-        {
-          "hooks": {
-            "PreToolUse": [
-              {
-                "matcher": "Bash",
-                "hooks": [
-                  {
-                    "type": "command",
-                    "command": "'/Applications/ClawShell.app/Contents/MacOS/ClawShellHookAdapter' --mode claude-hook --agent claude-code --host claude-code --owner-marker com.clawshell.integration.claude-code.v1"
-                  },
-                  { "type": "command", "command": "/usr/local/bin/user-hook" }
-                ]
-              }
-            ]
-          }
-        }
-        """
-        let legacyInstall = try patcher.installPlan(
-            currentData: Data(legacyCurrent.utf8),
-            adapterPath: "/Applications/AgentWake.app/Contents/MacOS/AgentWakeHookAdapter"
-        )
-        let legacyInstalled = String(data: legacyInstall.patchedData, encoding: .utf8) ?? ""
-        try check(legacyInstalled.contains(ClaudeCodeConfigPatcher.manifest.ownerMarker), "Expected AgentWake install to add current Claude marker")
-        try check(!legacyInstalled.contains("com.clawshell.integration.claude-code.v1"), "Expected AgentWake install to remove legacy Claude marker")
-        try check(!legacyInstalled.contains("ClawShellHookAdapter"), "Expected AgentWake install to remove legacy Claude adapter command")
-        try check(legacyInstalled.contains("user-hook"), "Expected AgentWake install to preserve user Claude hook beside legacy cleanup")
-        let legacyRemoval = try patcher.removalPlan(currentData: Data(legacyCurrent.utf8))
-        let legacyRemoved = String(data: legacyRemoval.patchedData, encoding: .utf8) ?? ""
-        try check(!legacyRemoved.contains("com.clawshell.integration.claude-code.v1"), "Expected Claude removal to clean legacy owned hook")
-        try check(!legacyRemoved.contains("ClawShellHookAdapter"), "Expected Claude removal to clean legacy adapter command")
-        try check(legacyRemoved.contains("user-hook"), "Expected Claude legacy removal to preserve user hook")
     }
 
     private static func codexPatcherPreservesExistingNotifyAndRestoresItOnRemoval() throws {
@@ -3118,49 +3085,6 @@ struct AgentWakeCoreChecks {
         try check(userHookRemoved.contains("/usr/local/bin/user-codex-hook"), "Expected Codex removal to preserve user native hook")
         try check(userHookRemoved.contains(#"[hooks.state."/tmp/user-hook:pre_tool_use:0:0"]"#), "Expected Codex removal to preserve user hook state table")
         try check(!userHookRemoved.contains(CodexConfigPatcher.manifest.ownerMarker), "Expected Codex removal to remove only owned native hook block")
-
-        let legacyPreviousNotify = #"notify = ["/usr/local/bin/legacy-notify", "Codex"]"#
-        let legacyPreviousNotifyBase64 = Data(legacyPreviousNotify.utf8).base64EncodedString()
-        let legacyCodex = """
-        # user config
-        # BEGIN com.clawshell.integration.codex-cli.v1
-        # ClawShell owns this top-level Codex notify fallback.
-        # clawshell-previous-notify-base64: \(legacyPreviousNotifyBase64)
-        notify = ["/Applications/ClawShell.app/Contents/MacOS/ClawShellHookAdapter", "--mode", "codex-notify", "--owner-marker", "com.clawshell.integration.codex-cli.v1"]
-        # END com.clawshell.integration.codex-cli.v1
-
-        # BEGIN com.clawshell.integration.codex-cli.v1
-        # ClawShell owns these Codex native hooks.
-
-        [[hooks.UserPromptSubmit]]
-        [[hooks.UserPromptSubmit.hooks]]
-        type = "command"
-        command = "'/Applications/ClawShell.app/Contents/MacOS/ClawShellHookAdapter' --mode codex-hook --owner-marker 'com.clawshell.integration.codex-cli.v1'"
-        timeout = 1
-
-        # END com.clawshell.integration.codex-cli.v1
-
-        [profiles.work]
-        model = "gpt-5.4"
-        """
-        let legacyInstall = try patcher.installPlan(
-            currentData: Data(legacyCodex.utf8),
-            adapterPath: "/Applications/AgentWake.app/Contents/MacOS/AgentWakeHookAdapter"
-        )
-        let legacyInstalled = String(data: legacyInstall.patchedData, encoding: .utf8) ?? ""
-        try patcher.validate(legacyInstall.patchedData)
-        try check(legacyInstalled.contains(CodexConfigPatcher.manifest.ownerMarker), "Expected AgentWake install to add current Codex marker")
-        try check(legacyInstalled.contains("--forward-notify"), "Expected AgentWake install to forward notify restored from legacy block")
-        try check(legacyInstalled.contains("[profiles.work]"), "Expected AgentWake legacy cleanup to preserve unrelated tables")
-        try check(!legacyInstalled.contains("com.clawshell.integration.codex-cli.v1"), "Expected AgentWake install to remove legacy Codex marker")
-        try check(!legacyInstalled.contains("ClawShellHookAdapter"), "Expected AgentWake install to remove legacy Codex adapter command")
-        let legacyRemoval = try patcher.removalPlan(currentData: Data(legacyCodex.utf8))
-        let legacyRemoved = String(data: legacyRemoval.patchedData, encoding: .utf8) ?? ""
-        try patcher.validate(legacyRemoval.patchedData)
-        try check(legacyRemoved.contains(legacyPreviousNotify), "Expected Codex legacy removal to restore previous notify")
-        try check(legacyRemoved.contains("[profiles.work]"), "Expected Codex legacy removal to preserve unrelated tables")
-        try check(!legacyRemoved.contains("com.clawshell.integration.codex-cli.v1"), "Expected Codex removal to clean legacy owned block")
-        try check(!legacyRemoved.contains("ClawShellHookAdapter"), "Expected Codex removal to clean legacy adapter command")
     }
 
     private static func codexPatcherHandlesMultilineAndSingleQuotedNotify() throws {

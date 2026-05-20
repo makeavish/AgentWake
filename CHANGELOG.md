@@ -110,8 +110,7 @@ Release notes:
   sleep-prevention scope.
 - Normal runtime/use does not require admin privileges.
 - The product rename uses fresh AgentWake local state under
-  `~/Library/Application Support/AgentWake/`; old pre-release AgentWake state is
-  not migrated. AgentWake does clean up legacy AgentWake-owned Claude Code and
-  Codex CLI integration hooks during integration install/remove.
+  `~/Library/Application Support/AgentWake/`; pre-release state is not migrated,
+  and integration patchers only manage current AgentWake-owned hooks.
 - Any future Closed-Lid Mode helper/admin approval flow is outside this release
   and is tracked separately in the post-v1 readiness issue.

@@ -215,36 +215,6 @@ private func runConfigPatchersPreserveAndRemoveOnlyOwnedBlocks() throws {
     try check(claudeRemoved.contains("user-security-hook"), "Expected Claude removal to preserve user hook")
     try check(!claudeRemoved.contains(ClaudeCodeConfigPatcher.manifest.ownerMarker), "Expected Claude removal to remove owned hooks")
 
-    let legacyClaude = """
-    {
-      "hooks": {
-        "PreToolUse": [
-          {
-            "matcher": "Bash",
-            "hooks": [
-              {
-                "type": "command",
-                "command": "'/Applications/ClawShell.app/Contents/MacOS/ClawShellHookAdapter' --mode claude-hook --agent claude-code --host claude-code --owner-marker com.clawshell.integration.claude-code.v1"
-              },
-              { "type": "command", "command": "/usr/local/bin/user-security-hook" }
-            ]
-          }
-        ]
-      }
-    }
-    """
-    let legacyClaudeInstall = try claudePatcher.installPlan(currentData: Data(legacyClaude.utf8), adapterPath: adapterPath)
-    let legacyClaudeInstalled = String(data: legacyClaudeInstall.patchedData, encoding: .utf8) ?? ""
-    try check(legacyClaudeInstalled.contains(ClaudeCodeConfigPatcher.manifest.ownerMarker), "Expected Claude install to add current owner marker")
-    try check(!legacyClaudeInstalled.contains("com.clawshell.integration.claude-code.v1"), "Expected Claude install to remove legacy owner marker")
-    try check(!legacyClaudeInstalled.contains("ClawShellHookAdapter"), "Expected Claude install to remove legacy adapter command")
-    try check(legacyClaudeInstalled.contains("user-security-hook"), "Expected Claude install to preserve user hook during legacy cleanup")
-    let legacyClaudeRemoval = try claudePatcher.removalPlan(currentData: Data(legacyClaude.utf8))
-    let legacyClaudeRemoved = String(data: legacyClaudeRemoval.patchedData, encoding: .utf8) ?? ""
-    try check(!legacyClaudeRemoved.contains("com.clawshell.integration.claude-code.v1"), "Expected Claude removal to clean legacy owner marker")
-    try check(!legacyClaudeRemoved.contains("ClawShellHookAdapter"), "Expected Claude removal to clean legacy adapter command")
-    try check(legacyClaudeRemoved.contains("user-security-hook"), "Expected Claude legacy removal to preserve user hook")
-
     let codexPatcher = CodexConfigPatcher()
     let codexInstall = try codexPatcher.installPlan(
         currentData: fixtureData("config-patchers/codex-config", extension: "toml"),
@@ -301,74 +271,6 @@ private func runConfigPatchersPreserveAndRemoveOnlyOwnedBlocks() throws {
     try check(userHookRemoved.contains("/usr/local/bin/user-codex-hook"), "Expected Codex removal to preserve user hook command")
     try check(userHookRemoved.contains(#"[hooks.state."/tmp/user-hook:pre_tool_use:0:0"]"#), "Expected Codex removal to preserve user hook state table")
     try check(!userHookRemoved.contains(CodexConfigPatcher.manifest.ownerMarker), "Expected Codex removal to remove only owned native hook block")
-
-    let legacyPreviousNotify = #"notify = ["/usr/local/bin/legacy-notify", "Codex"]"#
-    let legacyPreviousNotifyBase64 = Data(legacyPreviousNotify.utf8).base64EncodedString()
-    let legacyCodex = """
-    # user config
-    # BEGIN com.clawshell.integration.codex-cli.v1
-    # ClawShell owns this top-level Codex notify fallback.
-    # clawshell-previous-notify-base64: \(legacyPreviousNotifyBase64)
-    notify = ["/Applications/ClawShell.app/Contents/MacOS/ClawShellHookAdapter", "--mode", "codex-notify", "--owner-marker", "com.clawshell.integration.codex-cli.v1"]
-    # END com.clawshell.integration.codex-cli.v1
-
-    # BEGIN com.clawshell.integration.codex-cli.v1
-    # ClawShell owns these Codex native hooks.
-
-    [[hooks.UserPromptSubmit]]
-    [[hooks.UserPromptSubmit.hooks]]
-    type = "command"
-    command = "'/Applications/ClawShell.app/Contents/MacOS/ClawShellHookAdapter' --mode codex-hook --owner-marker 'com.clawshell.integration.codex-cli.v1'"
-    timeout = 1
-
-    # END com.clawshell.integration.codex-cli.v1
-
-    [profiles.work]
-    model = "gpt-5.4"
-    """
-    let legacyCodexInstall = try codexPatcher.installPlan(currentData: Data(legacyCodex.utf8), adapterPath: adapterPath)
-    let legacyCodexInstalled = String(data: legacyCodexInstall.patchedData, encoding: .utf8) ?? ""
-    try codexPatcher.validate(legacyCodexInstall.patchedData)
-    try check(legacyCodexInstalled.contains(CodexConfigPatcher.manifest.ownerMarker), "Expected Codex install to add current owner marker")
-    try check(legacyCodexInstalled.contains("--forward-notify"), "Expected Codex install to forward notify restored from legacy block")
-    try check(legacyCodexInstalled.contains("[profiles.work]"), "Expected Codex legacy cleanup to preserve unrelated tables")
-    try check(!legacyCodexInstalled.contains("com.clawshell.integration.codex-cli.v1"), "Expected Codex install to remove legacy owner marker")
-    try check(!legacyCodexInstalled.contains("ClawShellHookAdapter"), "Expected Codex install to remove legacy adapter command")
-    let legacyCodexRemoval = try codexPatcher.removalPlan(currentData: Data(legacyCodex.utf8))
-    let legacyCodexRemoved = String(data: legacyCodexRemoval.patchedData, encoding: .utf8) ?? ""
-    try codexPatcher.validate(legacyCodexRemoval.patchedData)
-    try check(legacyCodexRemoved.contains(legacyPreviousNotify), "Expected Codex legacy removal to restore previous notify")
-    try check(legacyCodexRemoved.contains("[profiles.work]"), "Expected Codex legacy removal to preserve unrelated tables")
-    try check(!legacyCodexRemoved.contains("com.clawshell.integration.codex-cli.v1"), "Expected Codex removal to clean legacy owner marker")
-    try check(!legacyCodexRemoved.contains("ClawShellHookAdapter"), "Expected Codex removal to clean legacy adapter command")
-
-    let originalNotify = #"notify = ["/usr/local/bin/original-notify", "Codex"]"#
-    let originalNotifyBase64 = Data(originalNotify.utf8).base64EncodedString()
-    let nestedCodex = """
-    model = "gpt-5.5"
-
-    # BEGIN com.clawshell.integration.codex-cli.v1
-    # ClawShell owns this top-level Codex notify fallback.
-    # clawshell-previous-notify-base64: \(originalNotifyBase64)
-    # BEGIN \(CodexConfigPatcher.manifest.ownerMarker)
-    # AgentWake owns this top-level Codex notify fallback.
-    # agentwake-previous-notify-base64: \(Data("notify = [\"/Applications/ClawShell.app/Contents/MacOS/ClawShellHookAdapter\"]".utf8).base64EncodedString())
-    notify = ["/Applications/AgentWake.app/Contents/MacOS/AgentWakeHookAdapter", "--owner-marker", "\(CodexConfigPatcher.manifest.ownerMarker)"]
-    # END \(CodexConfigPatcher.manifest.ownerMarker)
-    # END com.clawshell.integration.codex-cli.v1
-
-    [profiles.work]
-    model = "gpt-5.4"
-    """
-    let nestedRemoval = try codexPatcher.removalPlan(currentData: Data(nestedCodex.utf8))
-    let nestedRemoved = String(data: nestedRemoval.patchedData, encoding: .utf8) ?? ""
-    try codexPatcher.validate(nestedRemoval.patchedData)
-    try check(nestedRemoved.contains(originalNotify), "Expected nested legacy/current cleanup to restore the original notify")
-    try check(nestedRemoved.contains("[profiles.work]"), "Expected nested legacy/current cleanup to preserve unrelated tables")
-    try check(!nestedRemoved.contains("com.clawshell.integration.codex-cli.v1"), "Expected nested cleanup to remove legacy marker")
-    try check(!nestedRemoved.contains(CodexConfigPatcher.manifest.ownerMarker), "Expected nested cleanup to remove current marker")
-    try check(!nestedRemoved.contains("ClawShellHookAdapter"), "Expected nested cleanup not to restore stale ClawShell adapter")
-
     let multilineCodex = """
     model = "gpt-5.5"
     notify = [

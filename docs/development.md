@@ -61,8 +61,7 @@ sheet has an optional fresh-install cleanup checkbox, and the CLI has
 saved suppression before reinstall testing.
 
 Pre-release AgentWake state under `~/Library/Application Support/AgentWake/` is
-not migrated. The integration patchers still recognize and remove legacy
-AgentWake-owned Claude Code and Codex CLI hooks so early dogfood installs do not
-keep duplicate product-owned hooks after the rename.
+not migrated. The integration patchers only recognize and remove current
+AgentWake-owned Claude Code and Codex CLI hooks.
 
 Config exports exclude logs, runtime tokens, helper ownership state, integration status paths, cwd hashes, and hook payloads. Custom executable paths can still reveal local machine details, so exported config should be shared carefully.

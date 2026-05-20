@@ -75,9 +75,6 @@ public struct ClaudeCodeConfigPatcher {
         targetFiles: ["~/.claude/settings.json"],
         ownerMarker: "com.agentwake.integration.claude-code.v1"
     )
-    private static let legacyOwnerMarkers = [
-        "com.clawshell.integration.claude-code.v1"
-    ]
 
     private let encoder: JSONEncoder
 
@@ -224,12 +221,9 @@ public struct ClaudeCodeConfigPatcher {
             return false
         }
 
-        let ownedMarkers = [manifest.ownerMarker] + legacyOwnerMarkers
-        let ownedAdapterNames = ["AgentWakeHookAdapter", "ClawShellHookAdapter"]
-
-        return ownedAdapterNames.contains(where: { command.contains($0) })
+        return command.contains("AgentWakeHookAdapter")
             && command.contains("--mode claude-hook")
-            && ownedMarkers.contains(where: { command.contains("--owner-marker \($0)") })
+            && command.contains("--owner-marker \(manifest.ownerMarker)")
     }
 
     private func mutableJSONObject(from data: Data) throws -> [String: Any] {
@@ -251,9 +245,6 @@ public struct CodexConfigPatcher {
         targetFiles: ["~/.codex/config.toml"],
         ownerMarker: "com.agentwake.integration.codex-cli.v1"
     )
-    private static let legacyOwnerMarkers = [
-        "com.clawshell.integration.codex-cli.v1"
-    ]
 
     public init() {}
 
@@ -297,9 +288,6 @@ public struct CodexConfigPatcher {
     private static let beginMarker = "# BEGIN \(manifest.ownerMarker)"
     private static let endMarker = "# END \(manifest.ownerMarker)"
     private static let previousNotifyPrefix = "# agentwake-previous-notify-base64: "
-    private static let legacyPreviousNotifyPrefixes = [
-        "# clawshell-previous-notify-base64: "
-    ]
     private static let codexHookEvents = [
         "SessionStart",
         "UserPromptSubmit",
@@ -424,12 +412,11 @@ public struct CodexConfigPatcher {
 
     private func previousNotifyLine(from block: String) -> String? {
         for line in block.split(separator: "\n", omittingEmptySubsequences: false) {
-            guard let prefix = ([Self.previousNotifyPrefix] + Self.legacyPreviousNotifyPrefixes)
-                .first(where: { line.hasPrefix($0) }) else {
+            guard line.hasPrefix(Self.previousNotifyPrefix) else {
                 continue
             }
 
-            let raw = String(line.dropFirst(prefix.count))
+            let raw = String(line.dropFirst(Self.previousNotifyPrefix.count))
             guard raw != "none",
                   let data = Data(base64Encoded: raw),
                   let restored = String(data: data, encoding: .utf8),
@@ -522,14 +509,11 @@ public struct CodexConfigPatcher {
     }
 
     private static func ownedBlockRanges(in content: String) throws -> [Range<String.Index>] {
-        let markers = [manifest.ownerMarker] + legacyOwnerMarkers
-        let ranges = try markers.flatMap { marker in
-            try ownedBlockRanges(
-                in: content,
-                beginMarker: "# BEGIN \(marker)",
-                endMarker: "# END \(marker)"
-            )
-        }
+        let ranges = try ownedBlockRanges(
+            in: content,
+            beginMarker: beginMarker,
+            endMarker: endMarker
+        )
 
         return mergedRanges(ranges.sorted { $0.lowerBound < $1.lowerBound })
     }
