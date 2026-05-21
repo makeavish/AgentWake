@@ -283,6 +283,7 @@ public struct CodexConfigPatcher {
         if let notifyLine = topLevelNotifyLine(in: content) {
             try Self.validateNotifyAssignment(notifyLine.text)
         }
+        try Self.validateNoDuplicateTopLevelKeys(in: content)
     }
 
     private static let beginMarker = "# BEGIN \(manifest.ownerMarker)"
@@ -390,14 +391,22 @@ public struct CodexConfigPatcher {
             return (content, false)
         }
 
+        // If an external `notify =` already exists outside our owned block(s) (e.g. a
+        // third-party tool wrote a top-level notify on top of ours), skip restoring the
+        // recorded previous-notify — emitting it would create a duplicate `notify =`
+        // key and produce invalid TOML.
+        let strippedContent = stringExcluding(ranges: blockRanges, from: content)
+        let shouldRestorePreviousNotify = topLevelNotifyLine(in: strippedContent) == nil
+
         var next = ""
         var cursor = content.startIndex
         for blockRange in blockRanges {
             next.append(contentsOf: content[cursor..<blockRange.lowerBound])
-            let block = String(content[blockRange])
-            let restoredNotify = previousNotifyLine(from: block)
-            if let restoredNotify {
-                next.append(ensureTrailingNewline(restoredNotify))
+            if shouldRestorePreviousNotify {
+                let block = String(content[blockRange])
+                if let restoredNotify = previousNotifyLine(from: block) {
+                    next.append(ensureTrailingNewline(restoredNotify))
+                }
             }
             cursor = blockRange.upperBound
         }
@@ -408,6 +417,17 @@ public struct CodexConfigPatcher {
             return ("", true)
         }
         return (ensureTrailingNewline(compacted), true)
+    }
+
+    private func stringExcluding(ranges: [Range<String.Index>], from content: String) -> String {
+        var result = ""
+        var cursor = content.startIndex
+        for range in ranges {
+            result.append(contentsOf: content[cursor..<range.lowerBound])
+            cursor = range.upperBound
+        }
+        result.append(contentsOf: content[cursor..<content.endIndex])
+        return result
     }
 
     private func previousNotifyLine(from block: String) -> String? {
@@ -474,6 +494,51 @@ public struct CodexConfigPatcher {
         }
 
         return values
+    }
+
+    private static func validateNoDuplicateTopLevelKeys(in content: String) throws {
+        // Scope: catches the realistic class of duplicate-key corruption seen in
+        // Codex config files (e.g. an external tool writes a second top-level
+        // `notify =` on top of one already present). Codex configs don't use
+        // multi-line triple-quoted strings or other constructs that would defeat
+        // a simple line-based scanner, so we keep this minimal — the upstream
+        // `topLevelNotifyLine` has the same limitation.
+        var seen: Set<String> = []
+        var inTopLevel = true
+        var cursor = content.startIndex
+
+        while cursor < content.endIndex {
+            let lineEnd = content[cursor...].firstIndex(of: "\n") ?? content.endIndex
+            let trimmed = String(content[cursor..<lineEnd]).trimmingCharacters(in: .whitespaces)
+
+            if trimmed.hasPrefix("[") {
+                inTopLevel = false
+            } else if inTopLevel, !trimmed.isEmpty, !trimmed.hasPrefix("#") {
+                if let key = topLevelBareKey(from: trimmed), !seen.insert(key).inserted {
+                    throw IntegrationPatcherError.invalidTOML("duplicate top-level key '\(key)'")
+                }
+            }
+
+            cursor = lineEnd < content.endIndex ? content.index(after: lineEnd) : content.endIndex
+        }
+    }
+
+    private static func topLevelBareKey(from trimmedLine: String) -> String? {
+        guard let equals = trimmedLine.firstIndex(of: "=") else {
+            return nil
+        }
+        let keyPart = trimmedLine[..<equals].trimmingCharacters(in: .whitespaces)
+        guard !keyPart.isEmpty else {
+            return nil
+        }
+        // TOML bare keys: ASCII letters, digits, underscore, dash. Dot is allowed for
+        // dotted keys (e.g. `apple.color = "red"`). Quoted keys are intentionally
+        // ignored here — they're rare at top level and don't collide with the bare
+        // keys we care about (e.g. `notify`).
+        guard keyPart.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" || $0 == "." }) else {
+            return nil
+        }
+        return keyPart
     }
 
     private static func validateNotifyAssignment(_ text: String) throws {

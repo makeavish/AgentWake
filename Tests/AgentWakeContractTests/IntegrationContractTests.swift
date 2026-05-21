@@ -297,6 +297,103 @@ private func runConfigPatchersPreserveAndRemoveOnlyOwnedBlocks() throws {
     let lookalikeRemoval = try codexPatcher.removalPlan(currentData: Data(markerLookalike.utf8))
     let lookalikeRemoved = String(data: lookalikeRemoval.patchedData, encoding: .utf8) ?? ""
     try check(lookalikeRemoved.contains("but user-owned"), "Expected marker lookalikes not to be removed")
+
+    // Defense: when an external tool has written a top-level `notify =` line on
+    // top of our owned block, uninstall must NOT restore the recorded previous
+    // notify — emitting it would create a duplicate `notify =` key. Reproduces
+    // the real-world bug where the Codex Computer Use plugin wrote its own
+    // notify line over an AgentWake-owned block, then uninstall left two
+    // notify keys in the file.
+    let orphanNotifyLine = #"notify = ["/Applications/External/Foo", "turn-ended"]"#
+    let installedWithOrphan = orphanNotifyLine + "\n" + codexInstalled
+    let orphanRemoval = try codexPatcher.removalPlan(currentData: Data(installedWithOrphan.utf8))
+    let orphanRemoved = String(data: orphanRemoval.patchedData, encoding: .utf8) ?? ""
+    try codexPatcher.validate(orphanRemoval.patchedData)
+    try check(orphanRemoved.contains("/Applications/External/Foo"), "Expected external orphan notify to be preserved when our block is removed")
+    try check(!orphanRemoved.contains(CodexConfigPatcher.manifest.ownerMarker), "Expected owned block to be removed when orphan exists")
+    try check(!orphanRemoved.contains("notify-user"), "Expected recorded previous notify NOT to be restored when external orphan is present (would create duplicate key)")
+    try check(topLevelNotifyOccurrences(in: orphanRemoved) == 1, "Expected exactly one top-level notify after uninstall with external orphan present")
+
+    // Regression: when there is NO external orphan, the recorded previous
+    // notify must still be restored (existing behavior).
+    let cleanRemoval = try codexPatcher.removalPlan(currentData: codexInstall.patchedData)
+    let cleanRemoved = String(data: cleanRemoval.patchedData, encoding: .utf8) ?? ""
+    try check(cleanRemoved.contains(#"notify = ["/usr/local/bin/notify-user", "Codex"]"#), "Expected clean uninstall (no orphan) to restore recorded previous notify")
+    try check(topLevelNotifyOccurrences(in: cleanRemoved) == 1, "Expected exactly one top-level notify after clean uninstall")
+
+    // Defense: validate rejects any output that contains duplicate top-level
+    // keys, so the patcher refuses to write a corrupt TOML to disk.
+    let duplicateNotify = """
+    model = "gpt-5.5"
+    notify = ["/usr/local/bin/notify-user", "Codex"]
+
+    notify = ["/Applications/External/Foo", "turn-ended"]
+
+    [profiles.work]
+    model = "gpt-5.4"
+    """
+    var threwDuplicateNotify = false
+    do {
+        try codexPatcher.validate(Data(duplicateNotify.utf8))
+    } catch IntegrationPatcherError.invalidTOML(let message) where message.contains("duplicate top-level key") {
+        threwDuplicateNotify = true
+    }
+    try check(threwDuplicateNotify, "Expected validate to reject duplicate top-level notify keys")
+
+    // Same-named key inside a sub-table is NOT a duplicate (different scope).
+    let scopedNotify = """
+    model = "gpt-5.5"
+    notify = ["/usr/local/bin/notify-user", "Codex"]
+
+    [profiles.work]
+    notify = ["other"]
+    """
+    try codexPatcher.validate(Data(scopedNotify.utf8))
+
+    // Inline tables with `=` inside the value must not confuse the duplicate-key
+    // scanner — only the outer key counts.
+    let inlineTable = """
+    profile = { name = "foo", value = 1 }
+    notify = ["x"]
+    """
+    try codexPatcher.validate(Data(inlineTable.utf8))
+
+    // A multi-line `notify = [...]` continuation line that contains `=` inside a
+    // quoted element must not be misread as a new top-level key.
+    let multilineNotifyWithEquals = """
+    notify = [
+      "/usr/local/bin/notify-user",
+      "--option=x=y",
+    ]
+    """
+    try codexPatcher.validate(Data(multilineNotifyWithEquals.utf8))
+
+    // Dotted top-level keys like `apple.color = ...` and `apple.taste = ...` are
+    // distinct keys and must not be flagged as duplicates.
+    let dottedKeys = """
+    apple.color = "red"
+    apple.taste = "tart"
+    notify = ["x"]
+    """
+    try codexPatcher.validate(Data(dottedKeys.utf8))
+}
+
+private func topLevelNotifyOccurrences(in content: String) -> Int {
+    var count = 0
+    var inTopLevel = true
+    for rawLine in content.split(separator: "\n", omittingEmptySubsequences: false) {
+        let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("[") {
+            inTopLevel = false
+            continue
+        }
+        guard inTopLevel else { continue }
+        let collapsed = trimmed.filter { !$0.isWhitespace }
+        if collapsed.hasPrefix("notify=") {
+            count += 1
+        }
+    }
+    return count
 }
 
 private func fixtureData(_ name: String, extension ext: String) throws -> Data {
