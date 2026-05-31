@@ -75,7 +75,7 @@ private final class OnboardingViewController: NSViewController {
         title.font = .preferredFont(forTextStyle: .title1)
 
         let step1 = stepLabel("1. AgentWake adds local hooks so Claude Code and Codex can report session activity.")
-        let step2 = stepLabel("2. Lid-Closed Awake can ask for administrator approval when you turn it on.")
+        let step2 = stepLabel("2. Lid-Closed Awake uses an installed helper, approved once in System Settings.")
         let step3 = stepLabel("3. Open Claude Code or Codex. AgentWake will catch the next session automatically.")
 
         let diffView = NSTextView()

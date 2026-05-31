@@ -35,6 +35,10 @@ let package = Package(
         .executable(
             name: "AgentWakeHookAdapter",
             targets: ["AgentWakeHookAdapter"]
+        ),
+        .executable(
+            name: "AgentWakeHelper",
+            targets: ["AgentWakeHelper"]
         )
     ],
     targets: [
@@ -76,6 +80,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "AgentWakeHookAdapter",
+            dependencies: ["AgentWakeCore"]
+        ),
+        .executableTarget(
+            name: "AgentWakeHelper",
             dependencies: ["AgentWakeCore"]
         ),
         .testTarget(

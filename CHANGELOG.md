@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.8 - 2026-05-31
+
+- Makes Lid-Closed Awake session-scoped: it can only be turned on while
+  AgentWake is already keeping the Mac awake, and AgentWake restores normal
+  sleep when that protection ends.
+- Bundles an installed privileged helper for Lid-Closed Awake so automatic
+  restore does not re-prompt for an administrator password after approval.
+
 ## v0.2.7 - 2026-05-20
 
 - Prevents startup/resume-only Claude Code and Codex sessions from keeping the

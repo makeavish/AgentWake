@@ -364,6 +364,7 @@ public final class AgentMonitor: AppLifecycleComponent {
 
 public enum ClosedLidModeSafetyError: Error, Equatable, LocalizedError {
     case blocked(BagModeSafetyDiagnostic)
+    case noActiveProtection
 
     public var errorDescription: String? {
         switch self {
@@ -375,6 +376,8 @@ public enum ClosedLidModeSafetyError: Error, Equatable, LocalizedError {
             ]
             .compactMap { $0 }
             .joined(separator: "\n")
+        case .noActiveProtection:
+            return "Lid-Closed Awake needs active sleep protection. Start or protect an agent session, or use Keep Mac Active, before turning it on."
         }
     }
 }
@@ -388,9 +391,11 @@ public final class AgentWakeServices: @unchecked Sendable {
     public let logStore: LogStore
     public let closedLidModeController: ClosedLidModeController
     public let closedLidSafetyMonitor: ClosedLidSafetyMonitor
+    public let privilegedHelperManager: any AgentWakePrivilegedHelperManaging
     private let temperatureReadingProvider: (Date) -> BagModeTemperatureReading
     private let batteryPercentProvider: () -> Int?
     private let thermalPressureProvider: () -> BagModeAppThermalPressure?
+    private let shouldAutoRepairClosedLidHelper: Bool
 
     public init(
         agentMonitor: AgentMonitor? = nil,
@@ -398,6 +403,8 @@ public final class AgentWakeServices: @unchecked Sendable {
         assertionManager: AssertionManager? = nil,
         integrationManager: IntegrationManager? = nil,
         closedLidModeController: ClosedLidModeController? = nil,
+        closedLidModeCommandRunner: ClosedLidModeCommandRunning? = nil,
+        privilegedHelperManager: (any AgentWakePrivilegedHelperManaging)? = nil,
         settingsStore: SettingsStore? = nil,
         logStore: LogStore? = nil,
         temperatureReadingProvider: @escaping (Date) -> BagModeTemperatureReading = { timestamp in
@@ -422,7 +429,15 @@ public final class AgentWakeServices: @unchecked Sendable {
             installLocations: autoInstallIntegrations ? .defaultLocations() : nil
         )
         self.integrationManager = resolvedIntegrationManager
-        let resolvedClosedLidModeController = closedLidModeController ?? ClosedLidModeController(paths: paths)
+        let helperClient = AgentWakePrivilegedHelperClient(paths: paths)
+        let helperManager = privilegedHelperManager ?? AgentWakePrivilegedHelperManager(client: helperClient)
+        self.privilegedHelperManager = helperManager
+        let shouldAutoRegisterHelper = closedLidModeController == nil
+        self.shouldAutoRepairClosedLidHelper = shouldAutoRegisterHelper
+        let resolvedClosedLidModeController = closedLidModeController ?? ClosedLidModeController(
+            paths: paths,
+            commandRunner: closedLidModeCommandRunner ?? HelperBackedClosedLidModeCommandRunner(helperClient: helperClient)
+        )
         self.closedLidModeController = resolvedClosedLidModeController
         let resolvedAgentMonitor = agentMonitor ?? AgentMonitor(settingsProvider: { resolvedSettingsStore.settings })
         self.agentMonitor = resolvedAgentMonitor
@@ -444,6 +459,7 @@ public final class AgentWakeServices: @unchecked Sendable {
         )
         self.closedLidSafetyMonitor = resolvedClosedLidSafetyMonitor
         let closedLidEnableWithSafetyCheck: (Date) throws -> String = { receivedAt in
+            try Self.validateHasActiveSleepProtection(resolvedAgentMonitor.aggregateHoldState)
             try Self.validateCanArmClosedLidMode(
                 settings: resolvedSettingsStore.settings.safety,
                 temperature: temperatureReadingProvider(receivedAt),
@@ -451,6 +467,10 @@ public final class AgentWakeServices: @unchecked Sendable {
                 thermalPressure: thermalPressureProvider(),
                 at: receivedAt
             )
+            if shouldAutoRegisterHelper {
+                let helperStatus = try helperManager.repair()
+                try Self.validateClosedLidHelperReady(helperStatus)
+            }
             let message = try resolvedClosedLidModeController.enable()
             resolvedClosedLidSafetyMonitor.evaluateNow()
             return message
@@ -480,15 +500,18 @@ public final class AgentWakeServices: @unchecked Sendable {
                 resolvedAssertionManager.reconcile()
                 return "Integration event accepted: \(event.agent.rawValue) \(event.event.rawValue)"
             }, helperStatusProvider: {
-                "No production helper is installed. Use `agentwake closed-lid status` for local admin-approved Closed-Lid Mode."
-            }, helperEnableBagModeHandler: { _ in
-                "Production helper enable unavailable. Use `agentwake closed-lid enable` for local admin-approved Closed-Lid Mode."
+                helperManager.statusMessage()
+            }, helperEnableBagModeHandler: { receivedAt in
+                try closedLidEnableWithSafetyCheck(receivedAt)
             }, helperDisableBagModeHandler: { _ in
-                "Production helper disable unavailable. Use `agentwake closed-lid disable` for local admin-approved Closed-Lid Mode."
+                try resolvedClosedLidModeController.disable()
             }, helperRepairHandler: { _ in
-                "Production helper repair unavailable: no production helper is installed."
+                try helperManager.repair()
             }, helperUninstallHandler: { _ in
-                "Production helper uninstall unavailable: no production helper is installed."
+                if resolvedClosedLidModeController.isAgentWakeOwnedEnabled() {
+                    _ = try resolvedClosedLidModeController.disable()
+                }
+                return try helperManager.unregister()
             }, closedLidStatusProvider: {
                 resolvedClosedLidModeController.statusMessage()
             }, closedLidEnableHandler: { receivedAt in
@@ -512,7 +535,10 @@ public final class AgentWakeServices: @unchecked Sendable {
                 }
 
                 if removeHelper {
-                    outcomes.append("helper removal unavailable: no production helper is installed")
+                    if resolvedClosedLidModeController.isAgentWakeOwnedEnabled() {
+                        _ = try resolvedClosedLidModeController.disable()
+                    }
+                    outcomes.append(try helperManager.unregister())
                 } else {
                     outcomes.append("helper unchanged")
                 }
@@ -555,10 +581,33 @@ public final class AgentWakeServices: @unchecked Sendable {
 
     public func stopAll() {
         logStore.append(kind: .appStopped, message: "AgentWake stopped")
+        if closedLidModeController.isAgentWakeOwnedEnabled() {
+            do {
+                let message = try closedLidModeController.disable()
+                logStore.append(
+                    kind: .helperChange,
+                    message: "Closed-Lid Mode restored during shutdown",
+                    metadata: [
+                        "operation": "shutdown-restore",
+                        "result": message
+                    ]
+                )
+            } catch {
+                logStore.append(
+                    kind: .helperChange,
+                    message: "Closed-Lid Mode shutdown restore failed",
+                    metadata: [
+                        "operation": "shutdown-restore",
+                        "error": error.localizedDescription
+                    ]
+                )
+            }
+        }
         lifecycleComponents.reversed().forEach { $0.stop() }
     }
 
     public func enableClosedLidMode(at timestamp: Date = Date()) throws -> String {
+        try Self.validateHasActiveSleepProtection(agentMonitor.aggregateHoldState)
         try Self.validateCanArmClosedLidMode(
             settings: settingsStore.settings.safety,
             temperature: temperatureReadingProvider(timestamp),
@@ -566,6 +615,7 @@ public final class AgentWakeServices: @unchecked Sendable {
             thermalPressure: thermalPressureProvider(),
             at: timestamp
         )
+        try repairClosedLidHelperIfNeeded()
         let message = try closedLidModeController.enable()
         closedLidSafetyMonitor.evaluateNow()
         return message
@@ -645,6 +695,29 @@ public final class AgentWakeServices: @unchecked Sendable {
         let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         let error = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         return output.isEmpty ? error : output
+    }
+
+    private static func validateHasActiveSleepProtection(_ holdState: AgentAggregateHoldState) throws {
+        guard holdState.shouldHold else {
+            throw ClosedLidModeSafetyError.noActiveProtection
+        }
+    }
+
+    private func repairClosedLidHelperIfNeeded() throws {
+        guard shouldAutoRepairClosedLidHelper else {
+            return
+        }
+
+        let helperStatus = try privilegedHelperManager.repair()
+        try Self.validateClosedLidHelperReady(helperStatus)
+    }
+
+    private static func validateClosedLidHelperReady(_ helperStatus: String) throws {
+        let normalized = helperStatus.localizedLowercase
+        guard !normalized.contains("requires approval"),
+              !normalized.contains("approval required") else {
+            throw ClosedLidModeError.authorizationFailed(helperStatus)
+        }
     }
 
     private static func validateCanArmClosedLidMode(

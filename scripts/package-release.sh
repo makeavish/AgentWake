@@ -5,6 +5,8 @@ APP_NAME="AgentWake"
 BUNDLE_ID="com.makeavish.AgentWake"
 MIN_SYSTEM_VERSION="13.0"
 HOOK_ADAPTER_NAME="AgentWakeHookAdapter"
+HELPER_NAME="AgentWakeHelper"
+HELPER_LABEL="com.makeavish.AgentWake.Helper"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="$ROOT_DIR/.build/release-artifacts"
@@ -19,7 +21,8 @@ Usage: scripts/package-release.sh --version VERSION [--output-dir DIR] [--no-sig
 Builds a release AgentWake.app bundle and ZIP artifact.
 
 VERSION may be v0.1.0 or 0.1.0. The app bundle version uses the numeric form.
-The release artifact does not install or register privileged helpers.
+The release artifact bundles the privileged helper, but does not register or
+activate it during packaging.
 EOF
 }
 
@@ -95,8 +98,12 @@ APP_BUNDLE="$ARTIFACT_ROOT/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
+APP_LAUNCH_DAEMONS="$APP_CONTENTS/Library/LaunchDaemons"
+APP_PRIVILEGED_HELPER_TOOLS="$APP_CONTENTS/Library/PrivilegedHelperTools"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 HOOK_ADAPTER_BINARY="$APP_MACOS/$HOOK_ADAPTER_NAME"
+HELPER_BINARY="$APP_PRIVILEGED_HELPER_TOOLS/$HELPER_NAME"
+HELPER_PLIST="$APP_LAUNCH_DAEMONS/$HELPER_LABEL.plist"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 APP_ICON_SOURCE="$ROOT_DIR/Resources/AgentWake.icns"
 APP_ICON_NAME="AgentWake"
@@ -113,12 +120,14 @@ cd "$ROOT_DIR"
 
 swift build -c release --product "$APP_NAME"
 swift build -c release --product "$HOOK_ADAPTER_NAME"
+swift build -c release --product "$HELPER_NAME"
 BUILD_DIR="$(swift build -c release --show-bin-path)"
 
-mkdir -p "$APP_MACOS" "$APP_RESOURCES"
+mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$APP_LAUNCH_DAEMONS" "$APP_PRIVILEGED_HELPER_TOOLS"
 cp "$BUILD_DIR/$APP_NAME" "$APP_BINARY"
 cp "$BUILD_DIR/$HOOK_ADAPTER_NAME" "$HOOK_ADAPTER_BINARY"
-chmod +x "$APP_BINARY" "$HOOK_ADAPTER_BINARY"
+cp "$BUILD_DIR/$HELPER_NAME" "$HELPER_BINARY"
+chmod +x "$APP_BINARY" "$HOOK_ADAPTER_BINARY" "$HELPER_BINARY"
 cp "$APP_ICON_SOURCE" "$APP_RESOURCES/$APP_ICON_NAME.icns"
 cp "$ROOT_DIR/README.md" "$APP_RESOURCES/README.md"
 cp "$ROOT_DIR/CHANGELOG.md" "$APP_RESOURCES/CHANGELOG.md"
@@ -160,9 +169,36 @@ PLIST
 
 /usr/bin/plutil -lint "$INFO_PLIST" >/dev/null
 
+cat >"$HELPER_PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$HELPER_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Applications/$APP_NAME.app/Contents/Library/PrivilegedHelperTools/$HELPER_NAME</string>
+    <string>--daemon</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/var/log/agentwake-helper.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/var/log/agentwake-helper.stderr.log</string>
+</dict>
+</plist>
+PLIST
+
+/usr/bin/plutil -lint "$HELPER_PLIST" >/dev/null
+
 if [[ "$SIGN_MODE" == "ad-hoc" ]]; then
     /usr/bin/codesign --force --sign - --timestamp=none "$APP_BINARY" >/dev/null
     /usr/bin/codesign --force --sign - --timestamp=none "$HOOK_ADAPTER_BINARY" >/dev/null
+    /usr/bin/codesign --force --sign - --timestamp=none "$HELPER_BINARY" >/dev/null
     /usr/bin/codesign --force --sign - --timestamp=none "$APP_BUNDLE" >/dev/null
     /usr/bin/codesign --verify --strict "$APP_BUNDLE" >/dev/null
 fi
@@ -185,8 +221,12 @@ gitCommit=$GIT_COMMIT
 gitShortCommit=$GIT_SHORT_COMMIT
 signing=$SIGN_MODE
 dirtyTree=$ALLOW_DIRTY
-bagMode=unavailable
+bagMode=helper-backed
+helperBundled=true
 helperInstalled=false
+helperLabel=$HELPER_LABEL
+helperPlist=$HELPER_PLIST
+helperBinary=$HELPER_BINARY
 zipPath=$ZIP_PATH
 sha256Path=$SHA_PATH
 appBundle=$APP_BUNDLE

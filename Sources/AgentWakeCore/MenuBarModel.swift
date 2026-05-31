@@ -155,7 +155,7 @@ public enum MenuBarModel {
             items.append(
                 MenuBarItem(
                     title: "Turn Off Lid-Closed Awake",
-                    detail: "Restores only AgentWake-owned closed-lid state.",
+                    detail: "Restores normal sleep now instead of waiting for current protection to end.",
                     isEnabled: true,
                     kind: .closedLidDisable
                 )
@@ -173,7 +173,7 @@ public enum MenuBarModel {
             items.append(
                 MenuBarItem(
                     title: "Turn On Lid-Closed Awake",
-                    detail: "Prevents sleep when the lid closes. Requires macOS administrator approval.",
+                    detail: "Keeps lid-close sleep disabled only while AgentWake is keeping this Mac awake.",
                     isEnabled: true,
                     kind: .closedLidEnable
                 )
@@ -293,11 +293,13 @@ public enum MenuBarModel {
 
     private static func closedLidStatusDetail(_ status: ClosedLidStatus?) -> String? {
         switch status {
+        case .enabledByAgentWake:
+            return "Turns off when current sleep protection ends."
         case .enabledByOther:
             return "AgentWake left it alone so it can be restored cleanly when you turn that tool off."
         case .unknown(let reason):
             return reason
-        case .off, .enabledByAgentWake, .ownershipPending, .none:
+        case .off, .ownershipPending, .none:
             return nil
         }
     }

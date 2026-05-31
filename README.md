@@ -9,7 +9,7 @@ Codex CLI work:
 - shows a glanceable menu bar state
 - releases sleep protection when sessions finish
 - can keep the Mac active manually for a chosen duration or indefinitely
-- supports explicit admin-approved Lid-Closed Awake with release-only battery and
+- supports explicit helper-backed Lid-Closed Awake with release-only battery and
   thermal safety cutoffs
 - lets you pause protection for a chosen duration when you intentionally want
   macOS to sleep
@@ -24,7 +24,7 @@ AgentWake is in early public release, focused on Claude Code and Codex CLI.
 |---|---|---|
 | Auto-detect | Hooks + process detection | Hooks + process detection |
 | Idle sleep | Supported | Supported |
-| Lid-closed on AC | Admin-approved | Admin-approved |
+| Lid-closed on AC | Helper-backed | Helper-backed |
 | Lid-closed on battery | Works, release-only safety cutoffs | Works, release-only safety cutoffs |
 | Manual Mac Active | Duration-based | Duration-based |
 | Pause / resume | Supported | Supported |
@@ -36,9 +36,11 @@ Long-running coding agents can work for minutes or hours. macOS can interrupt th
 
 `caffeinate -i` helps with idle sleep, but it is easy to forget and does not track agent lifecycle. AgentWake aims to make normal sleep prevention automatic, visible, and agent-scoped, while still offering an explicit timed or indefinite manual hold when you need one.
 
-Closed-Lid Mode currently uses macOS administrator approval to toggle the
-`pmset disablesleep` primitive and records the prior value so AgentWake can
-restore it when disabled.
+Lid-Closed Awake uses an installed privileged helper to toggle the
+`pmset disablesleep` primitive while AgentWake is already keeping the Mac awake.
+After the one-time helper approval, AgentWake can restore the prior value
+without another password prompt when that sleep protection ends or when you turn
+Lid-Closed Awake off.
 
 Gemini CLI, Cursor, VS Code, and custom binaries are planned for later versions.
 
@@ -52,8 +54,9 @@ Gemini CLI, Cursor, VS Code, and custom binaries are planned for later versions.
 ## Safety Model
 
 Closed-lid battery support is treated as a guarded mode, not a blanket promise that every situation is safe.
-Closed-Lid Mode is currently an explicit admin-approved local mode. It changes
-`pmset disablesleep`, records the prior value, and restores that value when
+Lid-Closed Awake is currently an explicit helper-backed local mode. It changes
+`pmset disablesleep` only while AgentWake is already keeping the Mac awake,
+records the prior value, and restores that value when protection ends or when
 disabled. Safety cutoffs are release-only: AgentWake turns Lid-Closed Awake off
 when a limit is crossed, and it does not auto-resume.
 
@@ -67,15 +70,13 @@ Current safeguards include:
   otherwise
 - Critical macOS thermal-pressure release
 
-Planned safeguards include:
+Normal sleep prevention works without admin privileges. macOS authorization is
+only for approving the privileged helper needed for closed-lid battery support.
 
-- A privileged helper only for the closed-lid battery path
-
-Normal sleep prevention should work without admin privileges. macOS authorization is planned only when installing the privileged helper needed for closed-lid battery support.
-
-The CLI vocabulary is `agentwake closed-lid status|enable|disable`. Enable and
-disable may show a macOS administrator prompt because the closed-lid primitive
-requires privileged power-setting changes.
+The CLI vocabulary is `agentwake closed-lid status|enable|disable`. Enable is
+available only while AgentWake is actively keeping the Mac awake. Enable or
+disable uses the installed helper; if the helper has not been approved yet,
+run `agentwake helper repair` and approve AgentWake in System Settings.
 
 ## Settings
 
@@ -120,7 +121,8 @@ unzip it, and move `AgentWake.app` to `/Applications`.
 Current releases are ad-hoc signed. macOS may require right-click -> Open on
 first launch; moving the app into `/Applications` may ask for administrator
 approval depending on your machine; Lid-Closed Awake asks for administrator
-approval when you turn it on or off because it changes `pmset disablesleep`.
+approval only while installing/approving the helper. It restores normal sleep
+when the current AgentWake protection ends.
 
 The planned primary distribution path is a Homebrew cask. Developer ID signing
 and notarization are planned after the early release path is validated and the
@@ -135,9 +137,9 @@ Build a local release ZIP:
 scripts/package-release.sh --version v0.2.2
 ```
 
-The generated artifact is ad-hoc signed and does not install/register privileged
-helpers. Closed-Lid Mode uses macOS administrator approval at the moment the
-user enables or disables it.
+The generated artifact is ad-hoc signed and bundles the privileged helper. It
+does not register or activate that helper during packaging; the app registers it
+only after explicit Lid-Closed Awake consent.
 
 ## Development
 

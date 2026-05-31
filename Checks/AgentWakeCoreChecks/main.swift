@@ -28,6 +28,7 @@ struct AgentWakeCoreChecks {
         try bagModeSafetyPolicyCoversWarningCutoffFailClosedAndHysteresis()
         try directTemperatureProviderReturnsBoundedStatusOrFailClosed()
         try closedLidSafetyMonitorReleasesOnCutoff()
+        try closedLidSafetyMonitorReleasesWhenProtectionEnds()
         try closedLidEnablePreflightsSafety()
         try bagModeSafetyDiagnosticsCoverUserFacingProviderStates()
         try powerSourceReaderParsesPmsetBatteryOutput()
@@ -1295,13 +1296,21 @@ struct AgentWakeCoreChecks {
                 temperatureWarningCelsius: 85,
                 temperatureCutoffCelsius: 95,
                 batteryFloorPercent: 15
-            )
+            ),
+            manualOverrides: [
+                ManualOverride(
+                    id: "test-keep-awake",
+                    kind: ManualOverrideKind.keepAwake.rawValue,
+                    expiresAt: Date(timeIntervalSince1970: 6_000)
+                )
+            ]
         )
         let monitor = AgentMonitor(
             snapshotProvider: StaticSnapshotProvider(snapshotsToReturn: []),
             settingsProvider: { settings },
             now: { Date(timeIntervalSince1970: 5_001) }
         )
+        monitor.poll()
         let assertionController = RecordingPowerAssertionController()
         let assertionManager = AssertionManager(
             controller: assertionController,
@@ -1342,6 +1351,7 @@ struct AgentWakeCoreChecks {
             settingsProvider: { settings },
             now: { Date(timeIntervalSince1970: 5_011) }
         )
+        temperatureMonitor.poll()
         let temperatureAssertionManager = AssertionManager(
             controller: RecordingPowerAssertionController(),
             holdStateProvider: { temperatureMonitor.aggregateHoldState }
@@ -1390,6 +1400,65 @@ struct AgentWakeCoreChecks {
         try check(!unarmedMonitor.aggregateHoldState.isSafetyCutoffActive, "Expected missing battery while unarmed not to suppress normal sleep protection")
     }
 
+    private static func closedLidSafetyMonitorReleasesWhenProtectionEnds() throws {
+        let paths = try makeTemporaryPaths()
+        defer { try? FileManager.default.removeItem(at: paths.applicationSupportDirectory) }
+
+        let runner = RecordingClosedLidModeCommandRunner(initialValue: 0)
+        let controller = ClosedLidModeController(
+            paths: paths,
+            commandRunner: runner,
+            now: { Date(timeIntervalSince1970: 5_200) }
+        )
+        _ = try controller.enable()
+
+        let settings = AgentWakeSettings(
+            safety: SafetySettings(
+                temperatureWarningCelsius: 85,
+                temperatureCutoffCelsius: 95,
+                batteryFloorPercent: 15
+            )
+        )
+        let monitor = AgentMonitor(
+            snapshotProvider: StaticSnapshotProvider(snapshotsToReturn: []),
+            settingsProvider: { settings },
+            now: { Date(timeIntervalSince1970: 5_201) }
+        )
+        monitor.poll()
+        let assertionManager = AssertionManager(
+            controller: RecordingPowerAssertionController(),
+            holdStateProvider: { monitor.aggregateHoldState }
+        )
+        let logStore = LogStore(paths: paths, now: { Date(timeIntervalSince1970: 5_201) })
+        logStore.start()
+        let safetyMonitor = ClosedLidSafetyMonitor(
+            settingsProvider: { settings },
+            closedLidModeController: controller,
+            agentMonitor: monitor,
+            assertionManager: assertionManager,
+            logStore: logStore,
+            temperatureReadingProvider: { timestamp in
+                .sample(BagModeTemperatureSample(celsius: 70, capturedAt: timestamp))
+            },
+            batteryPercentProvider: { 80 },
+            thermalPressureProvider: { .nominal },
+            now: { Date(timeIntervalSince1970: 5_201) }
+        )
+
+        safetyMonitor.evaluateNow()
+
+        try check(runner.setValues == [1, 0], "Expected Closed-Lid Mode to restore when no sleep protection remains")
+        try check(!controller.isAgentWakeOwnedEnabled(), "Expected session-scoped release to remove AgentWake-owned Closed-Lid Mode")
+        try check(!monitor.aggregateHoldState.isSafetyCutoffActive, "Expected normal protection end not to trip the safety cutoff")
+        try check(
+            logStore.events.contains {
+                $0.kind == .helperChange &&
+                    $0.metadata["operation"] == "auto-release-no-active-protection"
+            },
+            "Expected session-scoped Closed-Lid Mode release to be logged"
+        )
+    }
+
     private static func directTemperatureProviderReturnsBoundedStatusOrFailClosed() throws {
         let startedAt = Date()
         let status = DirectTemperatureProvider(timeoutSeconds: 1).currentStatus(capturedAt: startedAt)
@@ -1416,18 +1485,64 @@ struct AgentWakeCoreChecks {
                 batteryFloorPercent: 15
             )
         )
+        let activeSettings = AgentWakeSettings(
+            safety: settings.safety,
+            manualOverrides: [
+                ManualOverride(
+                    id: "test-keep-awake",
+                    kind: ManualOverrideKind.keepAwake.rawValue,
+                    expiresAt: now.addingTimeInterval(600)
+                )
+            ]
+        )
+
+        let inactivePaths = try makeTemporaryPaths()
+        defer { try? FileManager.default.removeItem(at: inactivePaths.applicationSupportDirectory) }
+        let inactiveRunner = RecordingClosedLidModeCommandRunner(initialValue: 0)
+        let inactiveLogStore = LogStore(paths: inactivePaths)
+        let inactiveSettingsStore = SettingsStore(settings: settings, paths: inactivePaths, logStore: inactiveLogStore)
+        let inactiveController = ClosedLidModeController(
+            paths: inactivePaths,
+            commandRunner: inactiveRunner,
+            now: { now }
+        )
+        let inactiveServices = AgentWakeServices(
+            closedLidModeController: inactiveController,
+            settingsStore: inactiveSettingsStore,
+            logStore: inactiveLogStore,
+            temperatureReadingProvider: { timestamp in
+                .sample(BagModeTemperatureSample(celsius: 70, capturedAt: timestamp))
+            },
+            batteryPercentProvider: { 80 },
+            thermalPressureProvider: { .nominal },
+            paths: inactivePaths
+        )
+
+        do {
+            _ = try inactiveServices.enableClosedLidMode(at: now)
+            throw CheckFailure("Expected inactive protection to block Closed-Lid Mode before pmset")
+        } catch ClosedLidModeSafetyError.noActiveProtection {
+            try check(inactiveRunner.setValues.isEmpty, "Expected inactive protection preflight not to mutate disablesleep")
+        }
 
         let blockedPaths = try makeTemporaryPaths()
         defer { try? FileManager.default.removeItem(at: blockedPaths.applicationSupportDirectory) }
         let blockedRunner = RecordingClosedLidModeCommandRunner(initialValue: 0)
         let blockedLogStore = LogStore(paths: blockedPaths)
-        let blockedSettingsStore = SettingsStore(settings: settings, paths: blockedPaths, logStore: blockedLogStore)
+        let blockedSettingsStore = SettingsStore(settings: activeSettings, paths: blockedPaths, logStore: blockedLogStore)
         let blockedController = ClosedLidModeController(
             paths: blockedPaths,
             commandRunner: blockedRunner,
             now: { now }
         )
+        let blockedAgentMonitor = AgentMonitor(
+            snapshotProvider: StaticSnapshotProvider(snapshotsToReturn: []),
+            settingsProvider: { blockedSettingsStore.settings },
+            now: { now }
+        )
+        blockedAgentMonitor.poll()
         let blockedServices = AgentWakeServices(
+            agentMonitor: blockedAgentMonitor,
             closedLidModeController: blockedController,
             settingsStore: blockedSettingsStore,
             logStore: blockedLogStore,
@@ -1454,13 +1569,20 @@ struct AgentWakeCoreChecks {
         defer { try? FileManager.default.removeItem(at: allowedPaths.applicationSupportDirectory) }
         let allowedRunner = RecordingClosedLidModeCommandRunner(initialValue: 0)
         let allowedLogStore = LogStore(paths: allowedPaths)
-        let allowedSettingsStore = SettingsStore(settings: settings, paths: allowedPaths, logStore: allowedLogStore)
+        let allowedSettingsStore = SettingsStore(settings: activeSettings, paths: allowedPaths, logStore: allowedLogStore)
         let allowedController = ClosedLidModeController(
             paths: allowedPaths,
             commandRunner: allowedRunner,
             now: { now }
         )
+        let allowedAgentMonitor = AgentMonitor(
+            snapshotProvider: StaticSnapshotProvider(snapshotsToReturn: []),
+            settingsProvider: { allowedSettingsStore.settings },
+            now: { now }
+        )
+        allowedAgentMonitor.poll()
         let allowedServices = AgentWakeServices(
+            agentMonitor: allowedAgentMonitor,
             closedLidModeController: allowedController,
             settingsStore: allowedSettingsStore,
             logStore: allowedLogStore,
@@ -1475,6 +1597,74 @@ struct AgentWakeCoreChecks {
         let message = try allowedServices.enableClosedLidMode(at: now)
         try check(message.contains("Closed-Lid Mode enabled"), "Expected safe preflight to allow Closed-Lid Mode enable")
         try check(allowedRunner.setValues == [1], "Expected safe preflight to mutate disablesleep once")
+
+        let repairedPaths = try makeTemporaryPaths()
+        defer { try? FileManager.default.removeItem(at: repairedPaths.applicationSupportDirectory) }
+        let repairedRunner = RecordingClosedLidModeCommandRunner(initialValue: 0)
+        let repairedLogStore = LogStore(paths: repairedPaths)
+        let repairedSettingsStore = SettingsStore(settings: activeSettings, paths: repairedPaths, logStore: repairedLogStore)
+        let repairedAgentMonitor = AgentMonitor(
+            snapshotProvider: StaticSnapshotProvider(snapshotsToReturn: []),
+            settingsProvider: { repairedSettingsStore.settings },
+            now: { now }
+        )
+        repairedAgentMonitor.poll()
+        let repairedHelper = RecordingPrivilegedHelperManager(
+            repairMessage: "Privileged helper service: not registered\nRuntime: helper running"
+        )
+        let repairedServices = AgentWakeServices(
+            agentMonitor: repairedAgentMonitor,
+            closedLidModeCommandRunner: repairedRunner,
+            privilegedHelperManager: repairedHelper,
+            settingsStore: repairedSettingsStore,
+            logStore: repairedLogStore,
+            temperatureReadingProvider: { timestamp in
+                .sample(BagModeTemperatureSample(celsius: 70, capturedAt: timestamp))
+            },
+            batteryPercentProvider: { 80 },
+            thermalPressureProvider: { .nominal },
+            paths: repairedPaths
+        )
+
+        _ = try repairedServices.enableClosedLidMode(at: now)
+        try check(repairedHelper.repairCallCount == 1, "Expected direct enable path to repair the helper before setting disablesleep")
+        try check(repairedRunner.setValues == [1], "Expected repaired helper path to enable disablesleep once")
+
+        let approvalPaths = try makeTemporaryPaths()
+        defer { try? FileManager.default.removeItem(at: approvalPaths.applicationSupportDirectory) }
+        let approvalRunner = RecordingClosedLidModeCommandRunner(initialValue: 0)
+        let approvalLogStore = LogStore(paths: approvalPaths)
+        let approvalSettingsStore = SettingsStore(settings: activeSettings, paths: approvalPaths, logStore: approvalLogStore)
+        let approvalAgentMonitor = AgentMonitor(
+            snapshotProvider: StaticSnapshotProvider(snapshotsToReturn: []),
+            settingsProvider: { approvalSettingsStore.settings },
+            now: { now }
+        )
+        approvalAgentMonitor.poll()
+        let approvalHelper = RecordingPrivilegedHelperManager(
+            repairMessage: "Privileged helper service: requires approval in System Settings"
+        )
+        let approvalServices = AgentWakeServices(
+            agentMonitor: approvalAgentMonitor,
+            closedLidModeCommandRunner: approvalRunner,
+            privilegedHelperManager: approvalHelper,
+            settingsStore: approvalSettingsStore,
+            logStore: approvalLogStore,
+            temperatureReadingProvider: { timestamp in
+                .sample(BagModeTemperatureSample(celsius: 70, capturedAt: timestamp))
+            },
+            batteryPercentProvider: { 80 },
+            thermalPressureProvider: { .nominal },
+            paths: approvalPaths
+        )
+
+        do {
+            _ = try approvalServices.enableClosedLidMode(at: now)
+            throw CheckFailure("Expected helper approval to block Closed-Lid Mode before pmset")
+        } catch ClosedLidModeError.authorizationFailed {
+            try check(approvalHelper.repairCallCount == 1, "Expected approval-blocked path to attempt helper repair once")
+            try check(approvalRunner.setValues.isEmpty, "Expected helper approval block not to mutate disablesleep")
+        }
     }
 
     private static func bagModeSafetyDiagnosticsCoverUserFacingProviderStates() throws {
@@ -3957,6 +4147,30 @@ final class RecordingControlClient: ControlClient {
     func send(_ command: ControlCommand) throws -> ControlResponse {
         commands.append(command)
         return ControlResponse(accepted: true, receiptTimestamp: Date(timeIntervalSince1970: 1), message: "ok")
+    }
+}
+
+final class RecordingPrivilegedHelperManager: AgentWakePrivilegedHelperManaging, @unchecked Sendable {
+    var repairCallCount = 0
+    var unregisterCallCount = 0
+    var repairMessage: String
+
+    init(repairMessage: String) {
+        self.repairMessage = repairMessage
+    }
+
+    func statusMessage() -> String {
+        repairMessage
+    }
+
+    func repair() throws -> String {
+        repairCallCount += 1
+        return repairMessage
+    }
+
+    func unregister() throws -> String {
+        unregisterCallCount += 1
+        return "Runtime: fallback helper removed"
     }
 }
 

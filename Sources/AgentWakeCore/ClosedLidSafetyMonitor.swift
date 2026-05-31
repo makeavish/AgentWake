@@ -23,6 +23,7 @@ public final class ClosedLidSafetyMonitor: AppLifecycleComponent {
     private var storedRunState: ComponentRunState = .stopped
     private var safetyState = BagModeSafetyState()
     private var lastLoggedCutoffReason: BagModeSafetyCutoffReason?
+    private var lastLoggedProtectionReleaseStatus: String?
 
     public init(
         settingsProvider: @escaping () -> AgentWakeSettings,
@@ -88,6 +89,14 @@ public final class ClosedLidSafetyMonitor: AppLifecycleComponent {
     private func evaluateOnQueue() {
         let timestamp = now()
         let isArmed = closedLidModeController.isAgentWakeOwnedEnabled()
+        let holdState = agentMonitor.aggregateHoldState
+
+        if isArmed, !holdState.shouldHold {
+            releaseClosedLidModeAfterProtectionEnded()
+            assertionManager.reconcile()
+            return
+        }
+
         let policy = BagModeSafetyPolicy(settings: settingsProvider().safety)
         let decision = policy.evaluate(
             previous: safetyState,
@@ -116,6 +125,30 @@ public final class ClosedLidSafetyMonitor: AppLifecycleComponent {
         } catch {
             logCutoffIfNeeded(reason: decision.state.cutoffReason, status: error.localizedDescription)
         }
+    }
+
+    private func releaseClosedLidModeAfterProtectionEnded() {
+        do {
+            let status = try closedLidModeController.disable()
+            logProtectionReleaseIfNeeded(status: status)
+        } catch {
+            logProtectionReleaseIfNeeded(status: error.localizedDescription)
+        }
+    }
+
+    private func logProtectionReleaseIfNeeded(status: String) {
+        guard lastLoggedProtectionReleaseStatus != status else {
+            return
+        }
+
+        lastLoggedProtectionReleaseStatus = status
+        logStore.append(
+            kind: .helperChange,
+            metadata: [
+                "operation": "auto-release-no-active-protection",
+                "status": status
+            ]
+        )
     }
 
     private func logCutoffIfNeeded(reason: BagModeSafetyCutoffReason?, status: String) {

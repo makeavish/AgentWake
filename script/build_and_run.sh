@@ -21,6 +21,12 @@ APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 HOOK_ADAPTER_NAME="AgentWakeHookAdapter"
 HOOK_ADAPTER_BINARY="$APP_MACOS/$HOOK_ADAPTER_NAME"
+HELPER_NAME="AgentWakeHelper"
+HELPER_LABEL="com.makeavish.AgentWake.Helper"
+APP_LAUNCH_DAEMONS="$APP_CONTENTS/Library/LaunchDaemons"
+APP_PRIVILEGED_HELPER_TOOLS="$APP_CONTENTS/Library/PrivilegedHelperTools"
+HELPER_BINARY="$APP_PRIVILEGED_HELPER_TOOLS/$HELPER_NAME"
+HELPER_PLIST="$APP_LAUNCH_DAEMONS/$HELPER_LABEL.plist"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 APP_ICON_SOURCE="$ROOT_DIR/Resources/AgentWake.icns"
 APP_ICON_NAME="AgentWake"
@@ -74,16 +80,19 @@ stop_app() {
 stage_app() {
     swift build --product "$APP_NAME"
     swift build --product "$HOOK_ADAPTER_NAME"
-    local build_binary hook_adapter_build_binary
+    swift build --product "$HELPER_NAME"
+    local build_binary hook_adapter_build_binary helper_build_binary
     build_binary="$(swift build --show-bin-path)/$APP_NAME"
     hook_adapter_build_binary="$(swift build --show-bin-path)/$HOOK_ADAPTER_NAME"
+    helper_build_binary="$(swift build --show-bin-path)/$HELPER_NAME"
 
     rm -rf "$APP_BUNDLE"
-    mkdir -p "$APP_MACOS" "$APP_RESOURCES"
+    mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$APP_LAUNCH_DAEMONS" "$APP_PRIVILEGED_HELPER_TOOLS"
     cp "$build_binary" "$APP_BINARY"
     cp "$hook_adapter_build_binary" "$HOOK_ADAPTER_BINARY"
+    cp "$helper_build_binary" "$HELPER_BINARY"
     cp "$APP_ICON_SOURCE" "$APP_RESOURCES/$APP_ICON_NAME.icns"
-    chmod +x "$APP_BINARY" "$HOOK_ADAPTER_BINARY"
+    chmod +x "$APP_BINARY" "$HOOK_ADAPTER_BINARY" "$HELPER_BINARY"
 
     cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -117,6 +126,30 @@ stage_app() {
 </dict>
 </plist>
 PLIST
+
+    cat >"$HELPER_PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$HELPER_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Applications/$APP_NAME.app/Contents/Library/PrivilegedHelperTools/$HELPER_NAME</string>
+    <string>--daemon</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/var/log/agentwake-helper.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/var/log/agentwake-helper.stderr.log</string>
+</dict>
+</plist>
+PLIST
 }
 
 open_app() {
@@ -142,6 +175,8 @@ verify_app() {
     [[ "$found" == "1" ]]
     [[ -x "$APP_BINARY" ]]
     [[ -x "$HOOK_ADAPTER_BINARY" ]]
+    [[ -x "$HELPER_BINARY" ]]
+    [[ -f "$HELPER_PLIST" ]]
 }
 
 case "$MODE" in

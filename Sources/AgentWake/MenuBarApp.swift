@@ -76,7 +76,7 @@ final class MenuBarApp: NSObject {
             currentState: currentState,
             sessionSummary: services.agentMonitor.sessionSummaryMessage(),
             closedLidStatus: closedLidStatus,
-            closedLidModeDetail: closedLidModeStatusDetail,
+            closedLidModeDetail: closedLidModeMenuDetail(for: holdState),
             protectableDetectedSessionCount: services.agentMonitor.protectableDetectedSessionCount,
             enableClosedLidModeEnabled: canEnableClosedLidMode,
             disableClosedLidModeEnabled: canDisableClosedLidMode,
@@ -138,7 +138,8 @@ final class MenuBarApp: NSObject {
 
     private var canEnableClosedLidMode: Bool {
         !closedLidModeActionInFlight &&
-            (closedLidStatus == .off || isUnknownClosedLidStatus)
+            (closedLidStatus == .off || isUnknownClosedLidStatus) &&
+            services.agentMonitor.aggregateHoldState.shouldHold
     }
 
     private var canDisableClosedLidMode: Bool {
@@ -373,6 +374,14 @@ final class MenuBarApp: NSObject {
         return "Manual Mac-active hold ends in \(relativeDuration(until: expiresAt, from: Date()))."
     }
 
+    private func closedLidModeMenuDetail(for holdState: AgentAggregateHoldState) -> String {
+        if (closedLidStatus == .off || isUnknownClosedLidStatus), !holdState.shouldHold {
+            return "Start or protect a session, or use Keep Mac Active first."
+        }
+
+        return closedLidModeStatusDetail
+    }
+
     private func relativeDuration(until date: Date, from now: Date) -> String {
         let seconds = max(0, Int(date.timeIntervalSince(now)))
         if seconds < 60 {
@@ -444,7 +453,7 @@ final class MenuBarApp: NSObject {
 
     private func runClosedLidAction(action: @escaping @Sendable () throws -> String) {
         closedLidModeActionInFlight = true
-        closedLidModeStatusDetail = "Closed-Lid Mode change is waiting for macOS administrator approval."
+        closedLidModeStatusDetail = "Closed-Lid Mode change is waiting for helper approval."
         refreshState()
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -510,9 +519,9 @@ final class MenuBarApp: NSObject {
 
     private func closedLidEnableConfirmationText(currentValue: String) -> String {
         var message = """
-        AgentWake will request administrator permission to disable lid sleep via pmset disablesleep. This setting affects all apps system-wide.
+        AgentWake will use its installed helper to disable lid sleep now, then restore normal sleep when current protection ends. If the helper still needs approval, macOS will ask once in System Settings.
 
-        When you turn Lid-Closed Awake off, AgentWake will restore your previous value (currently: \(currentValue)).
+        Current value: \(currentValue)
         """
 
         if PowerSourceReader.current() == .battery {

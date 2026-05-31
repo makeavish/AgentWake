@@ -215,7 +215,7 @@ public final class ClosedLidModeController: @unchecked Sendable {
         case .off:
             return "Closed-Lid Mode off\nSleepDisabled=0"
         case .enabledByAgentWake:
-            return "Closed-Lid Mode enabled\nSleepDisabled=1\nRestore value=\(state?.previousDisablesleep ?? 0)"
+            return "Closed-Lid Mode enabled\nSleepDisabled=1\nWill turn off when AgentWake is no longer keeping this Mac awake.\nRestore value=\(state?.previousDisablesleep ?? 0)"
         case .enabledByOther:
             return "Lid-closed sleep is disabled by another tool\nSleepDisabled=1\nAgentWake left it alone so it can be restored cleanly when you turn that tool off."
         case .ownershipPending:
@@ -262,7 +262,7 @@ public final class ClosedLidModeController: @unchecked Sendable {
             try? removeState()
             throw error
         }
-        return "Closed-Lid Mode enabled\nSleepDisabled=1\nDisable from AgentWake to restore disablesleep=\(current)."
+        return "Closed-Lid Mode enabled\nSleepDisabled=1\nAgentWake will restore disablesleep=\(current) when current sleep protection ends."
     }
 
     public func disable() throws -> String {
@@ -307,7 +307,7 @@ public final class ClosedLidModeController: @unchecked Sendable {
         }
 
         try saveState(ClosedLidModeState(previousDisablesleep: restoreValue, enabledAt: now(), phase: .active))
-        return "Closed-Lid Mode ownership adopted\nSleepDisabled=1\nDisable from AgentWake to restore disablesleep=\(restoreValue)."
+        return "Closed-Lid Mode ownership adopted\nSleepDisabled=1\nAgentWake will restore disablesleep=\(restoreValue) when current sleep protection ends."
     }
 
     public func repair() throws -> String {

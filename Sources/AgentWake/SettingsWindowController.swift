@@ -433,11 +433,11 @@ private final class SettingsViewController: NSViewController {
         refreshButton.isHidden = !isStatusStale()
 
         let closedLidStatus = services.closedLidModeController.status()
-        closedLidModeStatusLabel.stringValue = closedLidDisplayText(for: closedLidStatus)
+        closedLidModeStatusLabel.stringValue = closedLidDisplayText(for: closedLidStatus, holdState: holdState)
         closedLidSafetyWarningLabel.stringValue = ClosedLidUserFacingCopy.safetyNotice(settings: services.settingsStore.settings.safety)
         closedLidSafetyWarningLabel.isHidden = !shouldShowSafetyWarning(status: closedLidStatus)
         enableClosedLidButton.isEnabled = !closedLidActionInFlight &&
-            canEnableClosedLidMode(status: closedLidStatus)
+            canEnableClosedLidMode(status: closedLidStatus, holdState: holdState)
         disableClosedLidButton.isEnabled = !closedLidActionInFlight &&
             canDisableClosedLidMode(status: closedLidStatus)
         refreshSafetyControls()
@@ -594,12 +594,15 @@ private final class SettingsViewController: NSViewController {
         services.settingsStore.settings.agents.first(where: { $0.id == agentID })?.isEnabled ?? false
     }
 
-    private func closedLidDisplayText(for status: ClosedLidStatus) -> String {
+    private func closedLidDisplayText(for status: ClosedLidStatus, holdState: AgentAggregateHoldState) -> String {
         switch status {
         case .off:
+            if !holdState.shouldHold {
+                return "Off\nStart or protect a session, or use Keep Mac Active first."
+            }
             return "Off"
         case .enabledByAgentWake:
-            return "Enabled\nAgentWake will restore the previous sleep setting when this is disabled."
+            return "Enabled\nAgentWake will restore normal sleep when current protection ends."
         case .ownershipPending:
             return "Finishing setup\nDisable is blocked until AgentWake confirms ownership."
         case .enabledByOther:
@@ -609,7 +612,11 @@ private final class SettingsViewController: NSViewController {
         }
     }
 
-    private func canEnableClosedLidMode(status: ClosedLidStatus) -> Bool {
+    private func canEnableClosedLidMode(status: ClosedLidStatus, holdState: AgentAggregateHoldState) -> Bool {
+        guard holdState.shouldHold else {
+            return false
+        }
+
         switch status {
         case .off, .unknown:
             return true
@@ -952,7 +959,7 @@ private final class SettingsViewController: NSViewController {
         }
 
         closedLidActionInFlight = true
-        closedLidModeStatusLabel.stringValue = "Waiting for macOS administrator approval"
+        closedLidModeStatusLabel.stringValue = "Waiting for helper approval"
         enableClosedLidButton.isEnabled = false
         disableClosedLidButton.isEnabled = false
 
@@ -1005,9 +1012,9 @@ private final class SettingsViewController: NSViewController {
 
     private func closedLidEnableConfirmationText(currentValue: String) -> String {
         var message = """
-        AgentWake will request administrator permission to disable lid sleep via pmset disablesleep. This setting affects all apps system-wide.
+        AgentWake will use its installed helper to disable lid sleep now, then restore normal sleep when current protection ends. If the helper still needs approval, macOS will ask once in System Settings.
 
-        When you turn Lid-Closed Awake off, AgentWake will restore your previous value (currently: \(currentValue)).
+        Current value: \(currentValue)
         """
 
         if PowerSourceReader.current() == .battery {
@@ -1128,7 +1135,11 @@ private final class SettingsViewController: NSViewController {
                 results.append("Launch at login: \(error.localizedDescription)")
             }
 
-            results.append("Production helper: no production helper is installed.")
+            do {
+                results.append(try self.services.privilegedHelperManager.unregister())
+            } catch {
+                results.append("Helper: \(error.localizedDescription)")
+            }
             if removeSavedSettings {
                 do {
                     try self.services.settingsStore.removeSavedSettingsForFreshInstall()
