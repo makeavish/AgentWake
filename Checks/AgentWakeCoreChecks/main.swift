@@ -1935,6 +1935,43 @@ struct AgentWakeCoreChecks {
             "Expected the still-open Codex process to remain visible only as a detected process"
         )
 
+        let staleClaudeMachine = AgentSessionStateMachine(
+            graceInterval: 900,
+            claudeActivityIdleTimeout: 30
+        )
+        staleClaudeMachine.applyIntegrationEvent(
+            hookEvent(
+                .toolStarted,
+                integrationSessionId: "claude-stale-tool",
+                pid: 105,
+                processStartTime: processStart,
+                agent: .claudeCode
+            ),
+            at: baseline
+        )
+        try check(
+            staleClaudeMachine.aggregateHoldState(at: baseline.addingTimeInterval(29)).shouldHold,
+            "Expected recent Claude PreToolUse activity to protect while waiting for a terminal hook"
+        )
+        staleClaudeMachine.applyProcessObservations(
+            [observation(pid: 105, start: processStart, path: "/opt/homebrew/bin/claude", agent: .claudeCode)],
+            at: baseline.addingTimeInterval(30)
+        )
+        try check(
+            !staleClaudeMachine.aggregateHoldState(at: baseline.addingTimeInterval(30)).shouldHold,
+            "Expected stale Claude tool activity to release even when the VS Code process remains open"
+        )
+        try check(
+            staleClaudeMachine.sessions.contains { $0.lastEvent?.kind == .staleActivityExpired },
+            "Expected stale Claude tool activity to record an expiry event"
+        )
+        try check(
+            staleClaudeMachine.sessions.contains {
+                $0.source == .processScan && $0.state != .finished && !$0.hasIntegratedEvidence
+            },
+            "Expected the still-open Claude process to remain visible only as a detected process"
+        )
+
         let terminalMachine = AgentSessionStateMachine(graceInterval: 900)
         terminalMachine.applyIntegrationEvent(
             hookEvent(.turnStarted, integrationSessionId: sessionID, pid: 100, processStartTime: processStart),
@@ -1987,6 +2024,40 @@ struct AgentWakeCoreChecks {
         )
         try check(claudeEndedMachine.sessions.count == 1, "Expected Claude UserPromptSubmit after SessionEnd not to create a new turn")
         try check(claudeEndedMachine.sessions[0].state == .finished, "Expected ended Claude session to remain finished")
+
+        let claudeFailureMachine = AgentSessionStateMachine(graceInterval: 900)
+        claudeFailureMachine.applyIntegrationEvent(
+            hookEvent(
+                .toolStarted,
+                integrationSessionId: "claude-failed-tool",
+                pid: 106,
+                processStartTime: processStart,
+                agent: .claudeCode
+            ),
+            at: baseline
+        )
+        claudeFailureMachine.applyIntegrationEvent(
+            hookEvent(
+                .toolFailedContinuing,
+                integrationSessionId: "claude-failed-tool",
+                pid: 106,
+                processStartTime: processStart,
+                agent: .claudeCode
+            ),
+            at: baseline.addingTimeInterval(1)
+        )
+        try check(claudeFailureMachine.sessions[0].state == .active, "Expected Claude PostToolUseFailure to keep the turn protected")
+        claudeFailureMachine.applyIntegrationEvent(
+            hookEvent(
+                .turnFinished,
+                integrationSessionId: "claude-failed-tool",
+                pid: 106,
+                processStartTime: processStart,
+                agent: .claudeCode
+            ),
+            at: baseline.addingTimeInterval(2)
+        )
+        try check(claudeFailureMachine.sessions[0].state == .finished, "Expected Claude StopFailure to release the protected turn")
 
         let multiTurnMachine = AgentSessionStateMachine(graceInterval: 5)
         let claudeSessionID = "claude-session-1"
@@ -2861,6 +2932,36 @@ struct AgentWakeCoreChecks {
         try check(!encoded.contains("cat .env"), "Expected tool arguments to be discarded")
         try check(!encoded.contains("private-project"), "Expected raw cwd to be discarded")
         try check(!encoded.contains("transcript"), "Expected transcript path to be discarded")
+
+        let failedToolEvent = try checkNotNil(
+            HookAdapterMapper.claudeCodeEvent(
+                from: Data(#"{"hook_event_name":"PostToolUseFailure","session_id":"session-1","tool_use_id":"tool-1"}"#.utf8),
+                context: HookAdapterContext(
+                    agent: .claudeCode,
+                    host: "claude-code",
+                    processID: 42,
+                    cwdHashSalt: "local-salt",
+                    eventIDProvider: { "fallback" }
+                )
+            ),
+            "Expected Claude failed tool payload to map"
+        )
+        try check(failedToolEvent.event == .toolFailedContinuing, "Expected PostToolUseFailure to keep the Claude turn active")
+
+        let stopFailureEvent = try checkNotNil(
+            HookAdapterMapper.claudeCodeEvent(
+                from: Data(#"{"hook_event_name":"StopFailure","session_id":"session-1"}"#.utf8),
+                context: HookAdapterContext(
+                    agent: .claudeCode,
+                    host: "claude-code",
+                    processID: 42,
+                    cwdHashSalt: "local-salt",
+                    eventIDProvider: { "fallback-stop" }
+                )
+            ),
+            "Expected Claude stop failure payload to map"
+        )
+        try check(stopFailureEvent.event == .turnFinished, "Expected StopFailure to release the Claude turn")
     }
 
     private static func hookAdapterMapsAndRedactsCodexNativeHookPayloads() throws {
@@ -3268,6 +3369,8 @@ struct AgentWakeCoreChecks {
         try check(installed.contains(ClaudeCodeConfigPatcher.manifest.ownerMarker), "Expected Claude patcher to add owned hook marker")
         try check(installed.contains("UserPromptSubmit"), "Expected Claude patcher to add turn-start hook")
         try check(installed.contains("PostToolUse"), "Expected Claude patcher to add tool-continuing hook")
+        try check(installed.contains("PostToolUseFailure"), "Expected Claude patcher to add failed tool hook")
+        try check(installed.contains("StopFailure"), "Expected Claude patcher to add failed stop hook")
 
         let removal = try patcher.removalPlan(currentData: install.patchedData)
         let removed = String(data: removal.patchedData, encoding: .utf8) ?? ""

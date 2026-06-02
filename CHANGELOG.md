@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.0 - 2026-06-02
+
+- Handles Claude Code `PostToolUseFailure` and `StopFailure` hooks so failed
+  tool calls and API-error turn endings do not leave stale wake holds behind.
+- Expires stale Claude Code tool activity after a conservative timeout, leaving
+  the still-open VS Code extension process visible only as detected.
+
 ## v0.2.8 - 2026-05-31
 
 - Makes Lid-Closed Awake session-scoped: it can only be turned on while

@@ -91,7 +91,7 @@ public struct ClaudeCodeConfigPatcher {
             let existingGroups = hooks[event] as? [[String: Any]] ?? []
             var groups = removeOwnedClaudeHooks(from: existingGroups).groups
             let command = Self.command(adapterPath: adapterPath, ownerMarker: Self.manifest.ownerMarker)
-            groups.append(Self.hookGroup(command: command, includeMatcher: event == "PreToolUse" || event == "PostToolUse"))
+            groups.append(Self.hookGroup(command: command, includeMatcher: Self.claudeToolHookEvents.contains(event)))
             hooks[event] = groups
         }
 
@@ -159,8 +159,15 @@ public struct ClaudeCodeConfigPatcher {
         "UserPromptSubmit",
         "PreToolUse",
         "PostToolUse",
+        "PostToolUseFailure",
         "Stop",
+        "StopFailure",
         "SessionEnd"
+    ]
+    private static let claudeToolHookEvents: Set<String> = [
+        "PreToolUse",
+        "PostToolUse",
+        "PostToolUseFailure"
     ]
 
     private static func command(adapterPath: String, ownerMarker: String) -> String {

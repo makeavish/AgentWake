@@ -6,6 +6,7 @@ public enum HookAdapterEventKind: String, Codable, CaseIterable, Equatable, Send
     case turnStarted = "turn_started"
     case toolStarted = "tool_started"
     case toolFinishedContinuing = "tool_finished_continuing"
+    case toolFailedContinuing = "tool_failed_continuing"
     case agentResumed = "agent_resumed"
     case turnFinished = "turn_finished"
     case sessionFinished = "session_finished"
@@ -199,7 +200,9 @@ public enum HookAdapterMapper {
         "UserPromptSubmit": .turnStarted,
         "PreToolUse": .toolStarted,
         "PostToolUse": .toolFinishedContinuing,
+        "PostToolUseFailure": .toolFailedContinuing,
         "Stop": .turnFinished,
+        "StopFailure": .turnFinished,
         "SessionEnd": .sessionFinished
     ]
 

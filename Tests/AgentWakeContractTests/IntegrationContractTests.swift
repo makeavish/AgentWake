@@ -100,6 +100,38 @@ private func runAdapterReducesClaudePayloadWithoutSensitiveFields() throws {
         "Expected replayed native tool payload to map to an AgentWake event"
     )
     try check(nativeToolEvent.eventID == replayedNativeToolEvent.eventID, "Expected Claude tool payloads with occurrence IDs to get stable replay IDs")
+
+    let failedToolPayload = Data(#"{"hook_event_name":"PostToolUseFailure","session_id":"contract-session","tool_use_id":"tool-1"}"#.utf8)
+    let failedToolEvent = try checkNotNil(
+        HookAdapterMapper.claudeCodeEvent(
+            from: failedToolPayload,
+            context: HookAdapterContext(
+                agent: .claudeCode,
+                host: "claude-code",
+                processID: 101,
+                cwdHashSalt: "contract-salt",
+                eventIDProvider: { "fallback" }
+            )
+        ),
+        "Expected failed Claude tool payload to map to an AgentWake event"
+    )
+    try check(failedToolEvent.event == .toolFailedContinuing, "Expected PostToolUseFailure to keep the turn active while Claude handles the failure")
+
+    let stopFailurePayload = Data(#"{"hook_event_name":"StopFailure","session_id":"contract-session"}"#.utf8)
+    let stopFailureEvent = try checkNotNil(
+        HookAdapterMapper.claudeCodeEvent(
+            from: stopFailurePayload,
+            context: HookAdapterContext(
+                agent: .claudeCode,
+                host: "claude-code",
+                processID: 101,
+                cwdHashSalt: "contract-salt",
+                eventIDProvider: { "fallback-stop" }
+            )
+        ),
+        "Expected Claude StopFailure payload to map to an AgentWake event"
+    )
+    try check(stopFailureEvent.event == .turnFinished, "Expected StopFailure to release the protected turn")
 }
 
 private func runAdapterReducesCodexNativeHooksWithoutSensitiveFields() throws {
@@ -210,6 +242,8 @@ private func runConfigPatchersPreserveAndRemoveOnlyOwnedBlocks() throws {
     let claudeInstalled = String(data: claudeInstall.patchedData, encoding: .utf8) ?? ""
     try check(claudeInstalled.contains("user-security-hook"), "Expected Claude patcher to preserve user hook")
     try check(claudeInstalled.contains(ClaudeCodeConfigPatcher.manifest.ownerMarker), "Expected Claude patcher to add owner marker")
+    try check(claudeInstalled.contains("PostToolUseFailure"), "Expected Claude patcher to add failed tool hook")
+    try check(claudeInstalled.contains("StopFailure"), "Expected Claude patcher to add failed stop hook")
     let claudeRemoval = try claudePatcher.removalPlan(currentData: claudeInstall.patchedData)
     let claudeRemoved = String(data: claudeRemoval.patchedData, encoding: .utf8) ?? ""
     try check(claudeRemoved.contains("user-security-hook"), "Expected Claude removal to preserve user hook")

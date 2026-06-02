@@ -5,6 +5,7 @@ public final class AgentSessionStateMachine {
     public var processDetectionHoldInterval: TimeInterval
     public var codexPostToolIdleTimeout: TimeInterval
     public var agentResumeIdleTimeout: TimeInterval
+    public var claudeActivityIdleTimeout: TimeInterval
     public private(set) var sessions: [AgentSession]
     public private(set) var pauseAllExpiresAt: Date?
     public private(set) var manualPauseAllExpiresAt: Date?
@@ -18,6 +19,7 @@ public final class AgentSessionStateMachine {
         processDetectionHoldInterval: TimeInterval = TimeInterval(AgentWakeSettings.defaultGraceSeconds),
         codexPostToolIdleTimeout: TimeInterval = 90,
         agentResumeIdleTimeout: TimeInterval = 90,
+        claudeActivityIdleTimeout: TimeInterval = 30 * 60,
         sessions: [AgentSession] = [],
         pauseAllExpiresAt: Date? = nil,
         manualPauseAllExpiresAt: Date? = nil,
@@ -30,6 +32,7 @@ public final class AgentSessionStateMachine {
         self.processDetectionHoldInterval = processDetectionHoldInterval
         self.codexPostToolIdleTimeout = codexPostToolIdleTimeout
         self.agentResumeIdleTimeout = agentResumeIdleTimeout
+        self.claudeActivityIdleTimeout = claudeActivityIdleTimeout
         self.sessions = sessions
         self.pauseAllExpiresAt = pauseAllExpiresAt
         self.manualPauseAllExpiresAt = manualPauseAllExpiresAt
@@ -318,7 +321,7 @@ public final class AgentSessionStateMachine {
             sessions[index].standingByExpiresAt = nil
             sessions[index].lastEvent = SessionEvent(kind: kind, occurredAt: now)
 
-        case .toolStarted, .toolFinishedContinuing, .agentResumed, .processTreeChanged:
+        case .toolStarted, .toolFinishedContinuing, .toolFailedContinuing, .agentResumed, .processTreeChanged:
             guard !sessions[index].hasTerminalEndEvent else {
                 return
             }
@@ -375,6 +378,11 @@ public final class AgentSessionStateMachine {
             return now.timeIntervalSince(session.lastActivityAt) >= agentResumeIdleTimeout
         case .toolFinishedContinuing where session.agent == .codexCLI:
             return now.timeIntervalSince(session.lastActivityAt) >= codexPostToolIdleTimeout
+        case .toolStarted, .toolFinishedContinuing, .toolFailedContinuing:
+            guard session.agent == .claudeCode else {
+                return false
+            }
+            return now.timeIntervalSince(session.lastActivityAt) >= claudeActivityIdleTimeout
         default:
             return false
         }
@@ -515,7 +523,7 @@ public final class AgentSessionStateMachine {
             }
 
             switch event.event {
-            case .toolStarted, .toolFinishedContinuing:
+            case .toolStarted, .toolFinishedContinuing, .toolFailedContinuing:
                 return false
             case .turnStarted where event.agent == .codexCLI:
                 return false
@@ -669,7 +677,7 @@ public final class AgentSessionStateMachine {
 
         if sessions[index].hasTerminalEndEvent {
             switch kind {
-            case .toolStarted, .toolFinishedContinuing, .agentResumed, .processTreeChanged, .turnFinished, .keepHolding:
+            case .toolStarted, .toolFinishedContinuing, .toolFailedContinuing, .agentResumed, .processTreeChanged, .turnFinished, .keepHolding:
                 return false
             default:
                 return true
@@ -704,6 +712,8 @@ private extension HookAdapterEvent {
             .toolStarted
         case .toolFinishedContinuing:
             .toolFinishedContinuing
+        case .toolFailedContinuing:
+            .toolFailedContinuing
         case .agentResumed:
             .agentResumed
         case .turnFinished:
@@ -715,7 +725,7 @@ private extension HookAdapterEvent {
 
     var createsSession: Bool {
         switch event {
-        case .sessionStarted, .turnStarted, .toolStarted, .toolFinishedContinuing, .agentResumed:
+        case .sessionStarted, .turnStarted, .toolStarted, .toolFinishedContinuing, .toolFailedContinuing, .agentResumed:
             true
         case .turnFinished, .sessionFinished:
             false

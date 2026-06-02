@@ -842,6 +842,43 @@ private func runOutOfOrderHookEventsAreIgnored() throws {
         "Expected the still-open Codex process to remain visible only as a detected process"
     )
 
+    let staleClaudeMachine = AgentSessionStateMachine(
+        graceInterval: 900,
+        claudeActivityIdleTimeout: 30
+    )
+    staleClaudeMachine.applyIntegrationEvent(
+        hookEvent(
+            .toolStarted,
+            integrationSessionId: "claude-stale-tool",
+            pid: 105,
+            processStartTime: processStart,
+            agent: .claudeCode
+        ),
+        at: baseline
+    )
+    try check(
+        staleClaudeMachine.aggregateHoldState(at: baseline.addingTimeInterval(29)).shouldHold,
+        "Expected recent Claude PreToolUse activity to protect while waiting for a terminal hook"
+    )
+    staleClaudeMachine.applyProcessObservations(
+        [observation(pid: 105, start: processStart, path: "/opt/homebrew/bin/claude", agent: .claudeCode)],
+        at: baseline.addingTimeInterval(30)
+    )
+    try check(
+        !staleClaudeMachine.aggregateHoldState(at: baseline.addingTimeInterval(30)).shouldHold,
+        "Expected stale Claude tool activity to release even when the VS Code process remains open"
+    )
+    try check(
+        staleClaudeMachine.sessions.contains { $0.lastEvent?.kind == .staleActivityExpired },
+        "Expected stale Claude tool activity to record an expiry event"
+    )
+    try check(
+        staleClaudeMachine.sessions.contains {
+            $0.source == .processScan && $0.state != .finished && !$0.hasIntegratedEvidence
+        },
+        "Expected the still-open Claude process to remain visible only as a detected process"
+    )
+
     let terminalMachine = AgentSessionStateMachine(graceInterval: 900)
     terminalMachine.applyIntegrationEvent(
         hookEvent(.turnStarted, integrationSessionId: sessionID, pid: 100, processStartTime: processStart),
@@ -894,6 +931,40 @@ private func runOutOfOrderHookEventsAreIgnored() throws {
     )
     try check(claudeEndedMachine.sessions.count == 1, "Expected Claude UserPromptSubmit after SessionEnd not to create a new turn")
     try check(claudeEndedMachine.sessions[0].state == .finished, "Expected ended Claude session to remain finished")
+
+    let claudeFailureMachine = AgentSessionStateMachine(graceInterval: 900)
+    claudeFailureMachine.applyIntegrationEvent(
+        hookEvent(
+            .toolStarted,
+            integrationSessionId: "claude-failed-tool",
+            pid: 106,
+            processStartTime: processStart,
+            agent: .claudeCode
+        ),
+        at: baseline
+    )
+    claudeFailureMachine.applyIntegrationEvent(
+        hookEvent(
+            .toolFailedContinuing,
+            integrationSessionId: "claude-failed-tool",
+            pid: 106,
+            processStartTime: processStart,
+            agent: .claudeCode
+        ),
+        at: baseline.addingTimeInterval(1)
+    )
+    try check(claudeFailureMachine.sessions[0].state == .active, "Expected Claude PostToolUseFailure to keep the turn protected")
+    claudeFailureMachine.applyIntegrationEvent(
+        hookEvent(
+            .turnFinished,
+            integrationSessionId: "claude-failed-tool",
+            pid: 106,
+            processStartTime: processStart,
+            agent: .claudeCode
+        ),
+        at: baseline.addingTimeInterval(2)
+    )
+    try check(claudeFailureMachine.sessions[0].state == .finished, "Expected Claude StopFailure to release the protected turn")
 
     let multiTurnMachine = AgentSessionStateMachine(graceInterval: 5)
     let claudeSessionID = "claude-session-1"
